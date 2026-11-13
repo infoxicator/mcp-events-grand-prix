@@ -1,0 +1,5 @@
+{
+  "extends":"./tsconfig.json",
+  "compilerOptions":{"types":["@cloudflare/workers-types"],"lib":["ES2023"]},
+  "include":["worker","server/jev.ts","src/physics.ts","src/agents.ts","src/protocol.ts"]
+}

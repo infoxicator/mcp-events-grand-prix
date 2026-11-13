@@ -1,0 +1,45 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jev-vs-jev-pong",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-13",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOMS",
+        "class_name": "GameRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "GameRoom"
+      ]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "ROOM_CREATION",
+      "namespace_id": "1794564601",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "account_id": "7833d46090296b6afec7be40dd5cc0ba",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}

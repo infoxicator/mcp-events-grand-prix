@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jev-pong-test",
+  "main": "worker/test-entry.ts",
+  "compatibility_date": "2026-11-13",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOMS",
+        "class_name": "TestGameRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "TestGameRoom"
+      ]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "ROOM_CREATION",
+      "namespace_id": "1794564602",
+      "simple": {
+        "limit": 100,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "vars": {
+    "OPENROUTER_API_KEY": "unused-fixture-key",
+    "OPENAI_API_KEY": "unused-openai-fixture-key",
+    "ROOM_CREATE_TOKEN": "local-test-only"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
