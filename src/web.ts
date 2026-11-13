@@ -1,2 +1,2 @@
-if(new URLSearchParams(location.search).has('track')) await import('./race/flythrough'); else if(new URLSearchParams(location.search).has('race')) await import('./race/local'); else await import('./pong-web');
-export {};
+import {prepareRoom} from './race/network';import {mountRace} from './race/ui';
+try{if(new URLSearchParams(location.search).has('track'))await import('./race/flythrough');else mountRace(await prepareRoom());}catch(error){document.getElementById('app')!.textContent=error instanceof Error?error.message:'Unable to connect';}

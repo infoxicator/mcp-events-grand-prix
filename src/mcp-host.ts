@@ -2,12 +2,12 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { AppBridge, PostMessageTransport, getToolUiResourceUri, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/app-bridge';
 const status=document.getElementById('host-status')!,diagnostic=document.getElementById('diagnostic')!,frame=document.getElementById('app-frame') as HTMLIFrameElement,close=document.getElementById('host-close') as HTMLButtonElement;
 const config=await fetch('/config').then(r=>r.json()) as {endpoint:string;sandboxOrigin:string};
-const client=new Client({name:'Jev Pong local MCP host',version:'1.0.0'});
+const client=new Client({name:'Jev Grand Prix local MCP host',version:'1.0.0'});
 let bridge:AppBridge|undefined;
 try{
   await client.connect(new StreamableHTTPClientTransport(new URL(config.endpoint)));
-  const {tools}=await client.listTools(),tool=tools.find(t=>t.name==='open_pong');
-  if(!tool)throw new Error('open_pong tool not found');
+  const {tools}=await client.listTools(),tool=tools.find(t=>t.name==='open_grand_prix');
+  if(!tool)throw new Error('open_grand_prix tool not found');
   const uri=getToolUiResourceUri(tool);if(!uri)throw new Error('Missing MCP UI resource link');
   const resource=await client.readResource({uri}),content=resource.contents[0];
   if(content.mimeType!==RESOURCE_MIME_TYPE||!('text' in content))throw new Error('Expected MCP App HTML resource');
@@ -16,7 +16,7 @@ try{
   frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms');
   const ready=new Promise<void>(resolve=>{const listener=(e:MessageEvent)=>{if(e.source===frame.contentWindow&&e.origin===config.sandboxOrigin&&e.data?.method==='ui/notifications/sandbox-proxy-ready'){removeEventListener('message',listener);resolve();}};addEventListener('message',listener);});
   frame.hidden=false;frame.src=sandboxURL.href;await ready;
-  bridge=new AppBridge(client,{name:'Jev Pong MCP host',version:'1.0.0'},{openLinks:{},serverTools:client.getServerCapabilities()?.tools,serverResources:client.getServerCapabilities()?.resources,updateModelContext:{text:{}}},{hostContext:{theme:'dark',platform:'web',displayMode:'inline',availableDisplayModes:['inline','fullscreen'],containerDimensions:{height:Math.max(700,innerHeight-66),width:innerWidth},safeAreaInsets:{top:0,right:0,bottom:0,left:0}}});
+  bridge=new AppBridge(client,{name:'Jev Grand Prix MCP host',version:'1.0.0'},{openLinks:{},serverTools:client.getServerCapabilities()?.tools,serverResources:client.getServerCapabilities()?.resources,updateModelContext:{text:{}}},{hostContext:{theme:'dark',platform:'web',displayMode:'inline',availableDisplayModes:['inline','fullscreen'],containerDimensions:{height:Math.max(700,innerHeight-66),width:innerWidth},safeAreaInsets:{top:0,right:0,bottom:0,left:0}}});
   const initialized=new Promise<void>(resolve=>{bridge!.oninitialized=()=>resolve();});
   bridge.onopenlink=async({url})=>{window.open(url,'_blank','noopener,noreferrer');return {};};
   bridge.onupdatemodelcontext=async()=>({});
@@ -26,8 +26,8 @@ try{
   await bridge.sendSandboxResourceReady({html:content.text,csp:ui?.csp});await initialized;
   // The local host opens read-only. Starting the two agents requires an explicit UI click.
   const params=new URLSearchParams(location.search),args={autoplay:params.get('autoplay')==='1',...(params.has('player')?{player:params.get('player')}:{}),...(params.has('invite')?{invite:params.get('invite')}:{} )};
-  bridge.sendToolInput({arguments:args});await bridge.sendToolResult(await client.callTool({name:'open_pong',arguments:args}));
-  status.textContent='Connected · Streamable HTTP · open_pong';diagnostic.hidden=true;close.disabled=false;document.body.dataset.mcpConnected='true';
+  bridge.sendToolInput({arguments:args});await bridge.sendToolResult(await client.callTool({name:'open_grand_prix',arguments:args}));
+  status.textContent='Connected · Streamable HTTP · open_grand_prix';diagnostic.hidden=true;close.disabled=false;document.body.dataset.mcpConnected='true';
   close.onclick=async()=>{await bridge!.teardownResource({});await bridge!.close();await client.close();frame.remove();close.disabled=true;status.textContent='App closed · controllers disconnected';document.body.dataset.mcpConnected='false';};
   addEventListener('pagehide',()=>{void bridge?.close();void client.close();},{once:true});
 }catch(error){status.textContent='Connection failed';diagnostic.textContent=error instanceof Error?error.message:String(error);}

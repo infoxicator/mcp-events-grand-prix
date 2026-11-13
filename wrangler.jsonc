@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "jev-vs-jev-pong",
+  "name": "jev-grand-prix",
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-13",
   "assets": {
@@ -38,7 +38,6 @@
     "enabled": true,
     "head_sampling_rate": 0.1
   },
-  "account_id": "7833d46090296b6afec7be40dd5cc0ba",
   "compatibility_flags": [
     "nodejs_compat"
   ]

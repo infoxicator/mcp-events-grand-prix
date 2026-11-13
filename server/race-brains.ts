@@ -1,6 +1,6 @@
 import {choice,TypeSafeClient,type TypeSafeClientConfig} from '@typesafe-ai/sdk';
 import {z} from 'zod';
-import {providerConfig,type ProviderConfig} from './jev';
+import {providerConfig,type ProviderConfig} from './provider';
 import {mockDriver,mockEngineer} from '../src/race/brains';
 import {other} from '../src/race/physics';
 import {type Race,type Team,type DriverIntent,type Instruction,type Decision} from '../src/race/types';

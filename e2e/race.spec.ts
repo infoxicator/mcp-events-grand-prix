@@ -1,0 +1,20 @@
+import {test,expect,type Page} from '@playwright/test';
+import {mkdir} from 'node:fs/promises';import type {RaceState} from '../src/race/types';
+const state=(p:Page)=>p.evaluate(()=>(window as unknown as {__raceState:RaceState}).__raceState);
+test('three independent WebSocket contexts race from lights out to results with radio and a pit stop',async({browser,request,baseURL})=>{
+ const errors:string[]=[];const contexts=await Promise.all([0,1,2].map(()=>browser.newContext({viewport:{width:1440,height:980}}))),pages=await Promise.all(contexts.map(c=>c.newPage()));pages.forEach(p=>p.on('pageerror',e=>errors.push(e.message)));const [a,b,spectator]=pages;
+ try{
+  const links=await request.get('/api/default').then(r=>r.json());await Promise.all(pages.map((p,i)=>p.goto([links.a,links.b,links.owner.replace('#','&spectate#')][i])));
+  await expect.poll(async()=>(await state(spectator))?.connected).toEqual({a:true,b:true});await expect.poll(async()=>(await state(spectator))?.race.phase).toBe('racing');await expect.poll(async()=>(await state(spectator))?.intents.a).toBeGreaterThan(2);await expect.poll(async()=>(await state(spectator))?.intents.b).toBeGreaterThan(2);
+  const first=await state(spectator);await expect.poll(async()=>(await state(spectator)).race.cars.a.distance).toBeGreaterThan(first.race.cars.a.distance+50);await expect.poll(async()=>(await state(spectator)).engineerCalls.a).toBeGreaterThan(0);
+  await a.getByRole('button',{name:'Manage',exact:true}).click();await expect.poll(async()=>(await state(spectator)).race.cars.a.intent.speedBias,{intervals:[50,100,100]}).toBe(-2);await expect(a.locator('#engineer-line')).toContainText('Manage');
+  await mkdir('artifacts',{recursive:true});await a.screenshot({path:'artifacts/cockpit.png'});await spectator.screenshot({path:'artifacts/broadcast.png'});
+  await expect.poll(async()=>(await state(spectator)).race.cars.a.stops,{timeout:60000}).toBe(1);await expect.poll(async()=>(await state(spectator)).race.cars.b.stops,{timeout:60000}).toBe(1);await expect.poll(async()=>(await state(spectator)).race.phase,{timeout:90000}).toBe('finished');
+  await expect(spectator.locator('#results')).toBeVisible();await spectator.screenshot({path:'artifacts/results.png'});const result=await state(spectator);expect(result.race.cars.a.lapTimes).toHaveLength(3);expect(result.race.cars.b.lapTimes).toHaveLength(3);expect(result.race.winner).toBeTruthy();expect(result.paidCalls).toBe(0);expect((await state(a)).room).toBe((await state(b)).room);
+  await spectator.getByRole('button',{name:'Replay the battle'}).click();await expect(spectator.locator('body')).toHaveAttribute('data-replay','true');await expect(spectator.locator('#results')).toBeHidden();await spectator.getByRole('button',{name:/Back to live/}).click();await expect(spectator.locator('#results')).toBeVisible();
+  await b.close();await expect.poll(async()=>(await state(spectator)).connected.b).toBe(false);const replacement=await contexts[1].newPage();await replacement.goto(links.b);await expect.poll(async()=>(await state(spectator)).connected.b).toBe(true);expect((await state(replacement)).race.cars.b.stops).toBe(1);
+  await spectator.getByRole('button',{name:'Title sequence'}).click();await expect(spectator.locator('#title-card')).toBeVisible();await spectator.screenshot({path:'artifacts/title.png'});await spectator.getByRole('button',{name:'LIGHTS OUT'}).click();await expect.poll(async()=>(await state(spectator)).race.phase).toBe('racing');
+  await a.setViewportSize({width:480,height:1000});expect(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);const health=await request.get('/health');expect(health.ok()).toBe(true);expect(errors).toEqual([]);
+  console.log(JSON.stringify({race:result.room,winner:result.race.winner,lapTimes:{a:result.race.cars.a.lapTimes,b:result.race.cars.b.lapTimes},stops:{a:result.race.cars.a.stops,b:result.race.cars.b.stops},intents:result.intents,engineerCalls:result.engineerCalls,paidCalls:result.paidCalls,errors},null,2));
+ }finally{await Promise.all(contexts.map(c=>c.close()));}
+});

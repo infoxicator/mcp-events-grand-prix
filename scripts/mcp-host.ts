@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { resolve,extname } from 'node:path';
 import { spawn } from 'node:child_process';
-const gamePort=Number(process.env.PORT??5177),hostPort=Number(process.env.MCP_HOST_PORT??gamePort+1),sandboxPort=hostPort+1;
+const gamePort=Number(process.env.PORT??5277),hostPort=Number(process.env.MCP_HOST_PORT??gamePort+1),sandboxPort=hostPort+1;
 const origin=process.env.MCP_SERVER_URL?new URL(process.env.MCP_SERVER_URL).origin:`http://127.0.0.1:${gamePort}`,hostOrigin=`http://127.0.0.1:${hostPort}`,sandboxOrigin=`http://127.0.0.1:${sandboxPort}`;
 let game:ReturnType<typeof spawn>|undefined;
 if(process.argv.includes('--start-game')&&!process.env.MCP_SERVER_URL){

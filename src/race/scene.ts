@@ -1,5 +1,6 @@
 import * as T from 'three';
-import { LENGTH, pointAt, tangentAt, CORNERS, SECTORS, PIT_ENTRY, PIT_EXIT, pitOffset, wrap } from './track';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import { LENGTH, pointAt, tangentAt, CORNERS, SECTORS, PIT_ENTRY, PIT_EXIT, pitOffset, wrap, centreline } from './track';
 export type CameraMode='broadcast'|'cockpit-a'|'cockpit-b'|'helicopter'|'flythrough';
 export interface RenderCar {distance:number;offset:number;speed:number;steering?:number;pit?:string}
 export interface RenderRace {cars:Record<'a'|'b',RenderCar>;time:number;phase:string}
@@ -26,7 +27,7 @@ export function createScene(container:HTMLElement){
  for(let d=0;d<LENGTH;d+=32){for(const side of [-1,1]){const p=pointAt(d,side*25);const wall=box(1.2,1.4,31,barrier,p.x,.7,p.z);const t=tangentAt(d);wall.rotation.y=Math.atan2(t.x,t.z);}}
  // Instanced parkland: 1,500 trees in two draw calls, deterministic positions.
  const treeCount=1500,trunks=new T.InstancedMesh(new T.CylinderGeometry(.5,.8,5,5),mat('#635347'),treeCount),crowns=new T.InstancedMesh(new T.ConeGeometry(5,13,6),mat('#294f40'),treeCount),dummy=new T.Object3D();
- for(let i=0;i<treeCount;i++){const d=(i*137.507)%LENGTH,off=(i%2?1:-1)*(40+(Math.sin(i*53.3)*.5+.5)*300),p=pointAt(d,off),scale=.7+(Math.sin(i*23)*.5+.5)*.8;dummy.position.set(p.x,2.5,p.z);dummy.scale.setScalar(scale);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);dummy.position.y=10*scale;dummy.updateMatrix();crowns.setMatrixAt(i,dummy.matrix);}scene.add(trunks,crowns);
+ for(let i=0;i<treeCount;i++){const d=(i*137.507)%LENGTH,off=(i%2?1:-1)*(40+(Math.sin(i*53.3)*.5+.5)*300),p=pointAt(d,off),scale=.7+(Math.sin(i*23)*.5+.5)*.8;const nearest=Math.min(...centreline.slice(1).map((q,j)=>{const a=centreline[j],dx=q.x-a.x,dz=q.z-a.z,k=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/(dx*dx+dz*dz)));return Math.hypot(p.x-a.x-dx*k,p.z-a.z-dz*k);}));dummy.position.set(p.x,2.5,p.z);dummy.scale.setScalar(nearest<65?0:scale);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);dummy.position.y=10*scale;dummy.updateMatrix();crowns.setMatrixAt(i,dummy.matrix);}scene.add(trunks,crowns);
  // Grandstands, paddock and pit garages on the main straight.
  for(let i=0;i<12;i++){const d=wrap(-180+i*45),p=pointAt(d,-45),t=tangentAt(d),stand=new T.Group();stand.position.set(p.x,0,p.z);stand.rotation.y=Math.atan2(t.x,t.z);scene.add(stand);
   for(let row=0;row<6;row++){const seats=new T.Mesh(new T.BoxGeometry(16,1.2,39),mat(row%2?'#a5b4bb':'#485e6a'));seats.position.set(0,1+row*1.2,row*0);seats.scale.x=1-row*.11;stand.add(seats);}const roof=new T.Mesh(new T.BoxGeometry(21,.5,43),white);roof.position.y=10;stand.add(roof);
@@ -44,16 +45,18 @@ export function createScene(container:HTMLElement){
   const helmet=new T.Mesh(new T.SphereGeometry(.19,12,8),mat(team==='a'?'#e8fc69':'#f6c6ff'));helmet.position.set(0,1.02,-.15);root.add(helmet);
   scene.add(root);return root;
  }
+ // Batch immutable scenery by material to keep three simultaneous views practical.
+ scene.updateMatrixWorld(true);const groups=new Map<string,{material:T.Material;geometries:T.BufferGeometry[];objects:T.Mesh[]}>();scene.traverse(o=>{if(!(o instanceof T.Mesh)||o instanceof T.InstancedMesh)return;const m=o.material as T.MeshStandardMaterial;if(Array.isArray(m))return;const key=(m.color?.getHexString()??'')+m.side+('roughness' in m?m.roughness:'')+(m.map?.uuid??'');let g=groups.get(key);if(!g){g={material:m,geometries:[],objects:[]};groups.set(key,g);}g.geometries.push(o.geometry.clone().applyMatrix4(o.matrixWorld));g.objects.push(o);});for(const g of groups.values()){const merged=mergeGeometries(g.geometries);if(merged){for(const o of g.objects){o.removeFromParent();o.geometry.dispose();}scene.add(new T.Mesh(merged,g.material));}g.geometries.forEach(v=>v.dispose());}
  const cars={a:car('a'),b:car('b')};let mode:CameraMode='broadcast',cameraLabel='HELICOPTER',lastCut=0,forceCut=0;const look=new T.Vector3(),target=new T.Vector3(),desired=new T.Vector3();
  function render(race:RenderRace,now:number){
   for(const id of ['a','b'] as const){const c=race.cars[id],p=pointAt(c.distance,c.offset+(c.pit&&c.pit!=='none'?pitOffset(c.distance):0)),t=tangentAt(c.distance);cars[id].position.set(p.x,.06,p.z);cars[id].rotation.y=Math.atan2(t.x,t.z);}
   const focus=race.cars.a.distance>=race.cars.b.distance?'a':'b',c=race.cars[focus],p=pointAt(c.distance),t=tangentAt(c.distance),elapsed=now/1000;
-  if(mode.startsWith('cockpit')){const id=mode==='cockpit-a'?'a':'b',v=race.cars[id],q=pointAt(v.distance,v.offset+(v.pit&&v.pit!=='none'?pitOffset(v.distance):0)),dir=tangentAt(v.distance);camera.position.set(q.x+dir.x*.12,1.22,q.z+dir.z*.12);const ahead=pointAt(v.distance+55,v.offset);camera.lookAt(ahead.x,1.15,ahead.z);camera.fov=78;cameraLabel=`ONBOARD / ${id==='a'?'VECTOR':'CHAOS'}`;
+  if(mode.startsWith('cockpit')){const id=mode==='cockpit-a'?'a':'b',v=race.cars[id],q=pointAt(v.distance,v.offset+(v.pit&&v.pit!=='none'?pitOffset(v.distance):0)),dir=tangentAt(v.distance);camera.position.set(q.x+dir.x*.12,1.34,q.z+dir.z*.12);const ahead=pointAt(v.distance+55,v.offset);camera.lookAt(ahead.x,1.15,ahead.z);camera.fov=78;cameraLabel=`ONBOARD / ${id==='a'?'VECTOR':'CHAOS'}`;
   }else if(mode==='flythrough'){const d=elapsed*160,fp=pointAt(d,60),ahead=pointAt(d+140);camera.position.set(fp.x,95,fp.z);camera.lookAt(ahead.x,0,ahead.z);camera.fov=58;cameraLabel='MONZA / CIRCUIT TOUR';
   }else{
    const shot=mode==='helicopter'?2:(Math.floor(elapsed/9)+forceCut)%3;
    if(shot===0){desired.set(p.x-t.x*17-t.z*7,6,p.z-t.z*17+t.x*7);const ahead=pointAt(c.distance+18);target.set(ahead.x,.6,ahead.z);cameraLabel='CHASE CAM';}
-   else if(shot===1){const anchor=pointAt(c.distance+70,37);desired.set(anchor.x,7,anchor.z);target.set(p.x,.5,p.z);cameraLabel='TRACKSIDE';}
+   else if(shot===1){const anchor=pointAt(Math.floor(c.distance/160)*160+110,18);desired.set(anchor.x,4.5,anchor.z);target.set(p.x,.5,p.z);cameraLabel='TRACKSIDE';}
    else{desired.set(p.x+110,160,p.z+95);target.set(p.x,0,p.z);cameraLabel='HELICOPTER';}
    if(lastCut!==shot){camera.position.copy(desired);look.copy(target);lastCut=shot;}else{camera.position.lerp(desired,.12);look.lerp(target,.15);}camera.lookAt(look);camera.fov=shot===2?48:55;
   }

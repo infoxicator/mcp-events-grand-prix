@@ -1,6 +1,2 @@
-import { defineConfig } from '@playwright/test';
-export default defineConfig({
-  testDir:'./e2e',timeout:120_000,fullyParallel:false,workers:1,retries:0,
-  reporter:'list',use:{baseURL:'http://127.0.0.1:5187',browserName:'chromium',headless:true,viewport:{width:1440,height:1080},trace:'retain-on-failure',screenshot:'only-on-failure'},
-  webServer:{command:'npm run start',url:'http://127.0.0.1:5187/health',reuseExistingServer:false,timeout:30_000,env:{PORT:'5187',JEV_MOCK:'1',PONG_MATCHUP:'jev-vs-jev'}},
-});
+import {defineConfig} from '@playwright/test';
+export default defineConfig({testDir:'./e2e',timeout:120000,workers:1,retries:0,reporter:'list',use:{baseURL:'http://127.0.0.1:5387',headless:true,viewport:{width:1440,height:980},trace:'retain-on-failure',screenshot:'only-on-failure'},webServer:[{command:'npm start',url:'http://127.0.0.1:5387/health',reuseExistingServer:false,env:{PORT:'5387',JEV_MOCK:'1',ENGINEER_MOCK:'1',RACE_SPEED:'18'}},{command:'npm run mcp:host',url:'http://127.0.0.1:5388',reuseExistingServer:false,env:{PORT:'5387',MCP_HOST_PORT:'5388'}}]});
