@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "build": "npm run typecheck && vite build && vite build --config vite.mcp.config.ts && vite build --config vite.mcp-host.config.ts",
     "test": "vitest run",
-    "test:e2e": "playwright test --grep \"three independent\"",
+    "test:e2e": "playwright test e2e/race.spec.ts e2e/provider-ui.spec.ts",
     "test:mcp": "playwright test --grep \"MCP\"",
     "test:worker": "playwright test --config playwright.worker.config.ts",
     "start": "node --import tsx server/index.ts --production",
@@ -22,7 +22,9 @@
     "verify": "npm run build && npm test && npm run test:e2e && npm run test:mcp",
     "dev:worker": "wrangler dev",
     "worker:check": "wrangler deploy --dry-run --outdir /tmp/jev-grand-prix-worker",
-    "test:performance": "node scripts/performance.mjs"
+    "test:performance": "node scripts/performance.mjs",
+    "demo:luna": "node scripts/demo.mjs --matchup=jev-vs-luna",
+    "test:luna": "vitest run __test__/luna.test.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261113.1",

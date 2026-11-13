@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 if(Number(process.versions.node.split('.')[0])<22)throw new Error('Node.js 22+ is required.');
 const smoke=process.argv.includes('--smoke'),headless=!process.argv.includes('--headed')&&(smoke||process.env.DEMO_HEADLESS==='1');
+const requestedMatchup=process.argv.find(a=>a.startsWith('--matchup='))?.split('=')[1];if(requestedMatchup&&!['jev-vs-jev','jev-vs-luna'].includes(requestedMatchup))throw new Error('Unknown race matchup');
 const port=Number(process.env.PORT??5277),origin=`http://127.0.0.1:${port}`;
 const contexts=[],folders=[];let server,stopping=false;
 async function cleanup(){if(stopping)return;stopping=true;await Promise.allSettled(contexts.map(c=>c.close()));server?.kill('SIGTERM');await Promise.allSettled(folders.map(p=>rm(p,{recursive:true,force:true})));}
@@ -18,7 +19,7 @@ try{
   }
   // Refuse to attach to an unrelated process or silently take over an occupied port.
   if(await fetch(`${origin}/health`).then(()=>true).catch(()=>false))throw new Error(`Port ${port} is occupied. Stop the other server or set PORT=5278.`);
-  server=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,JEV_MOCK:process.env.JEV_MOCK??'1'}});
+  server=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,...(requestedMatchup?{RACE_MATCHUP:requestedMatchup}:{}),JEV_MOCK:smoke?'1':process.env.JEV_MOCK??'1'}});
   let ready=false;for(let n=0;n<100;n++){if(server.exitCode!==null)throw new Error('Game server exited before startup.');try{const r=await fetch(`${origin}/health`);if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}
   if(!ready)throw new Error('Server did not become ready within 10 seconds.');
   let screenWidth=1440,screenHeight=960;
@@ -41,6 +42,7 @@ try{
     await pages[1].waitForFunction(()=>window.__raceState?.intents.a>0&&window.__raceState?.intents.b>0);
     const health=await fetch(`${origin}/health`).then(r=>r.json());
     if(!health.connected.a||!health.connected.b)throw new Error('Player windows did not connect.');
+    if(requestedMatchup&&health.matchup!==requestedMatchup)throw new Error('Requested matchup was not selected.');
     console.log(`DEMO SMOKE PASS: ${contexts.length} independent windows, both players connected, mock decisions visible, phase=racing, HTTP health OK.`);await cleanup();
   }else{
     await Promise.race(contexts.map(c=>new Promise(resolve=>c.once('close',resolve))));await cleanup();

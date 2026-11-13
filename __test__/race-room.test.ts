@@ -1,5 +1,6 @@
 import {it,expect} from 'vitest';
 import {RaceRoom} from '../server/race-room';
+import {LENGTH} from '../src/race/track';
 import {createRace,stepRace} from '../src/race/physics';
 import {mockDriver,mockEngineer} from '../src/race/brains';
 import {createRaceDriver,createRaceEngineer,providerConfig} from '../server/race-brains';
@@ -18,4 +19,8 @@ it('actual TypeSafe SDK serializes racing choices and decodes the driver intent 
 });
 it('engineer validates structured strategy, falls back on malformed data, and mock forbids transport',async()=>{
  let calls=0;const transport:typeof fetch=async()=>{calls++;return Response.json({choices:[{message:{content:JSON.stringify({pace:'push',ers:'deploy',box:true,tyre:'hard',tactic:'attack',line:'Box box. Undercut now.'})}}]});};const engineer=createRaceEngineer({OPENROUTER_API_KEY:'fixture-only'},transport);expect((await engineer(createRace(),'a')).source).toBe('live');expect(calls).toBe(1);const mock=createRaceEngineer({JEV_MOCK:'1',OPENROUTER_API_KEY:'fixture-only'},transport);expect((await mock(createRace(),'a')).source).toBe('mock');expect(calls).toBe(1);expect(providerConfig({JEV_MOCK:'1',TYPESAFE_API_KEY:'unused'}).mock).toBe(true);const broken=createRaceEngineer({OPENROUTER_API_KEY:'fixture-only'},async()=>Response.json({choices:[]}));expect((await broken(createRace(),'a')).source).toBe('fallback');
+});
+
+it('finishing-position changes do not replace an overtake replay or grow frozen history',()=>{
+ const r=new RaceRoom(crypto.randomUUID(),'http://localhost:5387',{JEV_MOCK:'1'}),a=r.add(()=>{}),b=r.add(()=>{});r.join(a,'a',r.tokens.a);r.join(b,'b',r.tokens.b);r.race.phase='racing';r.race.time=100;r.race.leader='b';r.race.cars.b.finishTime=99;r.race.cars.b.distance=LENGTH*3+.01;r.race.cars.a.distance=LENGTH*3-.1;r.race.cars.a.speed=80;r.replay=[structuredClone(r.race)];r.advance(120);expect(r.race.phase).toBe('finished');expect(r.replay).toHaveLength(1);const tick=r.race.tick,frames=r.history.length;r.advance(1200);expect(r.race.tick).toBe(tick);expect(r.history).toHaveLength(frames);expect(r.replay).toHaveLength(1);
 });
