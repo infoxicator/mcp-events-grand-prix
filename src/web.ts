@@ -1,3 +1,2 @@
-import { mountArena } from './main';
-import { prepareRoom,showHostingError } from './hosting';
-try{mountArena(await prepareRoom());}catch(error){showHostingError(error);}
+if(new URLSearchParams(location.search).has('track')) await import('./race/flythrough'); else await import('./pong-web');
+export {};
