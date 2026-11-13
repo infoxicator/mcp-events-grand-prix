@@ -21,13 +21,13 @@ export class RaceRoom {
  advance(steps:number){if(Date.now()>this.expiresAt||!this.connected().a||!this.connected().b)return;if(this.race.phase==='lobby')this.race.phase='lights';
   for(let n=0;n<steps;n++){const oldLeader=this.race.leader;stepRace(this.race);if(this.race.phase==='racing')for(const t of TEAMS)if(this.race.time-this.engineerAt[t]>=12&&Date.now()>this.manualUntil[t])void this.think(t);
    if(this.race.tick%4===0){this.history.push(structuredClone(this.race));if(this.history.length>240)this.history.shift();}
-   if(oldLeader!==this.race.leader){const score=100-Math.abs(this.race.cars.a.distance-this.race.cars.b.distance);if(score>this.bestReplayScore){this.bestReplayScore=score;this.replay=structuredClone(this.history);this.captureUntil=this.race.time+3;}}
+   if(oldLeader!==this.race.leader&&this.race.cars.a.pit==='none'&&this.race.cars.b.pit==='none'){const score=100-Math.abs(this.race.cars.a.distance-this.race.cars.b.distance);if(score>this.bestReplayScore){this.bestReplayScore=score;this.replay=structuredClone(this.history);this.captureUntil=this.race.time+3;}}
    if(this.captureUntil>this.race.time&&this.race.tick%4===0)this.replay.push(structuredClone(this.race));
   }
  }
  async message(p:Peer,msg:ClientMessage){p.lastSeen=Date.now();if(msg.type==='join'){this.join(p,msg.team,msg.token);return;}if(!p.joined)return;
   if(msg.type==='ping'){p.send({type:'pong',sent:msg.sent});return;}if(msg.type==='replay'){p.send({type:'replay',frames:this.replay.length?this.replay:this.history});return;}
-  if(msg.type==='reset'&&p.owner){this.generation++;this.race=createRace();this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerAt={a:-100,b:-100};this.history=[];this.replay=[];this.bestReplayScore=0;this.broadcast();return;}
+  if(msg.type==='reset'&&p.owner){this.generation++;this.race=createRace();this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerAt={a:-100,b:-100};this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.captureUntil=0;this.broadcast();return;}
   if(msg.type==='radio'&&p.team){const i=msg.instruction;if(i&&['push','balanced','manage'].includes(i.pace)&&['deploy','balanced','harvest'].includes(i.ers)&&['soft','medium','hard'].includes(i.tyre)&&['attack','defend','hold'].includes(i.tactic)&&typeof i.box==='boolean'&&typeof i.line==='string'&&i.line.length<=180){this.manualUntil[p.team]=Date.now()+3000;this.radio(p.team,i,'mock');}return;}
   if(!p.team)return;const team=p.team;
   if(msg.type==='decide'&&!p.busy&&Date.now()-p.lastDecision>=150&&this.race.phase==='racing'){

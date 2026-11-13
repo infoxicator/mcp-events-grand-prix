@@ -1,4 +1,4 @@
-import { LENGTH,wrap,curvatureAt,CORNERS,SECTORS,DRS_ZONES,inZone,isDrsZone,PIT_ENTRY,PIT_STOP,PIT_EXIT,PIT_LIMIT,PIT_STOP_SECONDS } from './track';
+import { LENGTH,wrap,curvatureAt,CORNERS,SECTORS,DRS_ZONES,inZone,isDrsZone,PIT_ENTRY,PIT_STOP,PIT_EXIT,PIT_LIMIT,PIT_STOP_SECONDS,SPEED_TRAP } from './track';
 import { TEAMS,type Team,type Race,type Car,type Instruction,type DriverIntent,type Compound } from './types';
 export const DT=1/120;
 export const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
@@ -7,10 +7,10 @@ export const defaultInstruction=():Instruction=>({pace:'balanced',ers:'balanced'
 export const defaultIntent=():DriverIntent=>({offset:0,speedBias:0,brakeAggression:.5,side:'hold',ers:false,drs:true,reply:'Radio check. Ready to race.'});
 const TYRES={soft:{grip:1.08,wear:.000105},medium:{grip:1,wear:.000068},hard:{grip:.96,wear:.000044}};
 export function createRace(laps=3):Race {
- const car=(team:Team):Car=>({team,distance:team==='a'?0:-12,speed:0,gear:1,throttle:0,brake:0,offset:team==='a'?-2:2,steering:0,ers:90,drs:false,eligible:[false,false],compound:team==='a'?'soft':'medium',wear:0,temperature:85,fuel:34,pit:'none',pitTime:0,stops:0,tyreAge:0,warnings:0,penalty:0,lap:0,lapStart:0,lastLap:0,bestLap:0,lapTimes:[],sector:0,sectorStart:0,splits:[],bestSectors:[0,0,0],splitColours:['yellow','yellow','yellow'],finishTime:null,intent:defaultIntent(),instruction:defaultInstruction(),lastLimit:-100});
+ const car=(team:Team):Car=>({team,distance:team==='a'?0:-12,speed:0,speedTrap:0,gear:1,throttle:0,brake:0,offset:team==='a'?-2:2,steering:0,ers:90,drs:false,eligible:[false,false],compound:team==='a'?'soft':'medium',wear:0,temperature:85,fuel:34,pit:'none',pitTime:0,stops:0,tyreAge:0,warnings:0,penalty:0,lap:0,lapStart:0,lastLap:0,bestLap:0,lapTimes:[],sector:0,sectorStart:0,splits:[],bestSectors:[0,0,0],splitColours:['yellow','yellow','yellow'],finishTime:null,intent:defaultIntent(),instruction:defaultInstruction(),lastLimit:-100});
  return {tick:0,time:0,phase:'lobby',countdown:5,laps,cars:{a:car('a'),b:car('b')},events:[],radio:[],leader:'a',fastest:null,winner:null};
 }
-export function event(s:Race,kind:Race['events'][number]['kind'],team:Team,message:string){s.events.push({id:s.tick*10+s.events.length,time:s.time,kind,team,message});if(s.events.length>40)s.events.shift();}
+export function event(s:Race,kind:Race['events'][number]['kind'],team:Team,message:string){s.events.push({id:Math.max(s.tick*100,(s.events.at(-1)?.id??0)+1),time:s.time,kind,team,message});if(s.events.length>40)s.events.shift();}
 export function grip(c:Car){const thermal=1-Math.min(.2,Math.abs(c.temperature-95)*.002);return TYRES[c.compound].grip*(1-c.wear*.37)*thermal;}
 export function aero(c:Car,rival:Car){const gap=rival.distance-c.distance,aligned=Math.abs(c.offset-rival.offset)<2.6;return {slipstream:gap>4&&gap<75&&aligned?(1-gap/85)*5.5:0,dirtyAir:gap>3&&gap<38&&aligned?.12*(1-gap/40):0};}
 export function drsAllowed(c:Car){return c.pit==='none'&&c.eligible.some((ok,i)=>ok&&inZone(c.distance,DRS_ZONES[i].start,DRS_ZONES[i].end))&&isDrsZone(c.distance)&&c.brake<.1;}
@@ -52,6 +52,7 @@ export function stepRace(s:Race){
   const desired=clamp(c.intent.offset,-12,12);c.offset+=clamp(desired-c.offset,-3*DT,3*DT);c.steering=curvatureAt(c.distance)*12+clamp(desired-c.offset,-1,1)*.1;
   c.gear=clamp(Math.floor(c.speed/12)+1,1,8);
   c.ers=clamp(c.ers+(deploying?-1.6:c.brake>.1?2.3:c.instruction.ers==='harvest'?1.2:.25)*DT,0,100);
+  if(crossed(before,c.distance,SPEED_TRAP))c.speedTrap=c.speed*3.6;
   const travelled=c.distance-before;c.wear=clamp(c.wear+travelled*TYRES[c.compound].wear*(mode==='manage'?.68:mode==='push'?1.2:1),0,1);
   c.tyreAge+=travelled/LENGTH;c.temperature+=(92+c.throttle*12+c.brake*18-(mode==='manage'?9:0)-c.temperature)*DT*.08;
   c.fuel=Math.max(0,c.fuel-travelled*.0017);

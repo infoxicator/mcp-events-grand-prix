@@ -1,0 +1,158 @@
+{
+  "date": "2026-11-13T21:16:59.932Z",
+  "gpu": [
+    "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))"
+  ],
+  "viewport": {
+    "width": 1100,
+    "height": 850
+  },
+  "mode": "mock",
+  "samples": [
+    [
+      {
+        "frame": 286,
+        "calls": 24,
+        "triangles": 68364,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.14808343117823
+      },
+      {
+        "frame": 285,
+        "calls": 39,
+        "triangles": 69286,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.14741547411157
+      },
+      {
+        "frame": 285,
+        "calls": 57,
+        "triangles": 70298,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.15594072420682
+      }
+    ],
+    [
+      {
+        "frame": 304,
+        "calls": 45,
+        "triangles": 69518,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.11574558391099
+      },
+      {
+        "frame": 304,
+        "calls": 24,
+        "triangles": 68364,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.09629575713041
+      },
+      {
+        "frame": 304,
+        "calls": 62,
+        "triangles": 72420,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.09875206990532
+      }
+    ],
+    [
+      {
+        "frame": 322,
+        "calls": 22,
+        "triangles": 68170,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.412404359154095
+      },
+      {
+        "frame": 322,
+        "calls": 24,
+        "triangles": 68364,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.44175857313545
+      },
+      {
+        "frame": 322,
+        "calls": 56,
+        "triangles": 70294,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.424840706903765
+      }
+    ],
+    [
+      {
+        "frame": 340,
+        "calls": 45,
+        "triangles": 69518,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.62623494312601
+      },
+      {
+        "frame": 340,
+        "calls": 21,
+        "triangles": 68168,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.601620487735566
+      },
+      {
+        "frame": 340,
+        "calls": 62,
+        "triangles": 72420,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.629391921626954
+      }
+    ],
+    [
+      {
+        "frame": 359,
+        "calls": 45,
+        "triangles": 69518,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.327239012519755
+      },
+      {
+        "frame": 359,
+        "calls": 24,
+        "triangles": 68364,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.31994763563392
+      },
+      {
+        "frame": 359,
+        "calls": 62,
+        "triangles": 72420,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.31531764417506
+      }
+    ]
+  ],
+  "health": {
+    "ok": true,
+    "game": "Jev Grand Prix",
+    "mode": "mock",
+    "physicsHz": 120,
+    "snapshotHz": 30,
+    "speed": 4,
+    "rooms": 1,
+    "tick": 3084,
+    "connected": {
+      "a": true,
+      "b": true
+    },
+    "paidCalls": 0
+  }
+}

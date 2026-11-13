@@ -1,0 +1,30 @@
+
+> jev-grand-prix@1.0.0 test:worker
+> playwright test --config playwright.worker.config.ts
+
+
+Running 1 test using 1 worker
+
+(node:4039) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS: workerd assets, Durable Object fixed-step physics, both Jev intents, engineer radio, independent disconnect, owner authorization and MCP invitations; paid calls=0.
+  ✓  1 e2e-worker/worker.spec.ts:2:1 › local Worker Durable Object drives one race and serves the MCP invitation resource (3.6s)
+
+  1 passed (5.9s)
+
+
+> jev-grand-prix@1.0.0 worker:check
+> wrangler deploy --dry-run --outdir /tmp/jev-grand-prix-worker
+
+
+ ⛅️ wrangler 4.162.0
+────────────────────
+✨ Read 45 files from the assets directory /Users/ruben.casas@postman.com/.t3/scratch/2026-11-13-build-jev-grand-prix-an-e75bd481/jev-grand-prix/dist
+Total Upload: 1256.96 KiB / gzip: 225.56 KiB
+Your Worker has access to the following bindings:
+Binding                                 Resource            
+env.ROOMS (GameRoom)                    Durable Object      
+env.ROOM_CREATION (5 requests/60s)      Rate Limit          
+env.ASSETS                              Assets              
+
+--dry-run: exiting now.

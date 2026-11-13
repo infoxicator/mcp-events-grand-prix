@@ -6,9 +6,7 @@ import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 if(Number(process.versions.node.split('.')[0])<22)throw new Error('Node.js 22+ is required.');
 const smoke=process.argv.includes('--smoke'),headless=!process.argv.includes('--headed')&&(smoke||process.env.DEMO_HEADLESS==='1');
-const matchupArg=process.argv.find(arg=>arg.startsWith('--matchup='))?.split('=')[1];
-if(matchupArg&&!['jev-vs-jev','jev-vs-luna'].includes(matchupArg))throw new Error('Unknown matchup');
-const port=Number(process.env.PORT??5177),origin=`http://127.0.0.1:${port}`;
+const port=Number(process.env.PORT??5277),origin=`http://127.0.0.1:${port}`;
 const contexts=[],folders=[];let server,stopping=false;
 async function cleanup(){if(stopping)return;stopping=true;await Promise.allSettled(contexts.map(c=>c.close()));server?.kill('SIGTERM');await Promise.allSettled(folders.map(p=>rm(p,{recursive:true,force:true})));}
 process.on('SIGINT',()=>void cleanup());process.on('SIGTERM',()=>void cleanup());
@@ -19,17 +17,17 @@ try{
     await new Promise((resolve,reject)=>{installer.on('error',reject);installer.on('exit',code=>code===0?resolve():reject(new Error('Chromium install failed. Run npx playwright install chromium.')));});
   }
   // Refuse to attach to an unrelated process or silently take over an occupied port.
-  if(await fetch(`${origin}/health`).then(()=>true).catch(()=>false))throw new Error(`Port ${port} is occupied. Stop the other server or set PORT=5178.`);
-  server=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,...(matchupArg?{PONG_MATCHUP:matchupArg}:{}),...(smoke?{JEV_MOCK:'1'}:{})}});
+  if(await fetch(`${origin}/health`).then(()=>true).catch(()=>false))throw new Error(`Port ${port} is occupied. Stop the other server or set PORT=5278.`);
+  server=spawn(process.execPath,['--import','tsx','server/index.ts'],{stdio:'inherit',env:{...process.env,JEV_MOCK:process.env.JEV_MOCK??'1'}});
   let ready=false;for(let n=0;n<100;n++){if(server.exitCode!==null)throw new Error('Game server exited before startup.');try{const r=await fetch(`${origin}/health`);if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}
   if(!ready)throw new Error('Server did not become ready within 10 seconds.');
   let screenWidth=1440,screenHeight=960;
   const pages=[];
-  for(const [index,seat] of ['left','spectate','right'].entries()){
-    const folder=await mkdtemp(join(tmpdir(),'jev-pong-'));folders.push(folder);
+  for(const [index,seat] of ['a','spectate','b'].entries()){
+    const folder=await mkdtemp(join(tmpdir(),'jev-grand-prix-'));folders.push(folder);
     const width=Math.max(410,Math.floor(screenWidth/3)),height=Math.max(720,screenHeight);
-    const url=`${origin}/${seat==='spectate'?'?spectate':`?side=${seat}`}`;
-    const context=await chromium.launchPersistentContext(folder,{headless,viewport:headless?{width:480,height:1000}:null,args:[`--app=${url}`,`--window-size=${width},${height}`,`--window-position=${index*width},0`,'--no-default-browser-check']});contexts.push(context);
+    const url=`${origin}/${seat==='spectate'?'?spectate':`?team=${seat}`}`;
+    const context=await chromium.launchPersistentContext(folder,{headless,viewport:headless?{width:480,height:1000}:null,args:[`--app=${url}`,`--window-size=${width},${height}`,`--window-position=${index*width},0`,'--no-default-browser-check','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});contexts.push(context);
     const page=context.pages().find(p=>p.url().startsWith(origin))??context.pages()[0]??await context.newPage();
     if(!page.url().startsWith(url))await page.goto(url);
     for(const blank of context.pages())if(blank!==page&&blank.url()==='about:blank')await blank.close();
@@ -37,14 +35,13 @@ try{
     if(index===0&&!headless){const size=await page.evaluate(()=>({width:screen.availWidth,height:screen.availHeight}));screenWidth=size.width;screenHeight=size.height;}
     if(!headless){try{const cdp=await context.newCDPSession(page);const {windowId}=await cdp.send('Browser.getWindowForTarget');await cdp.send('Browser.setWindowBounds',{windowId,bounds:{left:index*Math.floor(screenWidth/3),top:0,width:Math.max(410,Math.floor(screenWidth/3)),height:screenHeight,windowState:'normal'}});await cdp.detach();}catch{console.log(`Opened ${seat}; window positioning is unavailable on this desktop.`);}}
   }
-  console.log('\nThree independent Chromium windows are connected: VECTOR | SPECTATOR | CHAOS.\nRecord the spectator view; use Title card for the intro. Ctrl+C closes everything.\n');
+  console.log('\nThree independent Chromium windows are connected: VECTOR | SPECTATOR | CHAOS.\nRecord the spectator view; use Title sequence for the intro. Ctrl+C closes everything.\n');
   if(smoke){
-    await pages[1].waitForFunction(()=>document.body.dataset.phase==='play');
-    await pages[1].getByText('MOCK / HEURISTIC',{exact:true}).first().waitFor();
+    await pages[1].waitForFunction(()=>document.body.dataset.phase==='racing');
+    await pages[1].waitForFunction(()=>window.__raceState?.intents.a>0&&window.__raceState?.intents.b>0);
     const health=await fetch(`${origin}/health`).then(r=>r.json());
-    if(!health.connected.left||!health.connected.right)throw new Error('Player windows did not connect.');
-    if(matchupArg&&health.matchup!==matchupArg)throw new Error('Requested matchup was not selected.');
-    console.log(`DEMO SMOKE PASS: ${contexts.length} independent windows, both players connected, mock decisions visible, phase=play, HTTP health OK.`);await cleanup();
+    if(!health.connected.a||!health.connected.b)throw new Error('Player windows did not connect.');
+    console.log(`DEMO SMOKE PASS: ${contexts.length} independent windows, both players connected, mock decisions visible, phase=racing, HTTP health OK.`);await cleanup();
   }else{
     await Promise.race(contexts.map(c=>new Promise(resolve=>c.once('close',resolve))));await cleanup();
   }

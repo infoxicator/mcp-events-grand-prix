@@ -47,7 +47,9 @@ export function createScene(container:HTMLElement){
  }
  // Batch immutable scenery by material to keep three simultaneous views practical.
  scene.updateMatrixWorld(true);const groups=new Map<string,{material:T.Material;geometries:T.BufferGeometry[];objects:T.Mesh[]}>();scene.traverse(o=>{if(!(o instanceof T.Mesh)||o instanceof T.InstancedMesh)return;const m=o.material as T.MeshStandardMaterial;if(Array.isArray(m))return;const key=(m.color?.getHexString()??'')+m.side+('roughness' in m?m.roughness:'')+(m.map?.uuid??'');let g=groups.get(key);if(!g){g={material:m,geometries:[],objects:[]};groups.set(key,g);}g.geometries.push(o.geometry.clone().applyMatrix4(o.matrixWorld));g.objects.push(o);});for(const g of groups.values()){const merged=mergeGeometries(g.geometries);if(merged){for(const o of g.objects){o.removeFromParent();o.geometry.dispose();}scene.add(new T.Mesh(merged,g.material));}g.geometries.forEach(v=>v.dispose());}
- const cars={a:car('a'),b:car('b')};let mode:CameraMode='broadcast',cameraLabel='HELICOPTER',lastCut=0,forceCut=0;const look=new T.Vector3(),target=new T.Vector3(),desired=new T.Vector3();
+ const shadowCanvas=document.createElement('canvas');shadowCanvas.width=64;shadowCanvas.height=64;const sx=shadowCanvas.getContext('2d')!,gradient=sx.createRadialGradient(32,32,4,32,32,32);gradient.addColorStop(0,'#071013aa');gradient.addColorStop(1,'#07101300');sx.fillStyle=gradient;sx.fillRect(0,0,64,64);const shadowTexture=new T.CanvasTexture(shadowCanvas);
+ const cars={a:car('a'),b:car('b')};for(const root of Object.values(cars)){const shadow=new T.Mesh(new T.PlaneGeometry(4.5,8),new T.MeshBasicMaterial({map:shadowTexture,transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=.025;root.add(shadow);}
+let mode:CameraMode='broadcast',cameraLabel='HELICOPTER',lastCut=0,forceCut=0;const look=new T.Vector3(),target=new T.Vector3(),desired=new T.Vector3();
  function render(race:RenderRace,now:number){
   for(const id of ['a','b'] as const){const c=race.cars[id],p=pointAt(c.distance,c.offset+(c.pit&&c.pit!=='none'?pitOffset(c.distance):0)),t=tangentAt(c.distance);cars[id].position.set(p.x,.06,p.z);cars[id].rotation.y=Math.atan2(t.x,t.z);}
   const focus=race.cars.a.distance>=race.cars.b.distance?'a':'b',c=race.cars[focus],p=pointAt(c.distance),t=tangentAt(c.distance),elapsed=now/1000;
@@ -58,7 +60,7 @@ export function createScene(container:HTMLElement){
    if(shot===0){desired.set(p.x-t.x*17-t.z*7,6,p.z-t.z*17+t.x*7);const ahead=pointAt(c.distance+18);target.set(ahead.x,.6,ahead.z);cameraLabel='CHASE CAM';}
    else if(shot===1){const anchor=pointAt(Math.floor(c.distance/160)*160+110,18);desired.set(anchor.x,4.5,anchor.z);target.set(p.x,.5,p.z);cameraLabel='TRACKSIDE';}
    else{desired.set(p.x+110,160,p.z+95);target.set(p.x,0,p.z);cameraLabel='HELICOPTER';}
-   if(lastCut!==shot){camera.position.copy(desired);look.copy(target);lastCut=shot;}else{camera.position.lerp(desired,.12);look.lerp(target,.15);}camera.lookAt(look);camera.fov=shot===2?48:55;
+   camera.position.copy(desired);look.copy(target);lastCut=shot;camera.lookAt(look);camera.fov=shot===2?48:55;
   }
   camera.updateProjectionMatrix();renderer.render(scene,camera);
  }
