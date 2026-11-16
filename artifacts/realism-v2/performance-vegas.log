@@ -1,0 +1,278 @@
+
+> jev-grand-prix@1.0.0 test:performance
+> node scripts/performance.mjs
+
+JEV GRAND PRIX · LAS-VEGAS · JEV-VS-JEV · MOCK · 4× race clock
+http://127.0.0.1:5577/?team=a
+http://127.0.0.1:5577/?spectate
+http://127.0.0.1:5577/?team=b
+MCP: http://127.0.0.1:5577/mcp
+{
+  "date": "2026-11-16T22:58:40.855Z",
+  "gpu": [
+    "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))"
+  ],
+  "viewport": {
+    "width": 1100,
+    "height": 850
+  },
+  "mode": "mock",
+  "circuit": "las-vegas",
+  "samples": [
+    [
+      {
+        "frame": 7593,
+        "calls": 766,
+        "triangles": 258760,
+        "points": 0,
+        "lines": 128,
+        "sparks": 1,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.35500392635234
+      },
+      {
+        "frame": 7608,
+        "calls": 788,
+        "triangles": 203498,
+        "points": 0,
+        "lines": 128,
+        "sparks": 1,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.4749640964325
+      },
+      {
+        "frame": 7593,
+        "calls": 597,
+        "triangles": 261550,
+        "points": 0,
+        "lines": 128,
+        "sparks": 1,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.4463171384468
+      }
+    ],
+    [
+      {
+        "frame": 8133,
+        "calls": 742,
+        "triangles": 258574,
+        "points": 0,
+        "lines": 128,
+        "sparks": 9,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.81862394099
+      },
+      {
+        "frame": 8148,
+        "calls": 893,
+        "triangles": 222594,
+        "points": 0,
+        "lines": 128,
+        "sparks": 8,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.80794719965843
+      },
+      {
+        "frame": 8133,
+        "calls": 566,
+        "triangles": 259594,
+        "points": 0,
+        "lines": 128,
+        "sparks": 9,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.76691131780645
+      }
+    ],
+    [
+      {
+        "frame": 8688,
+        "calls": 680,
+        "triangles": 255332,
+        "points": 0,
+        "lines": 128,
+        "sparks": 9,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.50532562808291
+      },
+      {
+        "frame": 8703,
+        "calls": 844,
+        "triangles": 214136,
+        "points": 0,
+        "lines": 128,
+        "sparks": 9,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.3836878712819
+      },
+      {
+        "frame": 8688,
+        "calls": 532,
+        "triangles": 256408,
+        "points": 0,
+        "lines": 128,
+        "sparks": 9,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.47847423059217
+      }
+    ],
+    [
+      {
+        "frame": 9228,
+        "calls": 642,
+        "triangles": 252050,
+        "points": 0,
+        "lines": 128,
+        "sparks": 12,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.97047179075953
+      },
+      {
+        "frame": 9243,
+        "calls": 811,
+        "triangles": 212270,
+        "points": 0,
+        "lines": 128,
+        "sparks": 12,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.84422185688895
+      },
+      {
+        "frame": 9228,
+        "calls": 501,
+        "triangles": 255382,
+        "points": 0,
+        "lines": 128,
+        "sparks": 12,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.86005108818533
+      }
+    ],
+    [
+      {
+        "frame": 9768,
+        "calls": 614,
+        "triangles": 251994,
+        "points": 0,
+        "lines": 128,
+        "sparks": 15,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.5755211028716
+      },
+      {
+        "frame": 9783,
+        "calls": 763,
+        "triangles": 208962,
+        "points": 0,
+        "lines": 128,
+        "sparks": 15,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.65082411770389
+      },
+      {
+        "frame": 9768,
+        "calls": 480,
+        "triangles": 254630,
+        "points": 0,
+        "lines": 128,
+        "sparks": 15,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.58610866917674
+      }
+    ]
+  ],
+  "health": {
+    "ok": true,
+    "game": "Jev Grand Prix",
+    "mode": "mock",
+    "matchup": "jev-vs-jev",
+    "circuit": "las-vegas",
+    "players": {
+      "a": {
+        "engine": "jev",
+        "name": "JEV",
+        "model": "jev-latest",
+        "provider": "mock",
+        "mock": true,
+        "intervalMs": 200
+      },
+      "b": {
+        "engine": "jev",
+        "name": "JEV",
+        "model": "jev-latest",
+        "provider": "mock",
+        "mock": true,
+        "intervalMs": 200
+      }
+    },
+    "physicsHz": 120,
+    "snapshotHz": 30,
+    "speed": 4,
+    "rooms": 1,
+    "tick": 3063,
+    "connected": {
+      "a": true,
+      "b": true
+    },
+    "drivers": {
+      "a": {
+        "attempts": 0,
+        "successes": 0,
+        "fallbacks": 0,
+        "source": "mock"
+      },
+      "b": {
+        "attempts": 0,
+        "successes": 0,
+        "fallbacks": 0,
+        "source": "mock"
+      }
+    },
+    "paidCalls": 0
+  }
+}
+Average FPS, Vector / Chaos / Broadcast: 116.2 / 116.2 / 116.2

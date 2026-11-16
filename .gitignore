@@ -14,3 +14,4 @@ __test__/__screenshots__/
 .dev.vars*
 worker-test-results/
 worker-dist/
+*.blend1

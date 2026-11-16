@@ -1,0 +1,19 @@
+
+> jev-grand-prix@1.0.0 test:mcp
+> playwright test --grep "MCP"
+
+[WebServer] (node:47022) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:47049) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:47050) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"mcpResource":"ui://jev-grand-prix/pit-wall.html","sharedRoom":"edb2c059-46a7-4f64-9190-9f4d6c516bcb","circuit":"monza","intents":{"a":31,"b":43},"paidCalls":0,"clipboardFallback":true,"independentTeardown":true,"browserInvitation":true,"errors":[]}
+  ✓  1 e2e/mcp.spec.ts:3:44 › two MCP app contexts join by invitation and a browser spectator watches the same race (monza) (11.7s)
+{"mcpResource":"ui://jev-grand-prix/pit-wall.html","sharedRoom":"35dab5a3-50a2-4f0b-9481-da5cb6a0dcd7","circuit":"las-vegas","intents":{"a":34,"b":44},"paidCalls":0,"clipboardFallback":true,"independentTeardown":true,"browserInvitation":true,"errors":[]}
+  ✓  2 e2e/mcp.spec.ts:3:44 › two MCP app contexts join by invitation and a browser spectator watches the same race (las-vegas) (12.3s)
+
+  2 passed (26.1s)

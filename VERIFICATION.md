@@ -208,3 +208,43 @@ Evidence: `artifacts/vegas-verification.log`, `vegas-handling.log`, `vegas-perfo
 The final browser bundle scan found no provider key names, SDK client markers or inference endpoints. No credentials were changed or printed. The original Pong folder and unrelated running servers were left alone. Nothing was pushed, uploaded or deployed.
 
 A final lifecycle regression, `JEV_MOCK=1 npx playwright test e2e/vegas.spec.ts --grep 'owner switches'`, **passed in 3.7 s** (5.7 s including servers). It switches Monza → Vegas → Monza → Vegas → Monza across two independent connected browser contexts, preserves the room, limits each view to one canvas, restricts selection to the owner and exits the Sphere camera on returning to daylight. The first setup tried the camera with no driver seats connected and was blocked by the expected waiting overlay; that attempt was interrupted, then the test was corrected to connect both mock drivers. Clean output is in `artifacts/vegas-switching.log`. The test is now part of `npm run test:e2e` (seven browser scenarios total).
+
+## 2026-11-16: Blender car realism v2
+
+Preserved `5ce603c`'s Monza + Las Vegas circuit geometry, scenery, night lighting, Sphere, sparks, physics, Jev/Luna providers, engineers, radio, rooms, invitation flow and Worker configuration. No simulation coefficients or provider settings changed. The new work replaces the car renderer with original Blender GLBs, adds a real modelled steering wheel/live display, lowers the driver's-eye camera, adds T-cam, and provides a studio with Colour/Clay/occluded Wireframe modes.
+
+**Reference approval:** the MP4 was downloaded and inspected at 1 fps plus 4 fps in the requested ranges. Ruben approved the timestamped proof and corrected the livery specification to match the clip. All marks on the new models are fictional. Reference media stays local and is excluded from production builds. The original pre-change front/cockpit/broadcast/rear captures are preserved in `artifacts/realism-v2/before/`.
+
+**Blender:** version **5.2.2 LTS**, build `d13f752e3b9c`. The first sandboxed process exited 139 before Python execution. Its crash trace points to `supports_barycentric_whitelist` → `MTLBackend::metal_is_supported` → GPU backend selection. The same installed binary completed successfully with normal local application/GPU access. Final regeneration used `-b --factory-startup --python scripts/blender/build_car.py` with user add-ons disabled. No reinstall, engine substitution or procedural Three.js car fallback was used. Both high/low GLBs and the editable `.blend` are committed. Final high LOD: **103,808 triangles**, approximately **3.0 MB**; low LOD: approximately **929 KB**, selected from 32 m. The manifest records dimensions and authorship.
+
+**Visual iteration:** inspected actual headed GPU screenshots against frames 00:01, 00:04.25 and 00:05.25. Fixed over-bright carbon, inflated cockpit shoulders, clipped fictional lettering, mirrored steering-button layout, a visible reflection boundary, a jagged paint boundary, reversed cover-face visibility in Clay and an obstructed steering close-up. Wireframe now draws lines over an opaque depth surface so internal/back edges do not obscure the silhouette. Final screenshots have no page errors, failed HTTP assets or shader errors. The 3D dashboard updates at 10 Hz; wheel rotation, steering, body pitch/roll and DRS follow telemetry every rendered frame.
+
+Commands used Node **24.14.0**, with `env PATH=/Users/ruben.casas@postman.com/.nvm/versions/node/v24.14.0/bin:$PATH` before each npm/npx command. All provider execution used **`JEV_MOCK=1`** or injected mock WebSocket fixtures; paid calls **0**.
+
+| Command | Observed result |
+| --- | --- |
+| `/Applications/Blender.app/Contents/MacOS/Blender --version` | 5.2.2 LTS |
+| `/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_car.py` | PASS; editable source + two GLBs exported |
+| `JEV_MOCK=1 npm run verify` | PASS; strict Node/Worker typechecks, three production builds, **46 Vitest tests**, **8 Playwright scenarios**, **2 MCP invitation tests** |
+| `JEV_MOCK=1 npm run build` and `npm run typecheck` | PASS after the final visual refinements |
+| `JEV_MOCK=1 npm test` | PASS: **46 tests / 7 files** after final refinements; GLB rigs/resources/branding/LOD and wheelbase checks added |
+| `JEV_MOCK=1 npx playwright test e2e/realism-v2.spec.ts` | PASS: **17.2 s** final capture; front/rear/side/wheel/steering/chase/onboard/T-cam and all studio modes; live-to-studio return; pause control; no browser/asset errors |
+| `JEV_MOCK=1 npm run test:mcp` | PASS final renderer: **2 tests**, **11.7 s Monza / 12.3 s Vegas**; separate app contexts + spectator, clipboard fallback, browser invite joining, independent teardown |
+| `JEV_MOCK=1 npm run test:handling` | PASS Monza deterministic three-lap race; both cars pit once; calibration output retained |
+| `JEV_MOCK=1 RACE_CIRCUIT=las-vegas npm run test:handling` | PASS Vegas deterministic three-lap race; both cars pit once; calibration output retained |
+| `JEV_MOCK=1 npm run test:performance` | PASS: three 1100×850 headed GPU views; **115.5 / 115.6 / 115.6 FPS** Vector/Chaos/Broadcast |
+| `JEV_MOCK=1 RACE_CIRCUIT=las-vegas npm run test:performance` | PASS final isolated measurement: **115.7 / 115.6 / 115.7 FPS**, three 1100×850 views, Apple M4 Pro Metal renderer; night lighting/bloom/sparks enabled |
+| `JEV_MOCK=1 WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jgp-v2-final-worker.log npm run test:worker` | PASS: **2 tests**, Monza **4.1 s**, Vegas **4.0 s**; local workerd/DO, MCP resource and shared races |
+| `JEV_MOCK=1 WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jgp-v2-dry-run.log npm run worker:check` | PASS; dry run only, no deployment/upload |
+| `PORT=5487 JEV_MOCK=1 ENGINEER_MOCK=1 npm run demo:vegas -- --smoke --headed --matchup=jev-vs-luna` | PASS; three independent Chromium windows, both mock drivers, racing phase, HTTP health OK; launcher cleaned up its own windows/server |
+| `curl --fail --silent http://127.0.0.1:5477/health` | PASS; local mock server reachable; JSON retained |
+| `python3 scripts/realism-sheets.py` | PASS; three 1200 px wide JPEG quality-60 sheets, each base64 payload below 45,000 characters; three reference comparisons |
+| `git diff --check` | PASS |
+
+The full races verify movement, radio-driven behaviour changes, pit stops, lap counts, finish/results, replay and reconnect on both circuits. The final close-up captures use a deterministic mock WebSocket pose to allow comparison; full-race/MCP screenshots use the actual server. A performance measurement overlapping the demo smoke check was conservatively ~103 FPS; it was repeated with exactly three windows, yielding the final ~116 FPS figures above. FPS describes this Mac/display/viewport, not all hardware or a 4K recording guarantee. Scene pixel ratio remains capped at 1.5.
+
+All new evidence is under `artifacts/realism-v2/`: PNG captures, comparison PNGs, JPEG sheets, exact base64 text, logs, machine-readable render/handling/performance data and a self-contained remote review with copy/select fallback. The MCP resource is approximately **12.3 MB uncompressed**, including both GLBs and existing track textures/HDR; local sandbox and Worker tests pass. Loading on a slow link will take longer. Existing screenshots outside this evidence directory are restored to the baseline after testing so the pre-change record remains intact.
+
+**Honest remaining gaps:** the video has more carefully sculpted continuous body surfaces, denser fictional-equivalent sponsor placement, more convincing tyre shoulder detail and richer studio reflections. Our sidepods, inlet lips, suspension attachments, helmet and wing sections remain simplified. Some render typography is lighter than the reference. The scene uses a blurred planar reflection and contact shading rather than ray-traced AO/global illumination. Driver's-eye and T-cam are usable live camera views but do not include hands, visor optics or a full physical camera/suspension model. There is no exploded engine/gearbox view. These are improved real-time models, not a photogrammetric replica or a claim of matching every surface in the clip. The calibrated driving model and accelerated strategy wear remain as before.
+
+Local changes only. No provider keys were read or changed; no live inference, pushes, publishing or deployment occurred.

@@ -15,6 +15,6 @@ test('detailed cars render from front and rear, with textured aerial and cockpit
  }
  fixture.race.cars.a.distance=4220;fixture.race.cars.b.distance=4204;for(const c of Object.values(fixture.race.cars)){c.offset=0;c.speed=72;c.gear=7;c.throttle=.8;}
  await page.goto('/?spectate');await page.getByRole('button',{name:'↗ Aerial',exact:true}).click();await expect(page.locator('#camera-name')).toContainText('AERIAL');await page.waitForLoadState('networkidle');await page.screenshot({path:'artifacts/realism-aerial.png'});
- await page.getByRole('button',{name:'07 Onboard',exact:true}).click();await expect(page.locator('#camera-name')).toContainText('ONBOARD');await page.screenshot({path:'artifacts/realism-cockpit.png'});
+ await page.getByRole('button',{name:'44 Onboard',exact:true}).click();await expect(page.locator('#camera-name')).toContainText('ONBOARD');await page.screenshot({path:'artifacts/realism-cockpit.png'});
  expect(errors).toEqual([]);expect(failedAssets).toEqual([]);expect(fixture.paidCalls).toBe(0);
 });

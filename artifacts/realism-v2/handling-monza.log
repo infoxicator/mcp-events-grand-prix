@@ -1,0 +1,78 @@
+
+> jev-grand-prix@1.0.0 test:handling
+> node --import tsx scripts/handling-check.ts && node --import tsx scripts/calibrate.ts
+
+{
+  "elapsedMs": 1401.351042,
+  "phase": "finished",
+  "maxSpeed": 345.69596527807965,
+  "maxBrake": 3.779098769331687,
+  "maxLateral": 5.500000000000001,
+  "lapTimes": {
+    "a": [
+      106.69166666669764,
+      100.2666666666118,
+      86.59166666658791
+    ],
+    "b": [
+      92.49166666668634,
+      109.15833333329459,
+      101.48333333324103
+    ]
+  },
+  "stops": {
+    "a": 1,
+    "b": 1
+  },
+  "tyres": {
+    "a": 0.5561477825854964,
+    "b": 0.7404699207495229
+  },
+  "fuel": 28.077193210166747,
+  "corners": [
+    {
+      "name": "Rettifilo",
+      "d": 950
+    },
+    {
+      "name": "Curva Grande",
+      "d": 1510
+    },
+    {
+      "name": "Roggia",
+      "d": 2170
+    },
+    {
+      "name": "Lesmo 1",
+      "d": 2556
+    },
+    {
+      "name": "Lesmo 2",
+      "d": 2887
+    },
+    {
+      "name": "Ascari",
+      "d": 4040
+    },
+    {
+      "name": "Parabolica",
+      "d": 5279
+    }
+  ],
+  "samples": 607
+}
+{
+  laps: [ 81.8083333333445, 78.53333333334066 ],
+  maxG: 5.500000000000001,
+  maxBrake: 3.93132528371582,
+  maxOffset: 3.8666958625014636,
+  corners: [
+    { name: 'Rettifilo', kph: 73.31811000559624 },
+    { name: 'Curva Grande', kph: 297.02054225799424 },
+    { name: 'Roggia', kph: 108.36015681499889 },
+    { name: 'Lesmo 1', kph: 217.3083016400541 },
+    { name: 'Lesmo 2', kph: 146.23443835901952 },
+    { name: 'Ascari', kph: 154.7862184092105 },
+    { name: 'Parabolica', kph: 227.61872936829093 }
+  ]
+}

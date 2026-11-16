@@ -6,7 +6,7 @@ test('Las Vegas night scene renders Sphere, Strip, cockpit and skid sparks witho
  const errors:string[]=[],assets:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});page.on('response',r=>{if(r.status()>=400&&/\.(jpg|hdr|js|css)/.test(r.url()))assets.push(r.url());});
  await page.routeWebSocket('**/api/rooms/*/ws',ws=>{ws.onMessage(raw=>{const m=JSON.parse(String(raw));if(m.type==='join'){ws.send(JSON.stringify({type:'joined',team:null,canReset:true}));ws.send(JSON.stringify(fixture));}if(m.type==='ping')ws.send(JSON.stringify({type:'pong',sent:m.sent}));});});
  await mkdir('artifacts',{recursive:true});
- for(const [name,distance,camera] of [['sphere',1800,'◉ Sphere'],['strip',4370,'↗ The Strip'],['aerial',4370,'↗ Aerial'],['cockpit',1350,'07 Onboard'],['sparks',4300,'◉ Broadcast']] as const){
+ for(const [name,distance,camera] of [['sphere',1800,'◉ Sphere'],['strip',4370,'↗ The Strip'],['aerial',4370,'↗ Aerial'],['cockpit',1350,'44 Onboard'],['sparks',4300,'◉ Broadcast']] as const){
   fixture.race.cars.a.distance=distance;fixture.race.cars.b.distance=distance-15;for(const c of Object.values(fixture.race.cars)){c.offset=0;c.speed=90;c.pit='none';c.gear=8;}
   await page.goto('/?spectate');await expect(page.locator('body')).toHaveAttribute('data-circuit','las-vegas');await page.getByRole('button',{name:camera,exact:true}).click();await page.waitForLoadState('networkidle');await page.waitForTimeout(600);await page.screenshot({path:`artifacts/vegas-${name}.png`});
   if(name==='sparks')await expect.poll(()=>page.evaluate(()=>(window as unknown as {__renderStats:{sparks:number}}).__renderStats.sparks)).toBeGreaterThan(0);

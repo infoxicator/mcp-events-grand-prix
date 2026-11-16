@@ -1,0 +1,12 @@
+{
+  "source": "scripts/blender/build_car.py",
+  "highTriangles": 103808,
+  "dimensions": {
+    "length": 5.62,
+    "width": 2.0,
+    "wheelbase": 3.6,
+    "bodyHeight": 1.08
+  },
+  "lodDistanceMetres": 32,
+  "licence": "Original project asset; fictional branding"
+}

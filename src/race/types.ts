@@ -17,4 +17,4 @@ export interface RoomLinks {room:string;expiresAt:number;owner:string;a:string;b
 export interface HostedRoom {room:string;token:string;links:RoomLinks|null;origin?:string;mcpToken?:string;}
 export type ClientMessage={type:'join';team:Team|null;token:string}|{type:'ping';sent:number}|{type:'decide'}|{type:'intent';sequence:number}|{type:'reset'}|{type:'matchup';matchup:Matchup}|{type:'circuit';circuit:CircuitId}|{type:'replay'}|{type:'radio';instruction:Instruction};
 export type ServerMessage=RaceState|{type:'joined';team:Team|null;canReset:boolean;reason?:string}|{type:'decision';decision:Decision}|{type:'pong';sent:number}|{type:'replay';frames:Race[]}|{type:'error';message:string};
-export const PERSONAS={a:{name:'VECTOR',number:'07',colour:'#ff6335',subtitle:'Precision under pressure',engineer:'THE STRATEGIST'},b:{name:'CHAOS',number:'23',colour:'#a5a9ff',subtitle:'Born to send it',engineer:'THE TACTICIAN'}};
+export const PERSONAS={a:{name:'VECTOR',number:'44',colour:'#ed3446',subtitle:'Precision under pressure',engineer:'THE STRATEGIST'},b:{name:'CHAOS',number:'23',colour:'#30b9ad',subtitle:'Born to send it',engineer:'THE TACTICIAN'}};

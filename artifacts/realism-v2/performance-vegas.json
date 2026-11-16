@@ -1,0 +1,268 @@
+{
+  "date": "2026-11-16T23:02:40.751Z",
+  "gpu": [
+    "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))"
+  ],
+  "viewport": {
+    "width": 1100,
+    "height": 850
+  },
+  "mode": "mock",
+  "circuit": "las-vegas",
+  "samples": [
+    [
+      {
+        "frame": 6618,
+        "calls": 765,
+        "triangles": 258758,
+        "points": 0,
+        "lines": 128,
+        "sparks": 3,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.83919723594079
+      },
+      {
+        "frame": 6618,
+        "calls": 788,
+        "triangles": 203528,
+        "points": 0,
+        "lines": 128,
+        "sparks": 3,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.86607087306581
+      },
+      {
+        "frame": 6633,
+        "calls": 595,
+        "triangles": 261546,
+        "points": 0,
+        "lines": 128,
+        "sparks": 3,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.79262674182033
+      }
+    ],
+    [
+      {
+        "frame": 7173,
+        "calls": 733,
+        "triangles": 257730,
+        "points": 0,
+        "lines": 128,
+        "sparks": 7,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.2316772614692
+      },
+      {
+        "frame": 7173,
+        "calls": 891,
+        "triangles": 222620,
+        "points": 0,
+        "lines": 128,
+        "sparks": 7,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.17694243159845
+      },
+      {
+        "frame": 7188,
+        "calls": 565,
+        "triangles": 259592,
+        "points": 0,
+        "lines": 128,
+        "sparks": 7,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.35316772327123
+      }
+    ],
+    [
+      {
+        "frame": 7713,
+        "calls": 679,
+        "triangles": 255330,
+        "points": 0,
+        "lines": 128,
+        "sparks": 20,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.17460310415547
+      },
+      {
+        "frame": 7713,
+        "calls": 842,
+        "triangles": 214162,
+        "points": 0,
+        "lines": 128,
+        "sparks": 20,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.1482201387115
+      },
+      {
+        "frame": 7728,
+        "calls": 525,
+        "triangles": 256394,
+        "points": 0,
+        "lines": 128,
+        "sparks": 20,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 116.11508853314712
+      }
+    ],
+    [
+      {
+        "frame": 8268,
+        "calls": 635,
+        "triangles": 252036,
+        "points": 0,
+        "lines": 128,
+        "sparks": 12,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.6743655999085
+      },
+      {
+        "frame": 8268,
+        "calls": 809,
+        "triangles": 212296,
+        "points": 0,
+        "lines": 128,
+        "sparks": 12,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.72271173129285
+      },
+      {
+        "frame": 8283,
+        "calls": 498,
+        "triangles": 255518,
+        "points": 0,
+        "lines": 128,
+        "sparks": 12,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.73649047194156
+      }
+    ],
+    [
+      {
+        "frame": 8808,
+        "calls": 610,
+        "triangles": 247656,
+        "points": 0,
+        "lines": 128,
+        "sparks": 7,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.33049330188588
+      },
+      {
+        "frame": 8808,
+        "calls": 760,
+        "triangles": 208986,
+        "points": 0,
+        "lines": 128,
+        "sparks": 7,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.18763936646849
+      },
+      {
+        "frame": 8823,
+        "calls": 479,
+        "triangles": 254628,
+        "points": 0,
+        "lines": 128,
+        "sparks": 7,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "modelError": null,
+        "finish": "colour",
+        "fps": 115.2804038933999
+      }
+    ]
+  ],
+  "health": {
+    "ok": true,
+    "game": "Jev Grand Prix",
+    "mode": "mock",
+    "matchup": "jev-vs-jev",
+    "circuit": "las-vegas",
+    "players": {
+      "a": {
+        "engine": "jev",
+        "name": "JEV",
+        "model": "jev-latest",
+        "provider": "mock",
+        "mock": true,
+        "intervalMs": 200
+      },
+      "b": {
+        "engine": "jev",
+        "name": "JEV",
+        "model": "jev-latest",
+        "provider": "mock",
+        "mock": true,
+        "intervalMs": 200
+      }
+    },
+    "physicsHz": 120,
+    "snapshotHz": 30,
+    "speed": 4,
+    "rooms": 1,
+    "tick": 3078,
+    "connected": {
+      "a": true,
+      "b": true
+    },
+    "drivers": {
+      "a": {
+        "attempts": 0,
+        "successes": 0,
+        "fallbacks": 0,
+        "source": "mock"
+      },
+      "b": {
+        "attempts": 0,
+        "successes": 0,
+        "fallbacks": 0,
+        "source": "mock"
+      }
+    },
+    "paidCalls": 0
+  }
+}

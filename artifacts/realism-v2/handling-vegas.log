@@ -1,0 +1,128 @@
+
+> jev-grand-prix@1.0.0 test:handling
+> node --import tsx scripts/handling-check.ts && node --import tsx scripts/calibrate.ts
+
+{
+  "elapsedMs": 1626.278417,
+  "phase": "finished",
+  "maxSpeed": 337.0702915099795,
+  "maxBrake": 3.687650273971222,
+  "maxLateral": 5.500000000000001,
+  "lapTimes": {
+    "a": [
+      114.67500000003733,
+      109.49999999992312,
+      98.0083333332442
+    ],
+    "b": [
+      99.3833333333585,
+      120.74166666660564,
+      112.2166666665646
+    ]
+  },
+  "stops": {
+    "a": 1,
+    "b": 1
+  },
+  "tyres": {
+    "a": 0.5903295911114657,
+    "b": 0.7344657323644155
+  },
+  "fuel": 27.5385646464493,
+  "corners": [
+    {
+      "name": "T1 / Grand Prix Plaza",
+      "d": 134
+    },
+    {
+      "name": "T2",
+      "d": 246
+    },
+    {
+      "name": "T3",
+      "d": 391
+    },
+    {
+      "name": "T4 / Koval Lane",
+      "d": 551
+    },
+    {
+      "name": "T5 / Sphere entry",
+      "d": 1426
+    },
+    {
+      "name": "T6 / Sphere",
+      "d": 1781
+    },
+    {
+      "name": "T7",
+      "d": 1908
+    },
+    {
+      "name": "T8 / Sphere chicane",
+      "d": 1978
+    },
+    {
+      "name": "T9 / Sands Avenue",
+      "d": 2097
+    },
+    {
+      "name": "T10",
+      "d": 2584
+    },
+    {
+      "name": "T11 / Venetian",
+      "d": 2925
+    },
+    {
+      "name": "T12 / The Strip",
+      "d": 3086
+    },
+    {
+      "name": "T13 / Las Vegas Boulevard",
+      "d": 3897
+    },
+    {
+      "name": "T14 / Heavy braking",
+      "d": 5052
+    },
+    {
+      "name": "T15",
+      "d": 5093
+    },
+    {
+      "name": "T16 / Harmon Avenue",
+      "d": 5204
+    },
+    {
+      "name": "T17 / Final turn",
+      "d": 5990
+    }
+  ],
+  "samples": 665
+}
+{
+  laps: [ 91.8583333333525, 89.8499999999799 ],
+  maxG: 5.221412972183177,
+  maxBrake: 3.9134445920748693,
+  maxOffset: 3.857977373120234,
+  corners: [
+    { name: 'T1 / Grand Prix Plaza', kph: 99.27631956082443 },
+    { name: 'T2', kph: 99.27631956082443 },
+    { name: 'T3', kph: 218.32311691597897 },
+    { name: 'T4 / Koval Lane', kph: 250.83424432259312 },
+    { name: 'T5 / Sphere entry', kph: 111.21296140649827 },
+    { name: 'T6 / Sphere', kph: 164.1466299207199 },
+    { name: 'T7', kph: 79.07234336316495 },
+    { name: 'T8 / Sphere chicane', kph: 79.07234336316495 },
+    { name: 'T9 / Sands Avenue', kph: 94.24510108080378 },
+    { name: 'T10', kph: 290.3528137204787 },
+    { name: 'T11 / Venetian', kph: 273.4836231204734 },
+    { name: 'T12 / The Strip', kph: 97.67348524006853 },
+    { name: 'T13 / Las Vegas Boulevard', kph: 319.44588884823736 },
+    { name: 'T14 / Heavy braking', kph: 87.59001835838532 },
+    { name: 'T15', kph: 87.59001835838532 },
+    { name: 'T16 / Harmon Avenue', kph: 171.92099339575918 },
+    { name: 'T17 / Final turn', kph: 320.27077997385817 }
+  ]
+}

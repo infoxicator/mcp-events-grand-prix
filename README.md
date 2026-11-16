@@ -2,7 +2,7 @@
 
 Two teams. Two speeds of intelligence. Monza by day. Las Vegas by night. Built for Ruben Casas ([@Infoxicador](https://x.com/Infoxicador)).
 
-**Vector** is calm and precise, in orange. **Chaos** is aggressive, in violet. Each has a slow race engineer and a fast driver. Choose **Jev vs Jev** or **Jev vs Luna**; in the latter, Vector uses Jev and Chaos uses GPT-6 Luna through OpenAI Decisions. The engineer chooses strategy; Jev chooses structured driving intent; a deterministic local controller handles acceleration, braking and line following. Every window watches the same authoritative race.
+**Vector** is calm and precise, in red and white. **Chaos** is aggressive, in teal and silver. Each has a slow race engineer and a fast driver. Choose **Jev vs Jev** or **Jev vs Luna**; in the latter, Vector uses Jev and Chaos uses GPT-6 Luna through OpenAI Decisions. The engineer chooses strategy; Jev chooses structured driving intent; a deterministic local controller handles acceleration, braking and line following. Every window watches the same authoritative race.
 
 ## Run
 
@@ -33,7 +33,7 @@ Keep both team seats open. Missing seats pause physics without losing laps, tyre
 
 Maximize the broadcast window to 1440×980 or 1920×1080. **Title sequence → Lights out** resets the default race and gives a clean recording start. The opening title is also available with `/?spectate&intro`. The engineer/radio panels, battle banner, timing tower and telemetry work with the sound muted.
 
-Use **07 Onboard**, **23 Onboard**, **Broadcast**, **Aerial** or **Car detail** to switch cameras. Onboard includes the physical halo, visible nose/wheels and a steering wheel dash with gear, speed, DRS and ERS. Broadcast cycles through chase, trackside and helicopter cameras; overtakes and near misses trigger cuts. **Instant replay** replays the closest captured on-track lead change at 0.65×; **Back to live** restores the race. Results show classification, race and best-lap times, tyre stops and the winner. **Race again** resets the owner’s race.
+Use **44 Onboard**, **23 Onboard**, **Broadcast**, **Aerial** or **Car detail** to switch cameras. Onboard includes the physical halo, visible nose/wheels and a steering wheel dash with gear, speed, DRS and ERS. Broadcast cycles through chase, trackside and helicopter cameras; overtakes and near misses trigger cuts. **Instant replay** replays the closest captured on-track lead change at 0.65×; **Back to live** restores the race. Results show classification, race and best-lap times, tyre stops and the winner. **Race again** resets the owner’s race.
 
 Three laps take about 80–100 wall seconds at the default **4× race clock**. `npm run demo:realistic` uses real simulation time (1×); up to 24× is supported for tests. Tyre degradation is deliberately accelerated so undercuts matter in three laps. Each pit-wall view has **Push / Manage / Box, box** radio overrides; they take priority for three wall seconds. Engineers otherwise update every 12 simulated seconds (3 wall seconds at 4×). Drivers request a decision every 200 ms, with one request in flight per team. A late response never advances or rewinds physics.
 
@@ -152,7 +152,7 @@ Sector and DRS placement follows the [2025 FIA circuit map](https://www.fia.com/
 
 The deterministic model includes throttle/braking, eight gears, curvature-aware speed limits and braking lookahead, smoothed lateral intent, grip, slipstream, dirty air, detection-latched ≤1s DRS eligibility, zone-limited activation, deploy/balanced/harvest ERS, soft/medium/hard compounds, temperature and wear, fuel mass/consumption, an 80 km/h pit limiter, a **2.6 s** stationary tyre change, track-limit warnings and five-second penalties, sectors, best/last laps and finishing classification. The speed trap is sampled at its track station. Replay stores the best on-track lead change. Mock engineers deliberately use different stop windows; a controlled test proves the early undercut changes the outcome.
 
-The scene uses detailed original 2025-style cars with sculpted nose/monocoque/sidepods, open cockpit, halo, driver/visor, suspension wishbones, multi-element wings, diffuser, rotating slick tyres, 18-inch wheel covers, compound markings and animated steering/DRS. Physically based carbon, clearcoat paint, metal and rubber respond to local HDR daylight. Real shadow maps, textured tarmac with rubber buildup, mottled terrain, gravel, mesh fencing, Armco, grandstands and instanced volumetric leaf clusters replace the original box cars and cone trees. Trackside cameras use anchored positions and telephoto framing; the aerial shot frames the battle more tightly. Scenery is batched and spatially culled, and pixel ratio is capped at 1.5.
+The scene loads original Blender-built JGP–26 GLB cars with a 3.6 m wheelbase and approximately 5.62 × 2.0 × 1.08 m envelope including the camera pod. They include sculpted sidepods and undercuts, an open carbon cockpit, halo, wishbones, four front-wing elements, twin swan-neck rear supports, DRS, two beam-wing elements, diffuser strakes, curled floor edges and rotating slick tyres. Near and distant LODs share animated steering, wheels and DRS. Satin red/white and teal/silver paint, carbon weave, metal and rubber respond to the existing HDR daylight or Vegas night lighting. Tyre sidewall marks stay white; compound is conveyed by the timing-tower tyre icon. All sponsor marks are fictional. Scenery and the authoritative physics remain the existing Monza/Vegas implementation.
 
 Four local textures/HDR files come from **Poly Haven, CC0**: [Asphalt 02](https://polyhaven.com/a/asphalt_02), [Aerial Grass Rock](https://polyhaven.com/a/aerial_grass_rock), and [Kloofendal daylight](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky). Authors and licence links are in [asset attribution](src/race/assets/ATTRIBUTION.md). No external asset/font requests occur during the race; the MCP build embeds its assets.
 
@@ -203,6 +203,39 @@ PORT=5477 JEV_MOCK=1 npm run demo:vegas -- --smoke --headed --matchup=jev-vs-lun
 Default Jev/Luna decisions and engineer dialogue are deterministic rule-based mocks, labelled on screen. Fixture tests exercise the actual Jev SDK and engineer JSON adapter without contacting providers. The authoritative server, WebSockets, room capabilities, MCP SDK/Apps bridge, physics, timing, pit stops, browser rendering and shared state are real.
 
 This is a recording demo, not a tyre or aerodynamic engineering simulator. Tyre wear is accelerated, and the standard recording launcher accelerates the clock; use `demo:realistic` for 1×. The tyre-limited bicycle model and controller are still simpler than a full six-degree-of-freedom vehicle, suspension and contact-patch simulation. Track width, scenery and pit-lane geometry are illustrative; proprietary aero maps and measured tyre curves are unavailable. No elevation, wet weather, safety car, audio/TTS, realistic damage or official F1 assets are included. Results can change with driver request timing, while fixed physics steps with identical inputs reproduce exactly. Headless screenshot runs can render slowly; the headed hardware GPU test is the performance measurement.
+
+
+## Blender cars, onboard and studio (realism v2)
+
+The approved [reference clip](https://x.com/reach_vb/status/2096271854193271229) informed proportions, colour placement, wheel covers and steering-wheel controls. Its sponsor logos and geometry were not copied. Vector uses #44 with red bodywork, broad white upper panels, a white-front/red-rear fin, carbon halo/wings and white generic tyre marks. Chaos uses #23 in teal/silver. Recessed wheel dishes have metallic centre nuts, red rings and yellow centres.
+
+**44 Onboard / 23 Onboard** use a 70° vertical-FOV driver's-eye camera with a physical halo, mirrors, tyres, subtle speed-dependent vibration and the actual modelled butterfly steering wheel. **T-cam** moves above the airbox. The wheel has green/yellow/blue knurled rotaries (driver's left to right), labelled coloured buttons, a fictional wordmark, live gear/speed/ERS/DRS/delta and subdued RPM lights. The former CSS wheel overlay is hidden. Delta is last-lap minus best-lap, not a predictive mini-sector delta.
+
+**Showroom** uses a neutral studio environment, dark floor, soft contact-occlusion texture, shadow maps and a blurred planar reflection. Colour / Clay / Wireframe operate on the same GLBs used during racing. Pause rotation and Back to race are available. Studio shots omit the helmet and leave the display black, matching the reference. Fixed compositions:
+
+```text
+/?spectate&camera=showroom&angle=front
+/?spectate&camera=showroom&angle=rear
+/?spectate&camera=showroom&angle=side
+/?spectate&camera=showroom&angle=wheel
+/?spectate&camera=showroom&angle=steering
+/?spectate&camera=chase
+/?team=a&camera=tcam-a
+```
+
+Omit `angle` for the slow turntable. `scripts/blender/build_car.py` is the reproducible model source; `scripts/blender/jgp26.blend` is the editable Blender scene. Generate assets with **Blender 5.2.2 LTS**:
+
+```sh
+npm run model:build
+# Equivalent on another platform:
+blender -b --factory-startup --python scripts/blender/build_car.py
+```
+
+The macOS npm command uses `/Applications/Blender.app/Contents/MacOS/Blender`. The initial sandboxed launch crashed during Metal-device detection; running with normal local application/GPU access resolved it. Final exports use factory startup, with user add-ons disabled. No reinstall or substitute car renderer was needed. High detail is ~104k triangles, with a reduced LOD from 32 m; material batches keep draw calls bounded. GLBs are embedded in the MCP HTML so sandboxed app views need no model CDN or extra asset permissions.
+
+Review images, before/after JPEG sheets, reference comparisons, test logs and measured GPU results are in `artifacts/realism-v2/`. `python3 scripts/realism-sheets.py` recreates sheets from the screenshots and locally downloaded reference frames. The reference video remains local and outside production bundles.
+
+Limitations: this is an original real-time interpretation, not a scanned Ferrari or a regulation-certified 2026 car. Detailed aero profiles, suspension joints and body seams remain simplified. The studio uses inexpensive contact shading and a blurred planar reflection, not path tracing. There is no exploded/internal-engine mode. Existing 2025-style race rules and calibrated physics are preserved; this update does not claim more accurate vehicle dynamics.
 
 ## Verify
 
