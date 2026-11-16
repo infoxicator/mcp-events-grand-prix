@@ -2,7 +2,7 @@
 Coordinates deliberately use glTF axes: X lateral, Y up, +Z forward. Metres.
 Reference: approved SF–26 clip; all marks are original fictional branding.
 """
-import bpy, math, json
+import bpy, math, json, os
 from mathutils import Vector
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
@@ -19,7 +19,7 @@ paint=mat('Livery','cb091c',.4,.08);white=mat('Ivory','f4f3ef',.38,.03);carbon=m
 groups={}
 def group(name):
  o=bpy.data.objects.new(name,None);bpy.context.collection.objects.link(o);groups[name]=o;return o
-body=group('Chassis');steer=group('Steering');steer.location=(0,.58,.16);flap=group('DRS');flap.location=(0,.87,-2.42)
+body=group('Chassis');steer=group('Steering');steer.location=(0,.51,.16);flap=group('DRS');flap.location=(0,.87,-2.42)
 helmet=group('Helmet');numberA=group('NumberA');numberB=group('NumberB');wheelgroups=[]
 def mesh(name,vs,fs,m,parent=body):
  me=bpy.data.meshes.new(name);me.from_pydata(vs,[],fs);me.update();o=bpy.data.objects.new(name,me);bpy.context.collection.objects.link(o);o.data.materials.append(m);o.parent=parent
@@ -62,19 +62,34 @@ def loft(name,sections,m,parent=body,n=32,power=.85):
    a=2*math.pi*i/n;c,s=math.cos(a),math.sin(a);v.append((x+math.copysign(abs(c)**power,c)*w,(bot+top)/2+math.copysign(abs(s)**power,s)*(top-bot)/2,z))
  for j in range(len(ss)-1):
   for i in range(n):a=j*n+i;b=j*n+(i+1)%n;f.append((a,b,b+n,a+n))
- f.extend([tuple(reversed(range(n))),tuple((len(ss)-1)*n+i for i in range(n))]);return mesh(name,v,f,m,parent)
+ f.append(tuple(reversed(range(n))))
+ if 'sidepod' not in name.lower():f.append(tuple((len(ss)-1)*n+i for i in range(n)))
+ if name=='Cockpit tub':f=[face for face in f if sum(v[i][1] for i in face)/len(face)<.36]
+ o=mesh(name,v,f,m,parent)
+ if name in ['Nose','Downwash sidepod','White airbox']:
+  mod=o.modifiers.new('Sculpted continuous subdivision','SUBSURF');mod.levels=1
+  bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=mod.name)
+ return o
 def panel(name,outline,thickness,m,parent=body):
  # outline points in world XYZ; thickness along X for fins.
  v=[(x+side*thickness/2,y,z) for side in [-1,1] for x,y,z in outline];n=len(outline);f=[tuple(reversed(range(n))),tuple(range(n,2*n))]+[(i,(i+1)%n,(i+1)%n+n,i+n) for i in range(n)];return bevel(mesh(name,v,f,m,parent),.004,2)
 def wing(name,span,z,y,chord,m,parent=body,sweep=.15,lift=.05):
- v=[];f=[];nx,ny=48,12
+ # Closed cambered aerofoil: cosine-spaced round leading edge, 0.6mm trailing edge.
+ v=[];f=[];nx,n=48,24
+ section=[]
+ for side in [1,-1]:
+  for j in range(n+1):
+   u=(1-math.cos(math.pi*(j if side==1 else n-j)/n))/2
+   thick=5*.105*(.2969*math.sqrt(u)-.126*u-.3516*u*u+.2843*u**3-.1036*u**4)*chord
+   section.append((u,.035*math.sin(math.pi*u)+side*(thick+.0003)))
+ ns=len(section)
  for i in range(nx+1):
   x=(i/nx-.5)*span;t=abs(x)/(span/2)
-  for j in range(ny+1):
-   u=j/ny;v.append((x,y+lift*t*t+.026*math.sin(u*math.pi)+.025*u,z+(u-.5)*chord-sweep*t*t))
+  for u,h in section:v.append((x,y+lift*t*t+h,z+(.5-u)*chord-sweep*t*t))
  for i in range(nx):
-  for j in range(ny):a=i*(ny+1)+j;f.append((a,a+1,a+ny+2,a+ny+1))
- o=mesh(name,v,f,m,parent);mod=o.modifiers.new('Thin carbon laminate','SOLIDIFY');mod.thickness=.006;bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=mod.name);return o
+  for j in range(ns):a=i*ns+j;b=i*ns+(j+1)%ns;f.append((a,b,b+ns,a+ns))
+ f.extend([tuple(reversed(range(ns))),tuple(nx*ns+j for j in range(ns))])
+ return bevel(mesh(name,v,f,m,parent),.0007,2)
 def text(label,pos,size,m=silver,rotation=(0,0,0),parent=body):
  cu=bpy.data.curves.new('Mark '+label,'FONT');cu.body=label;cu.align_x='CENTER';cu.align_y='CENTER';cu.size=size;cu.shear=.14 if label in ['44','23','NOVA','NEXUS'] else 0;cu.extrude=.00015;cu.resolution_u=3
  o=bpy.data.objects.new('Mark '+label,cu);bpy.context.collection.objects.link(o);o.location=pos;o.rotation_euler=rotation;o.data.materials.append(m);o.parent=parent;return o
@@ -89,6 +104,10 @@ for x in [-.6,-.4,-.2,0,.2,.4,.6]:panel('Diffuser strake',[(x,.07,-2.72),(x,.33,
 # Raised tapering nose; no box-shaped body.
 loft('Nose',[ [.34,0,.33,.22,.64],[.75,0,.32,.22,.62],[1.2,0,.24,.23,.52],[1.85,0,.155,.22,.39],[2.5,0,.10,.17,.27],[2.86,0,.055,.15,.21],[2.9,0,.018,.17,.19]],paint,power=.62)
 loft('Cockpit tub',[[-1.05,0,.3,.17,.49],[-.5,0,.39,.17,.49],[.35,0,.33,.2,.5]],carbon)
+# Opaque carbon inner tub surfaces and front bulkhead, independent of outer paint.
+for side in [-1,1]:
+ mesh('Cockpit carbon liner',[(side*.275,.18,-.78),(side*.275,.63,-.78),(side*.275,.61,.32),(side*.275,.18,.32)],[(0,1,2,3)],carbon)
+mesh('Carbon pedal bulkhead',[(-.28,.17,.325),(-.28,.625,.325),(.28,.625,.325),(.28,.17,.325)],[(0,1,2,3)],carbon)
 # Continuous thin white cockpit deck around a true open aperture.
 v=[];f=[];N=64
 for ring in range(3):
@@ -106,8 +125,17 @@ for s in [-1,1]:
  loft('Carbon undercut',[[-1.95,s*.28,.07,.18,.28],[-1.3,s*.43,.18,.13,.35],[-.5,s*.48,.24,.17,.41],[.22,s*.47,.22,.24,.48]],carbon)
  loft('Downwash sidepod',[[-2.03,s*.25,.035,.23,.3],[-1.55,s*.39,.13,.23,.38],[-1.0,s*.49,.23,.26,.48],[-.45,s*.53,.285,.31,.59],[.05,s*.55,.29,.39,.66],[.38,s*.55,.25,.46,.65],[.48,s*.55,.20,.49,.6]],paint,power=.62)
  # Wide, shallow aperture with rolled lip.
- ellipsoid('Intake darkness',(s*.55,.543,.477),(.196,.045,.012),black)
- curve('Sidepod intake lip',[(s*.34,.57,.46),(s*.48,.608,.49),(s*.7,.599,.47),(s*.77,.56,.44)],.012,carbon)
+ # A true letterbox tunnel, sharply rolled upper lip and recessed throat.
+ pts=[(-.205,-.035),(-.20,.034),(-.12,.045),(.12,.045),(.205,.03),(.21,-.025),(.12,-.038),(-.12,-.038)]
+ vv=[]
+ for depth,scale in [(0,1.16),(.012,1),(-.13,.82)]:
+  for x,y in pts:vv.append((s*.55+x*scale,.548+y*scale,.493+depth))
+ ff=[]
+ for k in range(2):
+  for j in range(8):ff.append((k*8+j,k*8+(j+1)%8,(k+1)*8+(j+1)%8,(k+1)*8+j))
+ bevel(mesh('Letterbox intake lip and tunnel',vv,ff,carbon),.003,3)
+ box('Deep intake throat',(s*.55,.548,.345),(.36,.065,.005),black,r=.012)
+ # Rolled tunnel already supplies the lip; no overlapping trim curve.
  for i in range(7):box('Cooling louvre',(s*.49,.55-i*.009,-.48-i*.07),(.19,.009,.022),black,r=.003)
  curve('Mirror stay',[(s*.3,.62,.29),(s*.48,.67,.37),(s*.65,.71,.36)],.011)
  box('Mirror shell',(s*.65,.71,.36),(.22,.063,.115),paint,r=.025);box('Mirror glass',(s*.65,.713,.299),(.175,.038,.004),metal,r=.009)
@@ -123,6 +151,7 @@ cover=bpy.data.objects['Red engine cover'];cover.data.materials.append(white)
 for poly in cover.data.polygons:
  centre=sum((cover.data.vertices[i].co for i in poly.vertices),Vector())/len(poly.vertices)
  if poly.index%32<16 and centre.z>-1.35:poly.material_index=1
+mod=cover.modifiers.new('Paint boundary preserving subdivision','SUBSURF');mod.levels=1;bpy.context.view_layer.objects.active=cover;bpy.ops.object.modifier_apply(modifier=mod.name)
 loft('White airbox',[[-1.14,0,.16,.6,.85],[-.85,0,.205,.61,1.015],[-.63,0,.135,.76,1.025],[-.58,0,.105,.8,.99]],white)
 ellipsoid('Air intake',(0,.9,-.565),(.092,.102,.015),black)
 rod('Intake divider',(0,.802,-.54),(0,.995,-.54),.008)
@@ -177,23 +206,44 @@ for x,y,m in [(-.067,-.066,green),(0,-.073,yellow),(.072,-.089,blue)]:
  for i in range(20):
   a=i*math.tau/20;rod('Knurl',(x+.021*math.cos(a),y+.021*math.sin(a),-.036),(x+.021*math.cos(a),y+.021*math.sin(a),-.056),.0016,black,steer,5)
  box('Dial pointer',(x-.004,y+.009,-.059),(.003,.014,.001),silver,steer)
+# Hands are Blender geometry, attached to the steering rig; hidden in the studio.
+hands=group('Hands');hands.parent=steer
+for side in [-1,1]:
+ glove=ellipsoid('Gloved palm',(side*.195,-.026,-.055),(.043,.066,.036),white,hands)
+ ellipsoid('Glove cuff',(side*.226,-.097,-.079),(.044,.035,.037),carbon,hands)
+ for j in range(4):
+  yy=.011-j*.024
+  curve('Curled gloved finger',[(side*.21,yy,-.072),(side*.159,yy,-.065),(side*.145,yy,-.028),(side*.17,yy,.011)],.009,white,hands)
+ curve('Gloved thumb',[(side*.186,-.063,-.073),(side*.136,-.035,-.075),(side*.13,-.015,-.048)],.013,white,hands)
+ for j in range(3):curve('Glove stitched seam',[(side*(.19+j*.008),.009,-.09),(side*(.20+j*.008),-.058,-.085)],.0008,carbon,hands)
 # Tyres with radial sidewall typography, dish covers and tiny fasteners.
 for front in [True,False]:
  for s in [-1,1]:
   z=1.55 if front else -2.05;w=.305 if front else .405;x=s*(.835 if front else .795)
-  for yy in [.23,.43]:
-   for dz in [-.33,.28]:rod('Carbon wishbone',(s*.21,yy,z+dz),(x,.36,z),.012)
-  rod('Suspension pushrod',(s*.18,.56,z-.25),(x,.38,z),.016);rod('Steering trackrod',(s*.18,.33,z+.22),(x,.34,z+.08),.009)
+  # Upright, spaced ball joints and inboard pickup brackets (not one shared hub point).
+  ux=x-s*.10
+  rod('Upright',(ux,.22,z),(ux,.48,z),.029,metal,vertices=12)
+  for yy in [.235,.46]:
+   for dz in [-.33,.28]:
+    pick=(s*(.24 if front else .18),yy,z+dz);joint=(ux,yy,z)
+    rod('Carbon wishbone',pick,joint,.013)
+    box('Pickup clevis',pick,(.052,.036,.07),metal,r=.007)
+    rod('Pickup bolt',(pick[0]-.03,yy,z+dz),(pick[0]+.03,yy,z+dz),.009,metal,vertices=6)
+   ellipsoid('Upright spherical joint',(ux,yy,z),(.027,.022,.025),metal)
+  rod('Suspension pushrod',(s*.18,.56,z-.25),(ux,.25,z),.014)
+  rod('Steering trackrod',(s*.18,.33,z+.22),(ux,.34,z+.08),.009)
+  box('Brake duct scoop',(x-s*.17,.39,z+.16),(.085,.13,.13),carbon,r=.025)
+  box('Brake duct opening',(x-s*.17,.40,z+.229),(.058,.087,.005),black,r=.015)
   pivot=group(('Front' if front else 'Rear')+('L' if s<0 else 'R'));pivot.location=(x,.36,z);wheelgroups.append(pivot)
   # Surface of revolution about X.
   def lathe(name,profile,m):
-   vs=[];fs=[];steps=64
+   vs=[];fs=[];steps=96
    for xx,r in profile:
     for i in range(steps):a=i*math.tau/steps;vs.append((xx,r*math.cos(a),r*math.sin(a)))
    for j in range(len(profile)-1):
     for i in range(steps):a=j*steps+i;b=j*steps+(i+1)%steps;fs.append((a,b,b+steps,a+steps))
    return mesh(name,vs,fs,m,pivot)
-  lathe('Slick tyre',[(-w/2,.228),(-w/2,.29),(-w*.47,.325),(-w*.39,.352),(-w*.27,.36),(w*.27,.36),(w*.39,.352),(w*.47,.325),(w/2,.29),(w/2,.228)],rubber)
+  lathe('Slick tyre',[(-w/2,.228),(-w*.51,.26),(-w*.515,.285),(-w*.49,.316),(-w*.43,.341),(-w*.34,.357),(-w*.2,.36),(0,.361),(w*.2,.36),(w*.34,.357),(w*.43,.341),(w*.49,.316),(w*.515,.285),(w*.51,.26),(w/2,.228)],rubber)
   for side in [-1,1]:
    xx=side*w/2
    lathe('Recessed black dish',[(xx,.231),(xx-side*.012,.224),(xx-side*.037,.19),(xx-side*.046,.12),(xx-side*.04,.04)],carbon)
@@ -237,6 +287,38 @@ for parent in list(groups.values()):
   # Generate metric UVs for a subtle carbon twill applied by the runtime.
   if name=='Carbon':
    bpy.ops.object.mode_set(mode='EDIT');bpy.ops.uv.smart_project(angle_limit=1.15,island_margin=.015);bpy.ops.object.mode_set(mode='OBJECT')
+# Retain the prior real-time triangle budget after subdivision/edge manufacture.
+for o in bpy.context.scene.objects:
+ if o.type=='MESH' and len(o.data.polygons)>500:
+  d=o.modifiers.new('Optimised smooth production topology','DECIMATE');d.ratio=.57
+  bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=d.name)
+# Bake actual Cycles CPU occlusion into a shared packed UV atlas.
+bpy.context.scene.render.engine='CYCLES';bpy.context.scene.cycles.device='CPU';bpy.context.scene.cycles.samples=16
+meshes=[o for o in bpy.context.scene.objects if o.type=='MESH']
+bpy.ops.object.select_all(action='DESELECT')
+for o in meshes:o.select_set(True)
+bpy.context.view_layer.objects.active=meshes[0]
+bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.uv.smart_project(angle_limit=1.15,island_margin=.008);bpy.ops.object.mode_set(mode='OBJECT')
+ao=bpy.data.images.new('JGP baked ambient occlusion',width=1024,height=1024);ao.generated_color=(1,1,1,1)
+for m in M.values():
+ n=m.node_tree.nodes.new('ShaderNodeTexImage');n.image=ao;m.node_tree.nodes.active=n
+bpy.context.scene.render.bake.margin=4
+bpy.ops.object.bake(type='AO',use_clear=True)
+ao.filepath_raw=str(OUT/'jgp26-ao.png');ao.file_format='PNG';ao.save()
+# Ground contact is a second real AO bake with the complete car present.
+groundmat=mat('Contact bake','ffffff',1)
+ground=mesh('Bake receiver',[(-2,-.005,-3.5),(-2,-.005,3.5),(2,-.005,3.5),(2,-.005,-3.5)],[(0,1,2,3)],groundmat,parent=None)
+bpy.ops.object.select_all(action='DESELECT');ground.select_set(True);bpy.context.view_layer.objects.active=ground
+bpy.ops.object.mode_set(mode='EDIT');bpy.ops.uv.smart_project();bpy.ops.object.mode_set(mode='OBJECT')
+# Explicit top-facing planar UV, suitable for the showroom floor plane.
+uv=ground.data.uv_layers.active
+for poly in ground.data.polygons:
+ for li in poly.loop_indices:
+  co=ground.data.vertices[ground.data.loops[li].vertex_index].co;uv.data[li].uv=(co.x/4+.5,.5-co.z/7)
+contact=bpy.data.images.new('Baked ground contact',width=512,height=512);contact.generated_color=(1,1,1,1)
+n=groundmat.node_tree.nodes.new('ShaderNodeTexImage');n.image=contact;groundmat.node_tree.nodes.active=n
+bpy.ops.object.bake(type='AO',use_clear=True)
+contact.filepath_raw=str(OUT/'jgp26-contact.png');contact.file_format='PNG';contact.save();bpy.data.objects.remove(ground,do_unlink=True)
 # Store reproducible editable source and two self-contained LODs.
 bpy.ops.wm.save_as_mainfile(filepath=str(ROOT/'scripts/blender/jgp26.blend'))
 def export(name):
