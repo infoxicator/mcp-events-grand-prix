@@ -33,9 +33,9 @@ Keep both team seats open. Missing seats pause physics without losing laps, tyre
 
 Maximize the broadcast window to 1440×980 or 1920×1080. **Title sequence → Lights out** resets the default race and gives a clean recording start. The opening title is also available with `/?spectate&intro`. The engineer/radio panels, battle banner, timing tower and telemetry work with the sound muted.
 
-Use **07 Onboard**, **23 Onboard**, **Broadcast** or **Aerial** to switch cameras. Onboard includes the physical halo, visible nose/wheels and a steering wheel dash with gear, speed, DRS and ERS. Broadcast cycles through chase, trackside and helicopter cameras; overtakes and near misses trigger cuts. **Instant replay** replays the closest captured on-track lead change at 0.65×; **Back to live** restores the race. Results show classification, race and best-lap times, tyre stops and the winner. **Race again** resets the owner’s race.
+Use **07 Onboard**, **23 Onboard**, **Broadcast**, **Aerial** or **Car detail** to switch cameras. Onboard includes the physical halo, visible nose/wheels and a steering wheel dash with gear, speed, DRS and ERS. Broadcast cycles through chase, trackside and helicopter cameras; overtakes and near misses trigger cuts. **Instant replay** replays the closest captured on-track lead change at 0.65×; **Back to live** restores the race. Results show classification, race and best-lap times, tyre stops and the winner. **Race again** resets the owner’s race.
 
-Three laps take about 80–100 wall seconds at the default **4× race clock**. `RACE_SPEED=1` uses real simulation time; up to 24× is supported for tests. Tyre degradation is deliberately accelerated so undercuts matter in three laps. Each pit-wall view has **Push / Manage / Box, box** radio overrides; they take priority for three wall seconds. Engineers otherwise update every 12 simulated seconds (3 wall seconds at 4×). Drivers request a decision every 200 ms, with one request in flight per team. A late response never advances or rewinds physics.
+Three laps take about 80–100 wall seconds at the default **4× race clock**. `npm run demo:realistic` uses real simulation time (1×); up to 24× is supported for tests. Tyre degradation is deliberately accelerated so undercuts matter in three laps. Each pit-wall view has **Push / Manage / Box, box** radio overrides; they take priority for three wall seconds. Engineers otherwise update every 12 simulated seconds (3 wall seconds at 4×). Drivers request a decision every 200 ms, with one request in flight per team. A late response never advances or rewinds physics.
 
 ## Real agents and keys
 
@@ -152,13 +152,33 @@ Sector and DRS placement follows the [2025 FIA circuit map](https://www.fia.com/
 
 The deterministic model includes throttle/braking, eight gears, curvature-aware speed limits and braking lookahead, smoothed lateral intent, grip, slipstream, dirty air, detection-latched ≤1s DRS eligibility, zone-limited activation, deploy/balanced/harvest ERS, soft/medium/hard compounds, temperature and wear, fuel mass/consumption, an 80 km/h pit limiter, a **2.6 s** stationary tyre change, track-limit warnings and five-second penalties, sectors, best/last laps and finishing classification. The speed trap is sampled at its track station. Replay stores the best on-track lead change. Mock engineers deliberately use different stop windows; a controlled test proves the early undercut changes the outcome.
 
-The scene uses procedural low-poly cars, track ribbons, Italian kerbs, run-off/gravel, barriers, grandstands, garages, start gantry, parkland, lighting, contact shadows and distance fog. Scenery batches by material; trees are instanced and kept clear of the racing surface. No external images/fonts are fetched at runtime. Renderer pixel ratio is capped at 1.5.
+The scene uses detailed original 2025-style cars with sculpted nose/monocoque/sidepods, open cockpit, halo, driver/visor, suspension wishbones, multi-element wings, diffuser, rotating slick tyres, 18-inch wheel covers, compound markings and animated steering/DRS. Physically based carbon, clearcoat paint, metal and rubber respond to local HDR daylight. Real shadow maps, textured tarmac with rubber buildup, mottled terrain, gravel, mesh fencing, Armco, grandstands and instanced volumetric leaf clusters replace the original box cars and cone trees. Trackside cameras use anchored positions and telephoto framing; the aerial shot frames the battle more tightly. Scenery is batched and spatially culled, and pixel ratio is capped at 1.5.
+
+Four local textures/HDR files come from **Poly Haven, CC0**: [Asphalt 02](https://polyhaven.com/a/asphalt_02), [Aerial Grass Rock](https://polyhaven.com/a/aerial_grass_rock), and [Kloofendal daylight](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky). Authors and licence links are in [asset attribution](src/race/assets/ATTRIBUTION.md). No external asset/font requests occur during the race; the MCP build embeds its assets.
+
+### Driving and visual realism
+
+For realistic apparent motion, use the real-time launcher. The ordinary recording launcher retains the accelerated 4× clock:
+
+```sh
+npm run demo:realistic
+# Real Jev / Luna drivers, real-time simulation (requires configured keys):
+JEV_MOCK=0 LUNA_MOCK=0 npm run demo:realistic -- --matchup=jev-vs-luna
+```
+
+The car envelope uses a **3.6 m wheelbase, 2.0 m width and 800 kg dry mass**, consistent with the [2025 FIA regulations](https://www.fia.com/system/files/documents/fia_2025_formula_1_technical_regulations_-_issue_02_-_2025-02-26.pdf). The hybrid model follows the [MCL39 specification](https://www.mclaren.com/racing/formula-1/2025/mcl39-technical-specification/): 120 kW electric deployment, 4 MJ deployment budget and 2 MJ recovery budget per lap. Engine output and drag/downforce coefficients are explicit calibration estimates in `src/race/vehicle.ts`, not proprietary measurements. [Brembo's 2025 Monza braking data](https://brem-p-001.sitecorecontenthub.cloud/api/public/content/a7758d9026e14e81b940a82dd992941c?v=cc87e1fe) supplies braking and corner-speed reference points; the simulation does not match every corner exactly.
+
+Physics now integrates power/traction-limited acceleration, quadratic aero drag/downforce, tyre load sensitivity, a combined braking/cornering friction envelope, fuel mass, ERS energy accounting and finite steering. DRS reduces drag/downforce, a tow reduces drag, and dirty air reduces downforce. Excess speed saturates lateral grip and produces understeer/runoff; there is no hard attachment to a centreline. The controller follows a bounded minimum-curvature racing line, with tactical agent offsets, predictive braking and same-lane following distance. Steering wheels, front wheels, pitch, roll, wheel rotation and the rear-wing flap respond to telemetry.
+
+The original unscaled GeoJSON length is preserved for timing stations. A local 8 m smoothing kernel removes digitisation kinks for the rendered/driven path; its sampled length remains within 1% of the original. The track is approximately 12 m wide, widening to 15 m on the grid; these widths and runoff/pit placements are illustrative. The deterministic fresh-tyre calibration test completes a flying lap within 75–90 seconds, stays within the track and bounds lateral force at 5.5 g. `npm run test:handling` saves full strategic-race telemetry and prints the clean-lap calibration. The default three-lap tyre wear is still deliberately accelerated.
+
+**Car detail** works before connecting drivers. For inspection angles open `/?spectate&camera=detail&angle=front` (also `rear`, `side`, `top`). The render verification saves front/rear/side, aerial and onboard PNGs in `artifacts/realism-*.png`. On macOS, Playwright uses headed Chromium to exercise the Metal hardware path; `PW_HEADLESS=1` opts into software/headless testing, which is substantially slower for this scene.
 
 ## What is mocked or simplified
 
 Default Jev/Luna decisions and engineer dialogue are deterministic rule-based mocks, labelled on screen. Fixture tests exercise the actual Jev SDK and engineer JSON adapter without contacting providers. The authoritative server, WebSockets, room capabilities, MCP SDK/Apps bridge, physics, timing, pit stops, browser rendering and shared state are real.
 
-This is a recording demo, not a tyre or aerodynamic engineering simulator. Tyre wear and the race clock are accelerated; lateral motion follows a controller rather than a full rigid-body car model. Track width, scenery and pit-lane geometry are illustrative. No elevation, wet weather, safety car, audio/TTS, realistic damage or official F1 assets are included. Results can change with driver request timing, while fixed physics steps with identical inputs reproduce exactly. Headless screenshot runs can render slowly; the headed hardware GPU test is the performance measurement.
+This is a recording demo, not a tyre or aerodynamic engineering simulator. Tyre wear is accelerated, and the standard recording launcher accelerates the clock; use `demo:realistic` for 1×. The tyre-limited bicycle model and controller are still simpler than a full six-degree-of-freedom vehicle, suspension and contact-patch simulation. Track width, scenery and pit-lane geometry are illustrative; proprietary aero maps and measured tyre curves are unavailable. No elevation, wet weather, safety car, audio/TTS, realistic damage or official F1 assets are included. Results can change with driver request timing, while fixed physics steps with identical inputs reproduce exactly. Headless screenshot runs can render slowly; the headed hardware GPU test is the performance measurement.
 
 ## Verify
 
@@ -167,7 +187,7 @@ JEV_MOCK=1 npm run verify
 npm run test:worker        # local workerd only; no deployment
 npm run worker:check       # wrangler dry-run only; no upload
 npm run test:performance   # headed Chromium; writes artifacts/performance.json
-PORT=5477 npm run demo:smoke
+PORT=5477 npm run demo:smoke -- --headed
 ```
 
 `verify` runs strict Node/Worker typechecks, web/MCP/host production builds, Vitest, both full three-context Playwright matchups and the two-context MCP invitation test with a browser spectator. Tests set mock flags regardless of keys. Screenshots are versioned under `artifacts/`: cockpit, broadcast, results, title and MCP view. Full command results and measured limits are in [VERIFICATION.md](VERIFICATION.md).

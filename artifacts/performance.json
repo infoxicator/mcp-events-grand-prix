@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-13T21:16:59.932Z",
+  "date": "2026-11-16T22:02:24.946Z",
   "gpu": [
     "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))"
   ],
@@ -11,132 +11,132 @@
   "samples": [
     [
       {
-        "frame": 286,
-        "calls": 24,
-        "triangles": 68364,
+        "frame": 362,
+        "calls": 255,
+        "triangles": 191662,
         "points": 0,
         "lines": 0,
-        "fps": 60.14808343117823
+        "fps": 60.34659740434901
       },
       {
-        "frame": 285,
-        "calls": 39,
-        "triangles": 69286,
+        "frame": 360,
+        "calls": 328,
+        "triangles": 224924,
         "points": 0,
         "lines": 0,
-        "fps": 60.14741547411157
-      },
-      {
-        "frame": 285,
-        "calls": 57,
-        "triangles": 70298,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.15594072420682
-      }
-    ],
-    [
-      {
-        "frame": 304,
-        "calls": 45,
-        "triangles": 69518,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.11574558391099
-      },
-      {
-        "frame": 304,
-        "calls": 24,
-        "triangles": 68364,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.09629575713041
-      },
-      {
-        "frame": 304,
-        "calls": 62,
-        "triangles": 72420,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.09875206990532
-      }
-    ],
-    [
-      {
-        "frame": 322,
-        "calls": 22,
-        "triangles": 68170,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.412404359154095
-      },
-      {
-        "frame": 322,
-        "calls": 24,
-        "triangles": 68364,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.44175857313545
-      },
-      {
-        "frame": 322,
-        "calls": 56,
-        "triangles": 70294,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.424840706903765
-      }
-    ],
-    [
-      {
-        "frame": 340,
-        "calls": 45,
-        "triangles": 69518,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.62623494312601
-      },
-      {
-        "frame": 340,
-        "calls": 21,
-        "triangles": 68168,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.601620487735566
-      },
-      {
-        "frame": 340,
-        "calls": 62,
-        "triangles": 72420,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.629391921626954
-      }
-    ],
-    [
-      {
-        "frame": 359,
-        "calls": 45,
-        "triangles": 69518,
-        "points": 0,
-        "lines": 0,
-        "fps": 60.327239012519755
+        "fps": 60.3430462421895
       },
       {
         "frame": 359,
-        "calls": 24,
-        "triangles": 68364,
+        "calls": 174,
+        "triangles": 146574,
         "points": 0,
         "lines": 0,
-        "fps": 60.31994763563392
+        "fps": 60.336329779317296
+      }
+    ],
+    [
+      {
+        "frame": 380,
+        "calls": 277,
+        "triangles": 199080,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.09733594240364
       },
       {
-        "frame": 359,
-        "calls": 62,
-        "triangles": 72420,
+        "frame": 378,
+        "calls": 309,
+        "triangles": 207676,
         "points": 0,
         "lines": 0,
-        "fps": 60.31531764417506
+        "fps": 60.095693250880686
+      },
+      {
+        "frame": 377,
+        "calls": 207,
+        "triangles": 152724,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.09966517463439
+      }
+    ],
+    [
+      {
+        "frame": 398,
+        "calls": 306,
+        "triangles": 211224,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.26895908198114
+      },
+      {
+        "frame": 396,
+        "calls": 364,
+        "triangles": 236192,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.27247060477316
+      },
+      {
+        "frame": 395,
+        "calls": 326,
+        "triangles": 214004,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.272656186380345
+      }
+    ],
+    [
+      {
+        "frame": 417,
+        "calls": 303,
+        "triangles": 209028,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.236624285157944
+      },
+      {
+        "frame": 415,
+        "calls": 372,
+        "triangles": 247828,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.23076867834663
+      },
+      {
+        "frame": 414,
+        "calls": 268,
+        "triangles": 193338,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.24016523146444
+      }
+    ],
+    [
+      {
+        "frame": 435,
+        "calls": 226,
+        "triangles": 169286,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.08764146465046
+      },
+      {
+        "frame": 433,
+        "calls": 336,
+        "triangles": 227216,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.0848048109043
+      },
+      {
+        "frame": 432,
+        "calls": 224,
+        "triangles": 171652,
+        "points": 0,
+        "lines": 0,
+        "fps": 60.08680125302309
       }
     ]
   ],
@@ -144,14 +144,47 @@
     "ok": true,
     "game": "Jev Grand Prix",
     "mode": "mock",
+    "matchup": "jev-vs-jev",
+    "players": {
+      "a": {
+        "engine": "jev",
+        "name": "JEV",
+        "model": "jev-latest",
+        "provider": "mock",
+        "mock": true,
+        "intervalMs": 200
+      },
+      "b": {
+        "engine": "jev",
+        "name": "JEV",
+        "model": "jev-latest",
+        "provider": "mock",
+        "mock": true,
+        "intervalMs": 200
+      }
+    },
     "physicsHz": 120,
     "snapshotHz": 30,
     "speed": 4,
     "rooms": 1,
-    "tick": 3084,
+    "tick": 3011,
     "connected": {
       "a": true,
       "b": true
+    },
+    "drivers": {
+      "a": {
+        "attempts": 0,
+        "successes": 0,
+        "fallbacks": 0,
+        "source": "mock"
+      },
+      "b": {
+        "attempts": 0,
+        "successes": 0,
+        "fallbacks": 0,
+        "source": "mock"
+      }
     },
     "paidCalls": 0
   }

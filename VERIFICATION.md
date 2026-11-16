@@ -140,3 +140,38 @@ Additional final checks:
 | `git diff --check` and local credential/bundle scans | PASS: no whitespace errors or local key values in tracked/nonignored files; no provider credentials or inference endpoints in browser bundles |
 
 Worker and smoke logs are saved in `artifacts/luna-worker-verification.log`, `artifacts/luna-worker-check.log` and `artifacts/luna-demo-smoke.log`. No live Luna request was made. Launch real Jev/Luna with `JEV_MOCK=0 LUNA_MOCK=0 npm run demo:luna` after adding `OPENAI_API_KEY` alongside the existing Jev key in `.env.local`. These commands leave engineer mock/live selection independent.
+
+## 2026-11-16: car, environment and handling realism
+
+Replaced the original block-built cars with original detailed 2025-style meshes: 3.6 m wheelbase, 2 m envelope, shaped monocoque and sidepods, open cockpit, halo, suspension, multi-element front/rear wings, diffuser, wheel covers, rotating slicks, compound lettering, driver/visor and liveries. Paint/carbon/rubber/metal respond to local HDR environment lighting. Steering, wheel rotation, body pitch/roll and DRS flap animate from telemetry. Added a clean car-detail view with front, rear, side and top inspection URLs.
+
+Replaced flat road/terrain and cone trees with CC0 asphalt/normal/grass/HDR assets, rubber buildup, gravel, volumetric leaf clusters, real shadows, mesh fences and continuous Armco. Corrected the original ~22 m track ribbon to an illustrative 12 m, widening to 15 m at the grid. Garages now sit beside the pit lane. Trackside cameras have anchored telephoto positions; the aerial camera uses tighter framing. Asset attribution and SHA-256 hashes are stored under `src/race/assets/`.
+
+Physics now uses SI force/power calculations, tyre load sensitivity, quadratic aero, DRS/tow drag reduction, wake downforce loss, traction-limited launch, a combined tyre force limit, fuel mass, 120 kW ERS and per-lap energy budgets. Steering uses a finite-rate, tyre-limited bicycle model with a pure-pursuit controller, not direct offset sliding. A multi-scale curvature optimisation creates the racing line. Local smoothing removes source digitisation spikes; a sampled-length regression keeps the path within 1% of the original 5,793.163 m layout. Excess entry speed can understeer off the line and onto runoff. The accelerated tyre cliff remains intentional for a three-lap strategy demo; the undercut regression still passes.
+
+The initial physical pass exposed >6 g spikes and cars overshooting chicanes. Fixes included geometry fairing, curvature rather than shortest-path optimisation, a predictive braking envelope, and braking/steering allocation under the tyre-force limit. The clean calibration now produces a **78.533 s flying lap**, **3.867 m maximum absolute lateral offset**, **5.5 g maximum lateral acceleration** and **3.931 g peak deceleration**. It fixes tyres at fresh/95°C and fuel at 10 kg to isolate handling, so it is not a normal strategy-race result. It is a calibration envelope, not proof of matching team telemetry: Lesmo 2 and Ascari minima still differ from the referenced real car measurements. Actual full races retain fuel, wear, temperature, pits, agent choices and network timing.
+
+References: [FIA 2025 dimensions](https://www.fia.com/system/files/documents/fia_2025_formula_1_technical_regulations_-_issue_02_-_2025-02-26.pdf), [McLaren MCL39 specification](https://www.mclaren.com/racing/formula-1/2025/mcl39-technical-specification/), [Brembo 2025 Monza braking data](https://brem-p-001.sitecorecontenthub.cloud/api/public/content/a7758d9026e14e81b940a82dd992941c?v=cc87e1fe), [Poly Haven CC0 licence](https://polyhaven.com/license).
+
+All verification uses `JEV_MOCK=1` or injected WebSocket fixtures. No provider inference calls were made. The test renderer initially stalled in macOS headless/software mode, preventing driver updates; macOS verification now uses headed Chromium and the same Metal GPU path as the demo. `PW_HEADLESS=1` remains available explicitly. This was not resolved by weakening the race assertions. A separate test-setup issue (Playwright importing track JSON without a Node import attribute) was removed from the visual-only fixture.
+
+The earlier full GPU test of the upgraded scene measured **60.1 / 60.1 / 60.1 FPS**, three simultaneous 1100×850 views. The final run and commands are recorded below. Standard `demo` retains the 4× recording clock; `npm run demo:realistic` uses 1× for physically plausible apparent motion. No claim of a six-degree-of-freedom suspension/tyre simulator, surveyed scenery or a licensed team replica is made.
+
+
+Final results, using Node **24.14.0** (`env PATH=/Users/ruben.casas@postman.com/.nvm/versions/node/v24.14.0/bin:$PATH` before each npm command):
+
+| Command | Result |
+| --- | --- |
+| `JEV_MOCK=1 npm run verify` | PASS: `npm run build` (strict Node/Worker typechecks and three Vite builds), **39 unit tests**, **4 Playwright tests**, **1 MCP test** |
+| `npm run test:e2e` (inside verify) | PASS: provider UI; Jev/Jev full race **23.7 s**; Jev/Luna full race **22.2 s**; front/rear/side/aerial/cockpit render checks **6.3 s**; no browser errors or missing assets |
+| `npm run test:mcp` (inside verify) | PASS: **12.5 s**, two independent apps plus browser spectator; invitation, clipboard fallback, browser joining and independent teardown; accepted intents **35 / 42**, paid calls **0** |
+| `JEV_MOCK=1 npm run test:handling` | PASS: complete three-lap strategic race, one pit stop per car, max speed **345.70 km/h**; separate clean flying lap **78.533 s** |
+| `JEV_MOCK=1 npm run test:performance` | PASS: final production build, three simultaneous **1100×850** hardware-rendered views, average **60.2 / 60.2 / 60.2 FPS**, paid calls **0** |
+| `JEV_MOCK=1 WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jev-realism-worker.log npm run test:worker` | PASS: local workerd assets, Durable Object physics, both intents, radio, seat authorization and MCP invitation; **3.9 s**, paid calls **0** |
+| `JEV_MOCK=1 WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jev-realism-dry-run.log npm run worker:check` | PASS: **1281.84 KiB**, dry run only; no upload or deployment |
+
+Full outputs are saved as `artifacts/realism-verification.log`, `realism-handling.log`, `realism-performance.log`, `realism-worker-verification.log` and `realism-worker-check.log`; machine-readable samples are `artifacts/handling.json` and `artifacts/performance.json`. The close-up inspection caught and corrected reversed body normals and overlapping tyre lettering. The final front/rear/side/aerial/cockpit PNGs are saved under `artifacts/realism-*.png`, alongside refreshed actual-race cockpit/broadcast/results screenshots for both driver matchups. The close-up render test uses a deterministic mock WebSocket pose; the full-race tests use the real server and real physics with mock inference.
+
+`PORT=5477 JEV_MOCK=1 npm run demo:realistic -- --smoke --headed --matchup=jev-vs-luna` also **passed**: three independent browser windows, a **1×** clock, both seats connected, accepted mock decisions, racing phase and successful running-server HTTP health check. Output is `artifacts/realism-demo-smoke.log`. The launcher closed its own server/windows afterward. Temporary preview servers were also stopped; no unrelated running demo was restarted or reconfigured.
+
+`git diff --check` passed. A scan of browser JavaScript and HTML found no provider key names, SDK client markers or inference endpoints. User credentials and the original Pong folder were not changed. No live inference was used for this work, and nothing was pushed, published or deployed.

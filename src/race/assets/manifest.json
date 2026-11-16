@@ -1,0 +1,18 @@
+{
+  "asphalt-color.jpg": {
+    "bytes": 731707,
+    "sha256": "1aa5ce99f58a625c71d48cfc3e68b65ca85ccb00f39e045c0a928608a0ea25ed"
+  },
+  "asphalt-normal.jpg": {
+    "bytes": 1240122,
+    "sha256": "42a1c381b53204e83a982db2864479a30bc127bbdeebb1006f8ee51bff099df3"
+  },
+  "grass-color.jpg": {
+    "bytes": 666655,
+    "sha256": "57b8041bfe0d0f01430e4dbaad45e7ddddf0a9fc97317f90dbc51f7b0d9e1b5d"
+  },
+  "daylight.hdr": {
+    "bytes": 1435119,
+    "sha256": "fd94c84997b8a3c353b62c2125a9b44e19509956986a126e472684432a02d798"
+  }
+}

@@ -11,19 +11,56 @@ export const LENGTH=cumulative.at(-1)!;
 // (approximately 310m before that vertex); layout/length are never scaled.
 export const START_OFFSET=LENGTH-310;
 export const wrap=(d:number)=>((d%LENGTH)+LENGTH)%LENGTH;
-export function pointAt(distance:number,offset=0){
- const d=wrap(wrap(distance)+START_OFFSET);let i=1;while(i<cumulative.length-1&&cumulative[i]<d)i++;
- const a=centreline[i-1],b=centreline[i],t=(d-cumulative[i-1])/(cumulative[i]-cumulative[i-1]);
- const dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);
- return {x:a.x+(b.x-a.x)*t-dz/len*offset,z:a.z+(b.z-a.z)*t+dx/len*offset};
+// C1 Hermite interpolation removes the polygonal yaw snaps in the source geometry.
+// Stations remain the unscaled surveyed polyline distances; interpolation stays local.
+const count=centreline.length-1;
+const direction=centreline.slice(0,count).map((p,i)=>{const a=centreline[(i-1+count)%count],b=centreline[(i+1)%count],la=Math.hypot(p.x-a.x,p.z-a.z),lb=Math.hypot(b.x-p.x,b.z-p.z);const x=(p.x-a.x)/la+(b.x-p.x)/lb,z=(p.z-a.z)/la+(b.z-p.z)/lb,l=Math.hypot(x,z);return {x:x/l,z:z/l};});
+function sourceSample(distance:number){
+ const d=wrap(wrap(distance)+START_OFFSET);let lo=0,hi=count;while(lo+1<hi){const mid=(lo+hi)>>1;if(cumulative[mid]<=d)lo=mid;else hi=mid;}
+ const a=centreline[lo],b=centreline[lo+1],length=cumulative[lo+1]-cumulative[lo],u=(d-cumulative[lo])/length,v=direction[lo],w=direction[(lo+1)%count];
+ const h00=2*u**3-3*u*u+1,h10=u**3-2*u*u+u,h01=-2*u**3+3*u*u,h11=u**3-u*u;
+ const dx=(6*u*u-6*u)*(a.x-b.x)/length+(3*u*u-4*u+1)*v.x+(3*u*u-2*u)*w.x;
+ const dz=(6*u*u-6*u)*(a.z-b.z)/length+(3*u*u-4*u+1)*v.z+(3*u*u-2*u)*w.z,l=Math.hypot(dx,dz);
+ return {x:h00*a.x+h10*length*v.x+h01*b.x+h11*length*w.x,z:h00*a.z+h10*length*v.z+h01*b.z+h11*length*w.z,tx:dx/l,tz:dz/l};
 }
-export function tangentAt(d:number){const a=pointAt(d-8),b=pointAt(d+8),len=Math.hypot(b.x-a.x,b.z-a.z);return {x:(b.x-a.x)/len,z:(b.z-a.z)/len};}
-export function curvatureAt(d:number){const a=tangentAt(d-16),b=tangentAt(d+16);return Math.acos(Math.max(-1,Math.min(1,a.x*b.x+a.z*b.z)))/32;}
+// Smooth digitisation noise over 8m, then resample at 2m with Catmull interpolation.
+// This stays within the tarmac while removing sub-car-length curvature spikes.
+const smoothCount=Math.ceil(LENGTH/2),smoothStep=LENGTH/smoothCount;
+const rawPath=Array.from({length:smoothCount},(_,i)=>sourceSample(i*smoothStep));
+const smoothPath=rawPath.map((_,i)=>{let x=0,z=0,total=0;for(let j=-10;j<=10;j++){const w=Math.exp(-.5*(j*smoothStep/8)**2),p=rawPath[(i+j+smoothCount)%smoothCount];x+=p.x*w;z+=p.z*w;total+=w;}return {x:x/total,z:z/total};});
+function sample(distance:number){const u=wrap(distance)/smoothStep,i=Math.floor(u),t=u-i;
+ const a=smoothPath[(i-1+smoothCount)%smoothCount],b=smoothPath[i],c=smoothPath[(i+1)%smoothCount],d=smoothPath[(i+2)%smoothCount];
+ const interp=(a:number,b:number,c:number,d:number)=>.5*((2*b)+(-a+c)*t+(2*a-5*b+4*c-d)*t*t+(-a+3*b-3*c+d)*t*t*t);
+ const derivative=(a:number,b:number,c:number,d:number)=>.5*((-a+c)+2*(2*a-5*b+4*c-d)*t+3*(-a+3*b-3*c+d)*t*t);
+ const dx=derivative(a.x,b.x,c.x,d.x),dz=derivative(a.z,b.z,c.z,d.z),l=Math.hypot(dx,dz);
+ return {x:interp(a.x,b.x,c.x,d.x),z:interp(a.z,b.z,c.z,d.z),tx:dx/l,tz:dz/l};
+}
+export function pointAt(distance:number,offset=0){const p=sample(distance);return {x:p.x-p.tz*offset,z:p.z+p.tx*offset};}
+export function tangentAt(d:number){const p=sample(d);return {x:p.tx,z:p.tz};}
+export function signedCurvatureAt(d:number){const a=tangentAt(d-6),b=tangentAt(d+6);return Math.atan2(a.x*b.z-a.z*b.x,a.x*b.x+a.z*b.z)/12;}
+export function curvatureAt(d:number){return Math.abs(signedCurvatureAt(d));}
+export function trackHalfWidth(d:number){const straight=Math.min(wrap(d),LENGTH-wrap(d));return 6+1.5*Math.max(0,1-straight/450);}
+// Bounded minimum-curvature line, relaxed in the local track normal. Agents choose
+// an offset from this path; the controller still has room to race side by side.
+const lineCount=Math.ceil(LENGTH/3),lineStep=LENGTH/lineCount,lineOffsets=new Float64Array(lineCount);
+const lineBase=Array.from({length:lineCount},(_,i)=>sample(i*lineStep));
+// Projected gradient of squared second differences (curvature), at several
+// spatial scales. Minimising path length instead would hug the inside and
+// tighten each apex, the opposite of a useful racing line.
+for(const stride of [8,4,2,1])for(let pass=0;pass<250;pass++)for(let i=0;i<lineCount;i++){
+ const p=lineBase[i];let gx=0,gz=0;
+ for(const [shift,weight] of [[-2,1],[-1,-4],[0,6],[1,-4],[2,1]]){const j=(i+shift*stride+lineCount)%lineCount,q=lineBase[j];gx+=(q.x-q.tz*lineOffsets[j])*weight;gz+=(q.z+q.tx*lineOffsets[j])*weight;}
+ const normal=-gx*p.tz+gz*p.tx;lineOffsets[i]=Math.max(-3.8,Math.min(3.8,lineOffsets[i]-.06*normal));
+}
+// Fair the constrained path to avoid steering discontinuities at the lateral bounds.
+const fairOffsets=new Float64Array(lineCount);for(let i=0;i<lineCount;i++){let sum=0,weight=0;for(let j=-8;j<=8;j++){const w=Math.exp(-.5*(j/3)**2);sum+=lineOffsets[(i+j+lineCount)%lineCount]*w;weight+=w;}fairOffsets[i]=sum/weight;}lineOffsets.set(fairOffsets);
+export function racingLineOffset(d:number){const u=wrap(d)/lineStep,i=Math.floor(u),t=u-i;return lineOffsets[i]*(1-t)+lineOffsets[(i+1)%lineCount]*t;}
+export function racingCurvature(d:number){const a=pointAt(d-6,racingLineOffset(d-6)),b=pointAt(d,racingLineOffset(d)),c=pointAt(d+6,racingLineOffset(d+6));const ab=Math.hypot(b.x-a.x,b.z-a.z),bc=Math.hypot(c.x-b.x,c.z-b.z),ac=Math.hypot(c.x-a.x,c.z-a.z);return 2*((b.x-a.x)*(c.z-a.z)-(b.z-a.z)*(c.x-a.x))/Math.max(.01,ab*bc*ac);}
 // Corner/sector positions digitized against the 2025 FIA Monza map.
 // FIA offsets: S1 233m before T4; S2 215m before T8; DRS1 -95/+170m at T7;
 // DRS2 detection 20m after T11 exit, activation 12m after the control line.
 const station=(raw:number)=>wrap(raw-START_OFFSET);
-export const CORNERS=[{d:station(640),name:'Rettifilo',speed:24},{d:station(1200),name:'Curva Grande',speed:78},{d:station(1860),name:'Roggia',speed:35},{d:station(2246),name:'Lesmo 1',speed:44},{d:station(2577),name:'Lesmo 2',speed:46},{d:station(3730),name:'Ascari',speed:44},{d:station(4969),name:'Parabolica',speed:49}];
+export const CORNERS=[{d:station(640),name:'Rettifilo',speed:24},{d:station(1200),name:'Curva Grande',speed:78},{d:station(1860),name:'Roggia',speed:35},{d:station(2246),name:'Lesmo 1',speed:58.6},{d:station(2577),name:'Lesmo 2',speed:50.8},{d:station(3730),name:'Ascari',speed:57.2},{d:station(4969),name:'Parabolica',speed:65}];
 export const SECTORS=[0,station(1837-233),station(3646-215),LENGTH];
 export const SPEED_TRAP=station(619-212);
 export const DRS_ZONES=[{detection:station(2577-95),start:station(2598+170),end:station(3636-60)},{detection:station(5256+20),start:12,end:station(619-60)}];
