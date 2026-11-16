@@ -1,6 +1,6 @@
 # Jev Grand Prix
 
-Two teams. Two speeds of intelligence. One Monza race. Built for Ruben Casas ([@Infoxicador](https://x.com/Infoxicador)).
+Two teams. Two speeds of intelligence. Monza by day. Las Vegas by night. Built for Ruben Casas ([@Infoxicador](https://x.com/Infoxicador)).
 
 **Vector** is calm and precise, in orange. **Chaos** is aggressive, in violet. Each has a slow race engineer and a fast driver. Choose **Jev vs Jev** or **Jev vs Luna**; in the latter, Vector uses Jev and Chaos uses GPT-6 Luna through OpenAI Decisions. The engineer chooses strategy; Jev chooses structured driving intent; a deterministic local controller handles acceleration, braking and line following. Every window watches the same authoritative race.
 
@@ -174,6 +174,30 @@ The original unscaled GeoJSON length is preserved for timing stations. A local 8
 
 **Car detail** works before connecting drivers. For inspection angles open `/?spectate&camera=detail&angle=front` (also `rear`, `side`, `top`). The render verification saves front/rear/side, aerial and onboard PNGs in `artifacts/realism-*.png`. On macOS, Playwright uses headed Chromium to exercise the Metal hardware path; `PW_HEADLESS=1` opts into software/headless testing, which is substantially slower for this scene.
 
+## Las Vegas night race
+
+Choose **Las Vegas / Night** in the broadcast view's circuit selector, or launch all three windows directly at Vegas:
+
+```sh
+npm run demo:vegas
+# Real Jev and Luna, with your existing server-side keys:
+JEV_MOCK=0 LUNA_MOCK=0 npm run demo:vegas -- --matchup=jev-vs-luna
+```
+
+The Vegas launcher uses a **1× race clock**. `RACE_CIRCUIT=las-vegas npm run dev` also selects Vegas at server startup. Monza remains the default. The race owner can change circuits; this starts a new race for everyone in the room. Team invitees cannot change the circuit. Reconnects, driver matchup changes and race resets preserve the selected circuit. Separate rooms can run different circuits at the same time.
+
+Las Vegas includes the sourced 17-turn street layout, its own sectors, DRS detection/activation zones, speed trap and pit route. The night scene adds a correctly proportioned animated **Sphere**, floodlight rows, close street walls and catch fences, lit hotel façades, the Bellagio lake/fountains, Paris tower and High Roller. **Sphere** and **The Strip** camera buttons provide establishing shots, alongside the moving broadcast, aerial and onboard cameras. Short, load/speed-dependent underfloor sparks show clearly against the dark track. Cooler night conditions affect the existing tyre-temperature model.
+
+The geometry measures **6,227.823 m**, within **0.433%** of the official 6,201 m, without rescaling. Corner stations and infrastructure are approximate. The real race photographs inspected, FIA map, Sphere dimensions, geometry licence and model limitations are documented in [Las Vegas references](data/LAS-VEGAS-REFERENCES.md). The reference photos are not bundled. All scene assets work locally and inside the self-contained MCP app.
+
+For MCP, call `open_grand_prix` with `circuit: "las-vegas"` (and optionally `matchup: "jev-vs-luna"`). A joining invitation always preserves the original race's circuit, regardless of the joiner's defaults. The local MCP host accepts `?circuit=las-vegas&player=a&autoplay=1`.
+
+```sh
+RACE_CIRCUIT=las-vegas JEV_MOCK=1 npm run test:handling
+RACE_CIRCUIT=las-vegas JEV_MOCK=1 npm run test:performance
+PORT=5477 JEV_MOCK=1 npm run demo:vegas -- --smoke --headed --matchup=jev-vs-luna
+```
+
 ## What is mocked or simplified
 
 Default Jev/Luna decisions and engineer dialogue are deterministic rule-based mocks, labelled on screen. Fixture tests exercise the actual Jev SDK and engineer JSON adapter without contacting providers. The authoritative server, WebSockets, room capabilities, MCP SDK/Apps bridge, physics, timing, pit stops, browser rendering and shared state are real.
@@ -190,7 +214,7 @@ npm run test:performance   # headed Chromium; writes artifacts/performance.json
 PORT=5477 npm run demo:smoke -- --headed
 ```
 
-`verify` runs strict Node/Worker typechecks, web/MCP/host production builds, Vitest, both full three-context Playwright matchups and the two-context MCP invitation test with a browser spectator. Tests set mock flags regardless of keys. Screenshots are versioned under `artifacts/`: cockpit, broadcast, results, title and MCP view. Full command results and measured limits are in [VERIFICATION.md](VERIFICATION.md).
+`verify` runs strict Node/Worker typechecks, web/MCP/host production builds, Vitest, both Monza matchups and a Las Vegas three-context race and both circuits’ two-context MCP invitation tests with a browser spectator. Tests set mock flags regardless of keys. Screenshots are versioned under `artifacts/`: cockpit, broadcast, results, title and MCP view. Full command results and measured limits are in [VERIFICATION.md](VERIFICATION.md).
 
 The original Pong working tree (including its invitation fixes) was copied without `.env.local`, `.git`, dependencies or generated artifacts. Its build and both browser scenarios passed before conversion. Local commit `ebb7eba` preserves that baseline, then M1–M5 evolve it. The source Pong folder was left untouched.
 

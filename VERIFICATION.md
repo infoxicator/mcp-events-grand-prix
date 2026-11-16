@@ -175,3 +175,36 @@ Full outputs are saved as `artifacts/realism-verification.log`, `realism-handlin
 `PORT=5477 JEV_MOCK=1 npm run demo:realistic -- --smoke --headed --matchup=jev-vs-luna` also **passed**: three independent browser windows, a **1×** clock, both seats connected, accepted mock decisions, racing phase and successful running-server HTTP health check. Output is `artifacts/realism-demo-smoke.log`. The launcher closed its own server/windows afterward. Temporary preview servers were also stopped; no unrelated running demo was restarted or reconfigured.
 
 `git diff --check` passed. A scan of browser JavaScript and HTML found no provider key names, SDK client markers or inference endpoints. User credentials and the original Pong folder were not changed. No live inference was used for this work, and nothing was pushed, published or deployed.
+
+
+## 2026-11-16: Las Vegas night circuit
+
+Added a room-specific circuit selector, preserving Monza and supporting concurrent rooms on different circuits. The circuit travels with server-authoritative race state, replay frames, resets, driver changes, MCP invitations and Worker checkpoints. Only the owner can switch circuits. Jev, Luna and engineer prompts now describe the selected circuit. The minimap, sectors, DRS, pit route, location labels and night tyre-temperature target use that circuit's data.
+
+The unscaled Las Vegas GeoJSON projects to **6,227.823 m**, within **0.433%** of the published 6,201 m. All 17 turns are annotated; DRS and sector offsets reference the FIA 2025 map. Real BBC and Road & Track/Getty race-night photographs were downloaded temporarily and visually inspected. Original procedural models implement the Sphere, floodlights, street barriers, hotel façades, Bellagio fountains, Paris tower and High Roller. [Reference sources and limitations](data/LAS-VEGAS-REFERENCES.md) document what is measured versus approximate. No reference photo or proprietary car/track mesh was redistributed.
+
+The Sphere uses a 157.277 m diameter and 111.557 m height above ground, with an original animated LED shader/artwork. Night rendering includes bloom, four nearby physical floodlights, a lit track corridor and deterministic titanium skid streaks at high speed. Sparks stop at low speed and in the pits; they are cosmetic, not a suspension simulation. Geometry batching and local textures keep the MCP resource self-contained. Camera buttons add Sphere and Strip establishing views.
+
+Visual iteration corrected Sphere text orientation/framing, added roof caps and façade pilasters, improved window scale and the ground surroundings, and reduced the catch-fence cell size. The initial visual test found a favicon 404; a bundled inline icon fixed it. Typecheck also caught a duplicate local variable during the city refinement; that was corrected before the final suite. Final renders have no missing assets, browser errors or shader errors. Rendering resource disposal covers bloom, shadow maps, sprites and shader textures when switching circuits.
+
+Final commands below used Node **24.14.0**, prefixed with `env PATH=/Users/ruben.casas@postman.com/.nvm/versions/node/v24.14.0/bin:$PATH`. Every automated test used mock inference or injected WebSocket fixtures, with **zero paid provider calls**.
+
+| Command | Result |
+| --- | --- |
+| `JEV_MOCK=1 npm run verify` | PASS: strict Node/Worker typechecks, all three production builds, **44 Vitest tests**, **6 Playwright tests**, **2 MCP tests** |
+| `npm run test:e2e` (inside verify) | PASS: provider UI; Monza Jev/Jev **22.4 s**, Monza Jev/Luna **22.5 s**, Las Vegas Jev/Luna **25.6 s**; car/Monza render checks **6.3 s**, Vegas Sphere/Strip/aerial/cockpit/sparks checks **9.9 s** |
+| `npm run test:mcp` (inside verify) | PASS: two sandboxed contexts plus browser spectator on each circuit, **11.8 s Monza / 12.0 s Vegas**; invitation retains circuit/matchup, clipboard fallback, browser join and independent teardown |
+| `JEV_MOCK=1 RACE_CIRCUIT=las-vegas npm run test:handling` | PASS: deterministic three-lap strategic race, both cars pit once, top speed **337.07 km/h**; separate fresh-tyre calibration **89.850 s flying lap**, max offset **3.858 m**, lateral acceleration **5.221 g** |
+| `JEV_MOCK=1 RACE_CIRCUIT=las-vegas npm run test:performance` | PASS: three simultaneous **1100×850** headed GPU views, **60.0 / 60.0 / 60.0 FPS**, night lighting/bloom/sparks enabled |
+| `JEV_MOCK=1 WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/vegas-worker.log npm run test:worker` | PASS: local Durable Object driving and circuit-preserving MCP invitations on **both circuits**, **3.9 s / 3.8 s**, zero paid calls |
+| `JEV_MOCK=1 WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/vegas-dry-run.log npm run worker:check` | PASS: **1290.24 KiB** Worker bundle; dry run only, no upload/deployment |
+
+Full races verify independent WebSockets, moving cars, engineer-to-driver behaviour changes, both pit stops, three laps, results, replay, reconnect, driver changes and mobile width. New unit tests cover Vegas geometry, zone-specific DRS, room isolation, owner-only circuit changes, deterministic full races and speed/pit-dependent sparks. The clean calibration fixes fuel/tyres to isolate handling and is not a claim to reproduce measured F1 telemetry.
+
+Evidence: `artifacts/vegas-verification.log`, `vegas-handling.log`, `vegas-performance.log`, `vegas-worker-verification.log`, `vegas-worker-check.log`; telemetry in `handling-vegas.json` and `performance-vegas.json`. Render fixtures: `vegas-sphere.png`, `vegas-strip.png`, `vegas-aerial.png`, `vegas-cockpit.png`, `vegas-sparks.png`. Actual race screenshots: `cockpit-vegas.png`, `broadcast-vegas.png`, `results-vegas.png`, `title-vegas.png`; sandbox view: `mcp-team-a-vegas.png`. Fixture pictures use a fixed camera/car pose, while race/MCP screenshots use the actual mock-driven server.
+
+`PORT=5477 JEV_MOCK=1 npm run demo:vegas -- --smoke --headed --matchup=jev-vs-luna` **passed**: Las Vegas, 1× race clock, three independent browser windows, both seats connected, accepted mock decisions, racing phase and healthy running HTTP server. The launcher then cleaned up its own windows/server. Output is saved in `artifacts/vegas-demo-smoke.log`.
+
+The final browser bundle scan found no provider key names, SDK client markers or inference endpoints. No credentials were changed or printed. The original Pong folder and unrelated running servers were left alone. Nothing was pushed, uploaded or deployed.
+
+A final lifecycle regression, `JEV_MOCK=1 npx playwright test e2e/vegas.spec.ts --grep 'owner switches'`, **passed in 3.7 s** (5.7 s including servers). It switches Monza → Vegas → Monza → Vegas → Monza across two independent connected browser contexts, preserves the room, limits each view to one canvas, restricts selection to the owner and exits the Sphere camera on returning to daylight. The first setup tried the camera with no driver seats connected and was blocked by the expected waiting overlay; that attempt was interrupted, then the test was corrected to connect both mock drivers. Clean output is in `artifacts/vegas-switching.log`. The test is now part of `npm run test:e2e` (seven browser scenarios total).

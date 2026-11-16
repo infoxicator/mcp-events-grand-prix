@@ -3,7 +3,7 @@ import type {RaceState} from '../src/race/types';
 import {mkdir} from 'node:fs/promises';
 test('detailed cars render from front and rear, with textured aerial and cockpit views',async({page,request})=>{
  const links=await request.get('/api/default').then(r=>r.json());const fixture:RaceState=await request.get(`/api/rooms/${links.room}/status`).then(r=>r.json());
- fixture.connected={a:true,b:true};fixture.race.phase='racing';fixture.race.tick=1000;fixture.race.time=10;fixture.mode='mock';fixture.paidCalls=0;
+ fixture.race.circuit='monza';fixture.connected={a:true,b:true};fixture.race.phase='racing';fixture.race.tick=1000;fixture.race.time=10;fixture.mode='mock';fixture.paidCalls=0;
  const errors:string[]=[],failedAssets:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400&&/\.(jpg|hdr|js|css)/.test(r.url()))failedAssets.push(r.url());});
  await page.routeWebSocket('**/api/rooms/*/ws',ws=>{ws.onMessage(raw=>{const m=JSON.parse(String(raw));if(m.type==='join'){ws.send(JSON.stringify({type:'joined',team:null,canReset:true}));ws.send(JSON.stringify(fixture));}if(m.type==='ping')ws.send(JSON.stringify({type:'pong',sent:m.sent}));});});
  await mkdir('artifacts',{recursive:true});

@@ -1,6 +1,5 @@
-import { LENGTH,wrap,SECTORS,DRS_ZONES,inZone,isDrsZone,PIT_ENTRY,PIT_STOP,PIT_EXIT,PIT_LIMIT,PIT_STOP_SECONDS,SPEED_TRAP } from './track';
+import {getTrack,type Track,type CircuitId} from './track';
 import {VEHICLE,brakeCapacity,cornerLimit,drivetrain} from './vehicle';
-import {racingCurvature,racingLineOffset,signedCurvatureAt,trackHalfWidth,pointAt,tangentAt,pitOffset} from './track';
 import { TEAMS,type Team,type Race,type Car,type Instruction,type DriverIntent,type Compound } from './types';
 export const DT=1/120;
 export const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
@@ -8,23 +7,23 @@ export const other=(t:Team):Team=>t==='a'?'b':'a';
 export const defaultInstruction=():Instruction=>({pace:'balanced',ers:'balanced',box:false,tyre:'medium',tactic:'hold',line:'Bring the tyres in. Build the rhythm.'});
 export const defaultIntent=():DriverIntent=>({offset:0,speedBias:0,brakeAggression:.5,side:'hold',ers:false,drs:true,reply:'Radio check. Ready to race.'});
 const TYRES={soft:{grip:1.08,wear:.000105},medium:{grip:1,wear:.000068},hard:{grip:.96,wear:.000044}};
-export function createRace(laps=3):Race {
+export function createRace(laps=3,circuit:CircuitId='monza'):Race {
  const car=(team:Team):Car=>({team,distance:team==='a'?0:-12,speed:0,speedTrap:0,gear:1,throttle:0,brake:0,offset:team==='a'?-2:2,steering:0,heading:0,lateralVelocity:0,acceleration:0,lateralG:0,rpm:4000,ersUsed:0,ersRecovered:0,ers:90,drs:false,eligible:[false,false],compound:team==='a'?'soft':'medium',wear:0,temperature:85,fuel:34,pit:'none',pitTime:0,stops:0,tyreAge:0,warnings:0,penalty:0,lap:0,lapStart:0,lastLap:0,bestLap:0,lapTimes:[],sector:0,sectorStart:0,splits:[],bestSectors:[0,0,0],splitColours:['yellow','yellow','yellow'],finishTime:null,intent:defaultIntent(),instruction:defaultInstruction(),lastLimit:-100});
- return {tick:0,time:0,phase:'lobby',countdown:5,laps,cars:{a:car('a'),b:car('b')},events:[],radio:[],leader:'a',fastest:null,winner:null};
+ return {circuit,tick:0,time:0,phase:'lobby',countdown:5,laps,cars:{a:car('a'),b:car('b')},events:[],radio:[],leader:'a',fastest:null,winner:null};
 }
 export function event(s:Race,kind:Race['events'][number]['kind'],team:Team,message:string){s.events.push({id:Math.max(s.tick*100,(s.events.at(-1)?.id??0)+1),time:s.time,kind,team,message});if(s.events.length>40)s.events.shift();}
 export function grip(c:Car){const thermal=1-Math.min(.2,Math.abs(c.temperature-95)*.002);return TYRES[c.compound].grip*(1-c.wear*.28-Math.max(0,c.wear-.65)*.8)*thermal;}
 export function aero(c:Car,rival:Car){const gap=rival.distance-c.distance,aligned=Math.abs(c.offset-rival.offset)<2.6;return {slipstream:gap>5&&gap<110&&aligned?(1-gap/110):0,dirtyAir:gap>3&&gap<55&&aligned?.22*(1-gap/55):0};}
-export function drsAllowed(c:Car){return c.pit==='none'&&c.eligible.some((ok,i)=>ok&&inZone(c.distance,DRS_ZONES[i].start,DRS_ZONES[i].end))&&isDrsZone(c.distance)&&c.brake<.1;}
-function crossed(before:number,after:number,mark:number){return Math.floor((before-mark)/LENGTH)<Math.floor((after-mark)/LENGTH);}
+export function drsAllowed(c:Car,track:Track=getTrack()){const {inZone,DRS_ZONES,isDrsZone}=track;return c.pit==='none'&&c.eligible.some((ok,i)=>ok&&inZone(c.distance,DRS_ZONES[i].start,DRS_ZONES[i].end))&&isDrsZone(c.distance)&&c.brake<.1;}
+function crossedLine(before:number,after:number,mark:number,LENGTH:number){return Math.floor((before-mark)/LENGTH)<Math.floor((after-mark)/LENGTH);}
 // Precompute geometry only; grip, fuel, wake and strategy remain dynamic.
-const CURVE_STEP=4,curveTable=Array.from({length:Math.ceil(LENGTH/CURVE_STEP)+1},(_,i)=>racingCurvature(i*CURVE_STEP));
-export function pathCurvature(d:number){const u=wrap(d)/CURVE_STEP,i=Math.floor(u);return curveTable[i]*(1-u+i)+curveTable[i+1]*(u-i);}
-export function racingSpeed(c:Car,rival:Car){
+const CURVE_STEP=4,curves=new WeakMap<Track,number[]>();
+export function pathCurvature(d:number,track:Track=getTrack()){let curveTable=curves.get(track);if(!curveTable){curveTable=Array.from({length:Math.ceil(track.LENGTH/CURVE_STEP)+1},(_,i)=>track.racingCurvature(i*CURVE_STEP));curves.set(track,curveTable);}const u=track.wrap(d)/CURVE_STEP,i=Math.floor(u);return curveTable[i]*(1-u+i)+curveTable[i+1]*(u-i);}
+export function racingSpeed(c:Car,rival:Car,track:Track=getTrack()){
  const g=grip(c),air=aero(c,rival),mass=VEHICLE.dryMass+c.fuel;
  let limit=105;
  // Backwards velocity envelope: braking capacity grows with aerodynamic load.
- for(let ahead=320;ahead>=0;ahead-=8){const curve=pathCurvature(c.distance+ahead),v=cornerLimit(curve,mass,g,air.dirtyAir);
+ for(let ahead=320;ahead>=0;ahead-=8){const curve=pathCurvature(c.distance+ahead,track),v=cornerLimit(curve,mass,g,air.dirtyAir);
   const comfort=c.instruction.pace==='manage'?.91:c.instruction.pace==='push'?1:.975;
   const corner=v*comfort*(1+Math.min(2,c.intent.speedBias)*.005);
   const decel=brakeCapacity(limit,mass,g,Math.min(3*9.81,limit*limit*Math.abs(curve)),air.dirtyAir)*(.72+c.intent.brakeAggression*.08);
@@ -33,6 +32,8 @@ export function racingSpeed(c:Car,rival:Car){
  return limit;
 }
 export function stepRace(s:Race){
+ const track=getTrack(s.circuit),{LENGTH,wrap,SECTORS,DRS_ZONES,PIT_ENTRY,PIT_STOP,PIT_EXIT,PIT_LIMIT,PIT_STOP_SECONDS,SPEED_TRAP,racingLineOffset,signedCurvatureAt,trackHalfWidth,pointAt,tangentAt,pitOffset}=track;
+ const crossed=(before:number,after:number,mark:number)=>crossedLine(before,after,mark,LENGTH);
  s.tick++;
  if(s.phase==='lobby'||s.phase==='finished')return;
  if(s.phase==='lights'){s.countdown-=DT;if(s.countdown<=0){s.phase='racing';s.countdown=0;event(s,'start','a','LIGHTS OUT — LET THEM RACE');}return;}
@@ -46,9 +47,9 @@ export function stepRace(s:Race){
    if(c.pitTime+1e-8>=PIT_STOP_SECONDS){c.compound=c.instruction.tyre;c.wear=0;c.temperature=75;c.tyreAge=0;c.stops++;c.instruction.box=false;c.pit='exit';event(s,'pit',team,`${team.toUpperCase()} · ${PIT_STOP_SECONDS.toFixed(1)}s STOP · ${c.compound.toUpperCase()}`);}continue;
   }
   const air=aero(c,rival),mode=c.instruction.pace,mass=VEHICLE.dryMass+c.fuel,g=grip(c);
-  c.drs=c.intent.drs&&drsAllowed(c)&&s.time>20&&Math.abs(pathCurvature(c.distance))<.004;
+  c.drs=c.intent.drs&&drsAllowed(c,track)&&s.time>20&&Math.abs(pathCurvature(c.distance,track))<.004;
   const deploying=c.intent.ers&&c.ers>1&&c.ersUsed<4000000&&c.instruction.ers!=='harvest';
-  let target=racingSpeed({...c,distance:c.distance+c.speed*.18},rival);
+  let target=racingSpeed({...c,distance:c.distance+c.speed*.18},rival,track);
   // Battery and DRS alter available forces; neither adds free cornering speed.
   if(c.wear>.75)target*=1-(c.wear-.75)*.16;
   if(c.pit!=='none')target=Math.min(target,PIT_LIMIT);
@@ -94,7 +95,7 @@ export function stepRace(s:Race){
   else{const recovered=Math.min(120000*c.brake+(c.instruction.ers==='harvest'?18000:4000),Math.max(0,(2000000-c.ersRecovered)/DT))*DT;c.ersRecovered+=recovered;c.ers=clamp(c.ers+recovered/VEHICLE.batteryJoules*100,0,100);}
   if(crossed(before,c.distance,SPEED_TRAP))c.speedTrap=c.speed*3.6;
   const travelled=c.distance-before;c.wear=clamp(c.wear+travelled*TYRES[c.compound].wear*(mode==='manage'?.68:mode==='push'?1.2:1),0,1);
-  c.tyreAge+=travelled/LENGTH;c.temperature+=(87+c.throttle*9+c.brake*12+Math.abs(c.lateralG)*2-(mode==='manage'?9:0)-c.temperature)*DT*.08;
+  c.tyreAge+=travelled/LENGTH;c.temperature+=((track.night?81:87)+c.throttle*9+c.brake*12+Math.abs(c.lateralG)*2-(mode==='manage'?9:0)-c.temperature)*DT*.08;
   c.fuel=Math.max(0,c.fuel-(.004+.023*c.throttle)*DT);
   if(c.instruction.box&&c.pit==='none'&&crossed(before,c.distance,PIT_ENTRY)){c.pit='entry';event(s,'pit',team,'BOX BOX · pit limiter on');}
   if(c.pit==='entry'&&crossed(before,c.distance,PIT_STOP)){c.distance=Math.floor((c.distance-PIT_STOP)/LENGTH)*LENGTH+PIT_STOP;c.pit='stopped';c.pitTime=0;c.speed=0;}

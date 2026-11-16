@@ -3,9 +3,10 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import asphaltURL from './assets/asphalt-color.jpg?url';
 import normalURL from './assets/asphalt-normal.jpg?url';
 import grassURL from './assets/grass-color.jpg?url';
-import {LENGTH,pointAt,tangentAt,CORNERS,PIT_ENTRY,PIT_EXIT,pitOffset,trackHalfWidth,racingLineOffset} from './track';
+import {getTrack,type Track} from './track';
 const rand=(n:number)=>{const v=Math.sin(n*127.1+311.7)*43758.5453;return v-Math.floor(v);};
-export function buildScenery(scene:T.Scene,anisotropy:number){
+export function buildScenery(scene:T.Scene,anisotropy:number,track:Track=getTrack()){
+ const {LENGTH,pointAt,tangentAt,CORNERS,PIT_ENTRY,PIT_EXIT,pitOffset,trackHalfWidth,racingLineOffset}=track;
  const loader=new T.TextureLoader(),load=(url:string,srgb=true)=>{const t=loader.load(url);t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=anisotropy;if(srgb)t.colorSpace=T.SRGBColorSpace;return t;};
  const roadMap=load(asphaltURL),roadNormal=load(normalURL,false),grassMap=load(grassURL);
  const material=(color:string,roughness=.85)=>new T.MeshStandardMaterial({color,roughness});

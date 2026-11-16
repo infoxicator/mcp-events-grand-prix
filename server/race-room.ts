@@ -1,3 +1,4 @@
+import {isCircuit,type CircuitId} from '../src/race/track';
 import {createRace,DT,stepRace,event,other} from '../src/race/physics';
 import {TEAMS,type Team,type Race,type RaceState,type Decision,type RoomLinks,type Instruction,type ClientMessage,type ServerMessage} from '../src/race/types';
 import {createRaceDriver,createRaceEngineer,providerConfig} from './race-brains';
@@ -10,10 +11,10 @@ export class RaceRoom {
  race=createRace();readonly peers=new Set<Peer>();readonly tokens={owner:crypto.randomUUID(),a:crypto.randomUUID(),b:crypto.randomUUID()};mcpToken:string=crypto.randomUUID();expiresAt=Date.now()+2*60*60_000;
  decisions:Record<Team,Decision|null>={a:null,b:null};intents={a:0,b:0};engineerCalls={a:0,b:0};driverStats={a:{attempts:0,successes:0,fallbacks:0},b:{attempts:0,successes:0,fallbacks:0}};paidCalls=0;history:Race[]=[];replay:Race[]=[];bestReplayScore=0;private captureUntil=0;
  private engineerAt={a:-100,b:-100};private manualUntil={a:0,b:0};private engineerBusy={a:false,b:false};private generation=0;private sequence=0;private jevDriver;private lunaDriver:ReturnType<typeof createLunaDriver>|null=null;private engineer;mode:'mock'|'mixed'|'live';players:Record<Team,DriverInfo>;
- constructor(readonly id:string,readonly origin:string,private readonly env:Record<string,string|undefined>={},readonly speed=4,public matchup:Matchup='jev-vs-jev',transports:{luna?:typeof fetch}={}){
-  const roster=driverRoster(env,matchup);this.mode=roster.mode;this.players=roster.players;this.jevDriver=createRaceDriver(providerConfig(env));this.engineer=createRaceEngineer(env);if(matchup==='jev-vs-luna')this.lunaDriver=createLunaDriver(lunaConfig(env),transports.luna);
+ constructor(readonly id:string,readonly origin:string,private readonly env:Record<string,string|undefined>={},readonly speed=4,public matchup:Matchup='jev-vs-jev',transports:{luna?:typeof fetch}={},circuit:CircuitId='monza'){
+  this.race=createRace(3,circuit);const roster=driverRoster(env,matchup);this.mode=roster.mode;this.players=roster.players;this.jevDriver=createRaceDriver(providerConfig(env));this.engineer=createRaceEngineer(env);if(matchup==='jev-vs-luna')this.lunaDriver=createLunaDriver(lunaConfig(env),transports.luna);
  }
- private reset(){this.generation++;this.race=createRace();this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerAt={a:-100,b:-100};this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.captureUntil=0;this.broadcast();}
+ private reset(){this.generation++;this.race=createRace(3,this.race.circuit);this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerAt={a:-100,b:-100};this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.captureUntil=0;this.broadcast();}
 
  connected(){return {a:[...this.peers].some(p=>p.team==='a'),b:[...this.peers].some(p=>p.team==='b')};}
  state():RaceState{return {type:'state',room:this.id,race:this.race,connected:this.connected(),decisions:this.decisions,intents:this.intents,engineerCalls:this.engineerCalls,driverStats:this.driverStats,matchup:this.matchup,players:this.players,mode:this.mode,serverTime:Date.now(),physicsHz:120,snapshotHz:30,speed:this.speed,paidCalls:this.paidCalls};}
@@ -36,6 +37,7 @@ export class RaceRoom {
  async message(p:Peer,msg:ClientMessage){p.lastSeen=Date.now();if(msg.type==='join'){this.join(p,msg.team,msg.token);return;}if(!p.joined)return;
   if(msg.type==='ping'){p.send({type:'pong',sent:msg.sent});return;}if(msg.type==='replay'){p.send({type:'replay',frames:this.replay.length?this.replay:this.history});return;}
   if(msg.type==='matchup'&&p.owner){if(!isMatchup(msg.matchup)){p.send({type:'error',message:'Invalid matchup'});return;}const roster=driverRoster(this.env,msg.matchup);if(msg.matchup==='jev-vs-luna')this.lunaDriver??=createLunaDriver(lunaConfig(this.env));this.players=roster.players;this.mode=roster.mode;this.matchup=msg.matchup;this.driverStats={a:{attempts:0,successes:0,fallbacks:0},b:{attempts:0,successes:0,fallbacks:0}};this.reset();return;}
+  if(msg.type==='circuit'&&p.owner){if(!isCircuit(msg.circuit)){p.send({type:'error',message:'Invalid circuit'});return;}this.race.circuit=msg.circuit;this.reset();return;}
   if(msg.type==='reset'&&p.owner){this.reset();return;}
   if(msg.type==='radio'&&p.team){const i=msg.instruction;if(i&&['push','balanced','manage'].includes(i.pace)&&['deploy','balanced','harvest'].includes(i.ers)&&['soft','medium','hard'].includes(i.tyre)&&['attack','defend','hold'].includes(i.tactic)&&typeof i.box==='boolean'&&typeof i.line==='string'&&i.line.length<=180){this.manualUntil[p.team]=Date.now()+3000;this.radio(p.team,i,'mock');}return;}
   if(!p.team)return;const team=p.team;
