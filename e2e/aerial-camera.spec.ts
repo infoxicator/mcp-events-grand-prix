@@ -3,7 +3,7 @@ import type {RaceState} from '../src/race/types';
 import {mkdir,writeFile} from 'node:fs/promises';
 
 for(const circuit of ['monza','las-vegas'] as const)test(`aerial follows the ${circuit} straight without bouncing during lead swaps`,async({browser,request})=>{
- const out='artifacts/onboard-v9/after/aerial';await mkdir(out,{recursive:true});
+ const out=`artifacts/${process.env.AERIAL_REVIEW_DIR||'onboard-v9/after/aerial'}`;await mkdir(out,{recursive:true});
  const links=await request.get('/api/default').then(r=>r.json());
  const fixture:RaceState=await request.get(`/api/rooms/${links.room}/status`).then(r=>r.json());
  fixture.race.circuit=circuit;fixture.connected={a:true,b:true};fixture.race.phase='racing';fixture.race.events=[];fixture.mode='mock';fixture.paidCalls=0;

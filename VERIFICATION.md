@@ -534,3 +534,32 @@ The aerial browser tests each collect **349 rendered samples over more than 405 
 Performance order is Vector / Chaos / Broadcast, three independent headed browser processes at 1100×850, Apple M4 Pro / ANGLE Metal. These are uncapped capacity tests using the existing smoothed HUD FPS capped at 120; they are not monitor refresh rates or a guarantee for every frame. No Blender or other browser tests overlapped performance measurement.
 
 Final comparison: `artifacts/onboard-v9/after/cars/before-after-gloves.jpg`. Both lower onboard and helmet-visible T-cam remain, with shots for both teams and full steering locks. Gameplay/provider/radio/invite/Worker behaviours remain supported. All changes and evidence are local; no push, publish or deployment.
+
+## Continuous side camera — 2026-11-17
+
+Baseline `187bee4`. The former trackside anchor moved approximately 175 m at each reset. Broadcast also cut on timers/events, switched focus at lead changes and changed zoom at a 55 m gap. Broadcast now holds a continuous damped side-follow shot with a fixed 48° lens. Manual Chase/Aerial and both onboard views remain available. No model, circuit, gameplay or provider changes.
+
+Node 24.14.0, `JEV_MOCK=1 ENGINEER_MOCK=1`, zero paid calls. Build and unit tests ran first, then `zsh artifacts/steady-side/verify.sh` completed with exit 0. Exact output, recordings and review are retained under `artifacts/steady-side/`.
+
+| Command | Result |
+| --- | --- |
+| `npm run build` | PASS; web, MCP and host bundles; largest MCP HTML 23,340,276 / 26,214,400 bytes |
+| `npm run typecheck` | PASS; Node and Worker targets |
+| `npm test` | 69 passed / 11 files |
+| `npx playwright test e2e/side-camera.spec.ts` | 2 passed in the initial focused run |
+| `npm run test:e2e` | 13 passed, headed Chromium; both circuits, complete races, radio, stops, results, replay and all camera regressions |
+| `npm run test:mcp` | 2 passed; independent contexts, invitation, clipboard fallback, browser join and shared spectator |
+| `npm run test:worker` | 2 passed using local workerd |
+| `npm run worker:check` | PASS; dry-run only |
+| `npm run test:handling` | PASS |
+| `PERF_UNCAPPED=1 PERF_DEMO_PROCESSES=1 PORT=5577 npm run test:performance` | PASS; Monza means 119.96 / 119.86 / 120.00 FPS; minima 119.26 / 117.65 / 119.90 |
+| `PERF_UNCAPPED=1 PERF_DEMO_PROCESSES=1 RACE_CIRCUIT=las-vegas PORT=5578 npm run test:performance` | PASS; Vegas means 119.76 / 119.70 / 119.84 FPS; minima 116.28 / 116.43 / 118.52 |
+| `PORT=5579 npm run demo:smoke` | PASS; three independent windows, both seats, mock decisions, racing and HTTP health |
+| `curl --fail --silent http://127.0.0.1:5477/health` and HTTP check of `/` | PASS; HTTP 200, mock, zero paid calls; existing idle server preserved |
+| Python HTTP check of `/src/race/scene.ts` on port 5477 | PASS; active Vite server serves SIDE / STABILISED, old TRACKSIDE / TELEPHOTO absent |
+
+The two new browser motion tests each record 769 rendered samples across approximately 448 m. Final maximum angular rates: 0.01029 rad/s Monza, 0.01149 Vegas. Maximum translation speeds: 46.72 / 46.81 m/s, with no old anchor teleports; every sample retains the same side-camera label and 48° FOV. Each 13.5-second recording crosses the former 11-second cut and gap threshold, swaps leaders, and injects an overtake every second. Deterministic WebSocket fixtures isolate camera motion; separate authoritative-server tests verify full races.
+
+I inspected both final motion sheets. Framing stays continuous; the trailing car can leave the fixed frame at larger gaps, and Vegas fencing/light posts can naturally occlude the view. This is a camera-continuity fix, not a guarantee of eliminating all lighting/material aliasing. The saved `recordings/*-straight.webm` files and motion JSON make this review reproducible.
+
+Performance order: Vector / Chaos / Broadcast; three independent headed Chromium processes, 1100×850, Apple M4 Pro / ANGLE Metal. These are uncapped capacity measurements of smoothed HUD FPS (ceiling 120), not display refresh rates or a per-frame minimum guarantee. No other browser tests ran during the benchmark. Previous committed screenshots were retained; newly generated legacy-path regression screenshots were copied into this round's `regression/` folder. Local commit only; no push, publish or deployment.
