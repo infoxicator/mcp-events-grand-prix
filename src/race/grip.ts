@@ -1,40 +1,59 @@
 import * as T from 'three';
 
-const axis=new T.Vector3(0,1,0);
-const wrist=new T.Vector3(),shoulder=new T.Vector3(),elbow=new T.Vector3();
+const up=new T.Vector3(0,1,0);
+const wrist=new T.Vector3(),shoulder=new T.Vector3(),elbow=new T.Vector3(),centre=new T.Vector3();
 const along=new T.Vector3(),bend=new T.Vector3(),direction=new T.Vector3();
-const UPPER_LENGTH=.291,FORE_LENGTH=.266;
+const restAxis=new T.Vector3(),right=new T.Vector3(),normal=new T.Vector3();
+const chassisRotation=new T.Quaternion(),handRotation=new T.Quaternion(),basis=new T.Matrix4();
+const UPPER_LENGTH=.291,FORE_LENGTH=.290;
 
-type ArmRig={side:number;upper:T.Object3D;fore:T.Object3D;cuff:T.Object3D};
+type ArmRig={side:number;upper:T.Object3D;fore:T.Object3D;hand:T.Object3D;joint:T.Object3D};
 const armCache=new WeakMap<T.Object3D,ArmRig[]>();
 
-/** Solve both links in the chassis frame. Read the cuff from the actual hand
- * hierarchy so wheel rotation, grip offsets and LOD bind transforms agree. */
+/** Put the forearm end at the carpal joint. The fingers stay on the rim.
+ * The gauntlet rolls with the sleeve and the elbow moves around the reach circle. */
 export function poseForearms(model:T.Object3D,steering:T.Object3D,visible=true){
  let arms=armCache.get(model);
  if(!arms){
   arms=[];
   for(const [suffix,side] of [['L',-1],['R',1]] as const){
-   const fore=model.getObjectByName('Forearm'+suffix),upper=model.getObjectByName('UpperArm'+suffix),cuff=steering.getObjectByName('Cuff'+suffix);
-   if(fore&&upper&&cuff)arms.push({side,upper,fore,cuff});
+   const fore=model.getObjectByName('Forearm'+suffix),upper=model.getObjectByName('UpperArm'+suffix);
+   const hand=steering.getObjectByName('Hand'+suffix),joint=hand?.getObjectByName('Wrist'+suffix);
+   if(fore&&upper&&hand&&joint)arms.push({side,upper,fore,hand,joint});
   }
   armCache.set(model,arms);
  }
- for(const {side,upper,fore,cuff} of arms){
+ for(const {side,upper,fore,hand,joint} of arms){
   fore.visible=upper.visible=visible;
   if(!visible)continue;
   const chassis=fore.parent!;
-  chassis.worldToLocal(cuff.getWorldPosition(wrist));
+  chassis.worldToLocal(joint.getWorldPosition(wrist));
+  chassis.getWorldQuaternion(chassisRotation).invert();
+  hand.getWorldQuaternion(handRotation).premultiply(chassisRotation);
+  restAxis.set(-side*.007,.029,.045).normalize();
   shoulder.copy(upper.position);
-  along.subVectors(wrist,shoulder);
-  const reach=along.length();along.divideScalar(reach);
-  bend.set(side*.218,.180,-.20).sub(shoulder);
-  bend.addScaledVector(along,-bend.dot(along)).normalize();
+  along.subVectors(wrist,shoulder);const reach=along.length();along.divideScalar(reach);
   const advance=(UPPER_LENGTH**2+reach**2-FORE_LENGTH**2)/(2*reach);
-  elbow.copy(shoulder).addScaledVector(along,advance).addScaledVector(bend,Math.sqrt(Math.max(0,UPPER_LENGTH**2-advance**2)));
-  upper.quaternion.setFromUnitVectors(axis,direction.subVectors(elbow,shoulder).normalize());
-  fore.position.copy(elbow);
-  fore.quaternion.setFromUnitVectors(axis,direction.subVectors(wrist,elbow).normalize());
+  centre.copy(shoulder).addScaledVector(along,advance);
+  const radius=Math.sqrt(Math.max(0,UPPER_LENGTH**2-advance**2));
+  // The rising elbow lifts beside the ribs. The lowering elbow folds inward
+  // across the lap. A continuous pole trajectory avoids the flip produced
+  // by choosing either of two points on a constrained reach circle.
+  const turn=T.MathUtils.clamp(side*steering.rotation.z/(.42*3.6),-1,1);
+  const rise=Math.max(0,turn),fold=Math.max(0,-turn);
+  bend.set(side*(.20-.210*fold**1.35-.014*Math.sin(Math.PI*rise)),
+   .35+.28*rise**1.15-.04*Math.sin(Math.PI*fold),-.12-.07*fold-.04*rise).sub(centre);
+  bend.addScaledVector(along,-bend.dot(along)).normalize();
+  elbow.copy(centre).addScaledVector(bend,radius);
+  upper.quaternion.setFromUnitVectors(up,direction.subVectors(elbow,shoulder).normalize());
+  fore.position.copy(elbow);direction.subVectors(wrist,elbow).normalize();
+  // The suit seam pronates with the hand. Construct an orthonormal frame
+  // instead of allowing a shortest-arc rotation to choose the sleeve roll.
+  right.set(1,0,0).applyQuaternion(handRotation);
+  normal.crossVectors(right,direction).normalize();right.crossVectors(direction,normal).normalize();
+  fore.quaternion.setFromRotationMatrix(basis.makeBasis(right,direction,normal));
+  direction.applyQuaternion(handRotation.invert());
+  joint.quaternion.setFromUnitVectors(restAxis,direction);
  }
 }
 /** Small contact-preserving grip changes, deterministic from car telemetry. Radians. */
@@ -48,7 +67,7 @@ export function fingerCurl(side:-1|1,digit:number,steering:number,distance:numbe
 /** A millimetre of compression on the back of the glove. All applique and
  * seam meshes use the same hand-space field so the layers stay registered. */
 export function bindGloveCompression(hand:T.Object3D,side:-1|1){
- hand.updateWorldMatrix(true,true);
+ hand.updateWorldMatrix(true,true);hand.updateMatrixWorld(true);
  const inverseHand=hand.matrixWorld.clone().invert(),point=new T.Vector3(),shift=new T.Vector3();
  const meshes:T.Mesh[]=[];
  const candidates:T.Mesh[]=[];
@@ -57,7 +76,14 @@ export function bindGloveCompression(hand:T.Object3D,side:-1|1){
   if(!(child instanceof T.Mesh))continue;
   const geometry=child.geometry,base=geometry.getAttribute('position');
   if(!base||geometry.morphAttributes.position?.length)continue;
-  const toHand=inverseHand.clone().multiply(child.matrixWorld),toMesh=toHand.clone().invert();
+  const toHand=inverseHand.clone().multiply(child.matrixWorld);
+  if(child instanceof T.SkinnedMesh){
+   // glTF positions are in the skin bind space. At setup all joints are in their
+   // rest pose and share this transform into the rendered hand frame.
+   toHand.multiply(child.bindMatrixInverse).multiply(child.skeleton.bones[0].matrixWorld)
+    .multiply(child.skeleton.boneInverses[0]).multiply(child.bindMatrix);
+  }
+  const toMesh=toHand.clone().invert();
   const deltas=new Float32Array(base.count*3);
   for(let i=0;i<base.count;i++){
    point.fromBufferAttribute(base,i).applyMatrix4(toHand);

@@ -1,7 +1,7 @@
 """Cockpit components in metres, X across the car, Y up, Z forward."""
 import math
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 def closed_rings(rings):
@@ -80,7 +80,7 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
     bpy.ops.object.modifier_apply(modifier=fuse.name)
     smooth=skin.modifiers.new('Blend finger webs','SMOOTH');smooth.factor=.82;smooth.iterations=4
     bpy.ops.object.modifier_apply(modifier=smooth.name)
-    reduce=skin.modifiers.new('Preserve knuckle profile','DECIMATE');reduce.ratio=.215
+    reduce=skin.modifiers.new('Preserve knuckle profile','DECIMATE');reduce.ratio=.193
     bpy.ops.object.modifier_apply(modifier=reduce.name)
     side=-1 if suffix=='L' else 1
     colors=skin.data.color_attributes.new(name='Racewear',type='BYTE_COLOR',domain='POINT')
@@ -121,6 +121,16 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
             if ok:vertex.co=inverse@(point+normal*.00105)
         trim.data.update()
 
+    # Bind the piping and printed trim to the same skin as the shell. Their
+    # cuff ends must move with the wrist and their knuckle ends with the palm.
+    trims=[o for o in hand.children_recursive if o!=skin and o.type in {'MESH','CURVE'}]
+    for trim in trims:
+        if trim.type=='CURVE':
+            bpy.ops.object.select_all(action='DESELECT');trim.select_set(True)
+            bpy.context.view_layer.objects.active=trim;bpy.ops.object.convert(target='MESH')
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in [skin]+trims:obj.select_set(True)
+    bpy.context.view_layer.objects.active=skin;bpy.ops.object.join()
     rig_data=bpy.data.armatures.new('Glove skeleton '+suffix)
     rig=bpy.data.objects.new('GloveRig'+suffix,rig_data)
     bpy.context.collection.objects.link(rig);rig.parent=hand
@@ -129,12 +139,16 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
     rig.select_set(True);bpy.context.view_layer.objects.active=rig
     bpy.ops.object.mode_set(mode='EDIT')
     root=rig_data.edit_bones.new('Palm'+suffix);root.head=(0,0,0);root.tail=(0,.035,0)
+    carpal=Vector((side*.208,-.033,-.059))
+    wrist=rig_data.edit_bones.new('Wrist'+suffix)
+    wrist.head=carpal;wrist.tail=carpal+Vector((0,.025,0));wrist.parent=root
     names=[]
     for digit,path in enumerate(paths):
         name='Finger'+suffix+str(digit);names.append(name)
         bone=rig_data.edit_bones.new(name);bone.head=path[0];bone.tail=path[0]+Vector((0,.026,0));bone.parent=root
     bpy.ops.object.mode_set(mode='OBJECT')
     palm=skin.vertex_groups.new(name='Palm'+suffix)
+    gauntlet=skin.vertex_groups.new(name='Wrist'+suffix)
     joints=[skin.vertex_groups.new(name=name) for name in names]
     from mathutils.kdtree import KDTree
     points=[(digit,i/(len(path)-1),point) for digit,path in enumerate(paths) for i,point in enumerate(path)]
@@ -145,9 +159,14 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
         _,i,distance=tree.find(vertex.co);digit,t,_=points[i]
         mix=min(1,max(0,(t-.07)/.48))*min(1,max(0,(.030-distance)/.011))
         mix=mix*mix*(3-2*mix)
-        if mix<1:palm.add([vertex.index],1-mix,'REPLACE')
+        # A smooth bend through the wrist. The entire gauntlet mouth follows
+        # the forearm. Finger contact surfaces remain attached to the wheel.
+        cuff=(1-mix)*(1-smooth(-.091,-.048,vertex.co.z))
+        if cuff>0:gauntlet.add([vertex.index],cuff,'REPLACE')
+        if 1-mix-cuff>1e-6:palm.add([vertex.index],1-mix-cuff,'REPLACE')
         if mix>0:joints[digit].add([vertex.index],mix,'REPLACE')
     modifier=skin.modifiers.new('Finger articulation','ARMATURE');modifier.object=rig
+    return rig
 
 def build_driver(group, mesh, curve, interp, steer, body, materials):
     fabric, insert, leather, thread, suit = materials
@@ -179,15 +198,6 @@ def build_driver(group, mesh, curve, interp, steer, body, materials):
         rings = [[backhand_point(row, k*math.tau/32) for k in range(32)] for row in stations]
         glove = mesh('Precurved gauntlet', *closed_rings(rings), fabric, hand)
         shells=[glove];paths=[]
-        glove.data.materials.append(leather)
-        glove.data.materials.append(insert)
-        for face in glove.data.polygons:
-            row,col = divmod(face.index,32)
-            if row >= len(stations)-1: continue
-            z = stations[row][0]
-            # Suede palm, stretch gusset at wrist and a woven cuff binding.
-            if math.cos((col+.5)*math.tau/32)<-.40: face.material_index=1
-            if -.095<z<-.091 or z<-.101: face.material_index=2
         def seam(name,points,radius,material,parent):
             detail=curve(name,points,radius,material,parent)
             detail.data.resolution_u=3
@@ -272,35 +282,32 @@ def build_driver(group, mesh, curve, interp, steer, body, materials):
                 rings.append(ring)
             part=mesh('Curled digit',*closed_rings(rings),fabric,finger)
             shells.append(part)
-            part.data.materials.append(leather)
-            part.data.materials.append(insert)
-            for face in part.data.polygons:
-                row,col=divmod(face.index,16)
-                if row>=len(rings)-1:continue
-                if math.cos((col+.5)*math.tau/16)*side<-.30 and row>4:face.material_index=1
-                if 6<=row<=8 and face.material_index==0:face.material_index=2
             edge=3 if side>0 else 11
             seam('External finger seam',[ring[edge] for ring in rings[1:-1:2]],.0006,thread,finger)
 
-        fit_glove_skin(hand,suffix,shells,paths,fabric,leather,mesh)
-        cuff=group('Cuff'+suffix)
-        cuff.parent=hand
-        cuff.location=(side*.215,-.062,-.104)
+        rig=fit_glove_skin(hand,suffix,shells,paths,fabric,leather,mesh)
+        cuff=group('Cuff'+suffix);cuff.parent=rig
+        cuff.parent_type='BONE';cuff.parent_bone='Wrist'+suffix
+        bpy.context.view_layer.update()
+        cuff.matrix_world=hand.matrix_world@Matrix.Translation((side*.215,-.062,-.104))
 
         # Rigid anatomical segments, authored at final physical length. Only the
         # elbow joint moves as the wheel turns. No longitudinal sleeve scaling.
         shoulder=Vector((side*.168,.501,-.366))
-        wrist=Vector((side*(.215-.205*(1-.85)),-.062,-.104))+steer.location
-        upper_length,fore_length=.291,.266
+        wrist=Vector((side*(.208-.205*(1-.85)),-.033,-.059))+steer.location
+        upper_length,fore_length=.291,.290
         along=(wrist-shoulder).normalized()
         reach=(wrist-shoulder).length
         pole=Vector((side*.218,.180,-.20))-shoulder
-        bend=(pole-along*pole.dot(along)).normalized()
+        natural=(pole-along*pole.dot(along)).normalized()
+        dorsal=Vector((-side*.007,.029,.045)).normalized()
+        aligned=(-dorsal+along*dorsal.dot(along)).normalized()
+        bend=(natural*.30+aligned*.70).normalized()
         advance=(upper_length**2+reach**2-fore_length**2)/(2*reach)
         elbow=shoulder+along*advance+bend*math.sqrt(max(0,upper_length**2-advance**2))
         sections=[
-            ('UpperArm',shoulder,elbow,upper_length,[[0,.051,.050],[.12,.061,.057],[.46,.054,.054],[.82,.051,.047],[1,.047,.045]]),
-            ('Forearm',elbow,wrist,fore_length,[[0,.046,.044],[.12,.052,.051],[.35,.050,.048],[.63,.043,.041],[.86,.035,.036],[1,.029,.031]])]
+            ('UpperArm',shoulder,elbow,upper_length,[[0,.051,.050],[.12,.061,.057],[.46,.054,.054],[.82,.051,.047],[.98,.047,.045],[1.04,.033,.032]]),
+            ('Forearm',elbow,wrist,fore_length,[[-.06,.033,.032],[.03,.046,.044],[.15,.052,.050],[.39,.048,.046],[.61,.041,.040],[.78,.034,.033],[.87,.027,.026],[1,.016,.015]])]
         for name,start,end,length,profile in sections:
             arm=group(name+suffix);arm.parent=body
             rings=[]

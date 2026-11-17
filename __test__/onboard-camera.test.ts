@@ -73,7 +73,7 @@ for(const level of ['high','low'])it(level+' holds the glove width and both slee
  const steering=scene.getObjectByName('Steering')!;
  for(const [suffix,side] of [['L',-1],['R',1]] as const){
   const upper=scene.getObjectByName('UpperArm'+suffix)!,fore=scene.getObjectByName('Forearm'+suffix)!;
-  const cuff=scene.getObjectByName('Cuff'+suffix)!,hand=scene.getObjectByName('Hand'+suffix)!;
+  const cuff=scene.getObjectByName('Cuff'+suffix)!,joint=scene.getObjectByName('Wrist'+suffix)!,hand=scene.getObjectByName('Hand'+suffix)!;
   const meshes=bindGloveCompression(hand,side);expect(meshes.length).toBeGreaterThan(0);
   let largest=0;
   for(const mesh of meshes){
@@ -82,12 +82,21 @@ for(const level of ['high','low'])it(level+' holds the glove width and both slee
   }
   expect(largest).toBeGreaterThan(.0003);expect(largest).toBeLessThan(.00136);
   const palm=(x:number,y:number,z:number)=>hand.localToWorld(new T.Vector3(side*x,y,z));
+  let previousElbow:T.Vector3|undefined;
   for(let step=-42;step<=42;step++){
    steering.rotation.z=-step*.01*3.6;poseForearms(scene,steering);scene.updateMatrixWorld(true);
    const origin=(bone:T.Object3D)=>bone.getWorldPosition(new T.Vector3());
    expect(origin(upper).distanceTo(origin(fore))).toBeCloseTo(.291,5);
-   expect(origin(cuff).distanceTo(origin(fore))).toBeCloseTo(.266,5);
-   expect(fore.localToWorld(new T.Vector3(0,.266,0)).distanceTo(origin(cuff))).toBeLessThan(.00002);
+   expect(origin(joint).distanceTo(origin(fore))).toBeCloseTo(.290,5);
+   expect(fore.localToWorld(new T.Vector3(0,.290,0)).distanceTo(origin(joint))).toBeLessThan(.00002);
+   const sleeve=origin(joint).sub(origin(fore)).normalize();
+   const opening=origin(joint).sub(origin(cuff)).normalize();
+   expect(T.MathUtils.radToDeg(sleeve.angleTo(opening))).toBeLessThan(.1);
+   expect(Math.abs(fore.position.x)).toBeLessThan(.240);
+   const palmAxis=new T.Vector3(-side*.007,.029,.045).normalize().applyQuaternion(hand.getWorldQuaternion(new T.Quaternion()));
+   expect(T.MathUtils.radToDeg(sleeve.angleTo(palmAxis))).toBeLessThan(37);
+   if(previousElbow)expect(fore.position.distanceTo(previousElbow)).toBeLessThan(.018);
+   previousElbow=fore.position.clone();
    expect(palm(.184,-.04,-.06).distanceTo(palm(.245,-.04,-.06))).toBeCloseTo(.061,6);
    expect(palm(.21,.02,-.025).distanceTo(palm(.21,.02,-.105))).toBeCloseTo(.080,6);
    for(const node of [upper,fore,hand])expect(node.getWorldScale(new T.Vector3()).distanceTo(new T.Vector3(1,1,1))).toBeLessThan(.00001);

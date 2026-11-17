@@ -54,7 +54,7 @@ export function createCar(team:'a'|'b'){
  const originals=new Map<T.Mesh,T.Material|T.Material[]>(),clay=new T.MeshStandardMaterial({color:'#deded9',roughness:.83,side:T.DoubleSide}),wire=new T.MeshBasicMaterial({color:'#15222b',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}),lineMaterial=new T.LineBasicMaterial({color:'#9ab8ca',transparent:true,opacity:.7,depthWrite:false}),wireLines:T.LineSegments[]=[];
  const carbonMap=twill(),grainMap=grain(),fabricMap=knit(),tyreUniforms:{spin:{value:number};load:{value:number};side:number;front:boolean}[]=[],aoMap=new T.TextureLoader().load(aoURL);aoMap.flipY=false;let ready=false,dead=false,finish:Finish='colour',error:string|null=null;
  const compression=new WeakMap<T.Group,{side:-1|1;meshes:T.Mesh[]}[]>();
- const fingerRigs=new WeakMap<T.Group,{node:T.Object3D;trim:T.Object3D;side:-1|1;digit:number}[]>();
+ const fingerRigs=new WeakMap<T.Group,{node:T.Object3D;side:-1|1;digit:number}[]>();
  const sidewallInks:T.MeshPhysicalMaterial[]=[];
  const mirrors:T.MeshPhysicalMaterial[]=[];const rigs:T.Group[]=[],dashTextures:T.CanvasTexture[]=[],dashContexts:CanvasRenderingContext2D[]=[],lights:T.MeshBasicMaterial[][]=[];
  function setFinish(next:Finish){finish=next;wireLines.forEach(o=>o.visible=next==='wireframe');for(const [mesh,original] of originals)mesh.material=next==='colour'?original:next==='clay'?clay:wire;}
@@ -137,7 +137,7 @@ export function createCar(team:'a'|'b'){
   }return m;};o.material=Array.isArray(o.material)?o.material.map(m=>make(m as T.MeshStandardMaterial)):make(o.material as T.MeshStandardMaterial);o.castShadow=!(Array.isArray(o.material)?o.material:[o.material]).every(m=>bakedDetailShadow.has(m.name));o.receiveShadow=true;originals.set(o,o.material);}});
   for(const name of team==='a'?['NumberB','HelmetNumberB']:['NumberA','HelmetNumberA']){const unused=model.getObjectByName(name);if(unused)unused.visible=false;}
   compression.set(model,([-1,1] as const).map(side=>({side,meshes:bindGloveCompression(model.getObjectByName(side<0?'HandL':'HandR')!,side)})));
-  fingerRigs.set(model,([-1,1] as const).flatMap(side=>Array.from({length:5},(_,digit)=>({node:model.getObjectByName(`Finger${side<0?'L':'R'}${digit}`)!,trim:model.getObjectByName(`FingerTrim${side<0?'L':'R'}${digit}`)!,side,digit})).filter(binding=>!!binding.node)));
+  fingerRigs.set(model,([-1,1] as const).flatMap(side=>Array.from({length:5},(_,digit)=>({node:model.getObjectByName(`Finger${side<0?'L':'R'}${digit}`)!,side,digit})).filter(binding=>!!binding.node)));
   rigs.push(model);lod.addLevel(model,index===0?0:32);const meshes:T.Mesh[]=[];model.traverse(o=>{if(o instanceof T.Mesh)meshes.push(o);});for(const m of meshes){const lines=new T.LineSegments(new T.WireframeGeometry(m.geometry),lineMaterial);lines.renderOrder=1;lines.visible=false;m.add(lines);wireLines.push(lines);}
   const steering=model.getObjectByName('Steering');
   if(steering){const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;const material=new T.MeshBasicMaterial({map:tex,toneMapped:false});const display=new T.Mesh(new T.PlaneGeometry(.182,.101),material);display.position.set(0,.025,-.025);display.rotation.y=Math.PI;steering.add(display);originals.set(display,material);dashTextures.push(tex);dashContexts.push(canvas.getContext('2d')!);
@@ -152,8 +152,8 @@ export function createCar(team:'a'|'b'){
   for(const model of rigs){for(const name of ['FrontL','FrontR','RearL','RearR']){const w=model.getObjectByName(name);if(w){w.position.y=.36-T.MathUtils.clamp(.007+(studio?0:c.speed*c.speed*.0000012+(name.startsWith('Front')?1:-1)*-(c.acceleration??0)*.00022+(name.endsWith('L')?-1:1)*(c.lateralG??0)*.0012),.003,.024);w.rotation.set(0,name.startsWith('Front')?(c.steering??0):0,0);w.rotateX(studio?0:c.distance/.36);}}
    const hands=model.getObjectByName('Hands');if(hands)hands.visible=!studio;
    const suit=model.getObjectByName('SuitBody');if(suit)suit.visible=!studio;
-   for(const {node,trim,side,digit} of fingerRigs.get(model)??[]){
-    const pose=fingerCurl(side,digit,c.steering??0,c.distance,c.speed);node.rotation.y=pose.curl;node.rotation.z=pose.spread;if(trim)trim.quaternion.copy(node.quaternion);
+   for(const {node,side,digit} of fingerRigs.get(model)??[]){
+    const pose=fingerCurl(side,digit,c.steering??0,c.distance,c.speed);node.rotation.y=pose.curl;node.rotation.z=pose.spread;
    }
    for(const {side,meshes} of compression.get(model)??[]){
     const pressure=T.MathUtils.clamp(.32+side*(c.steering??0)*1.65-Math.min(0,c.acceleration??0)*.014,0,1);
