@@ -42,6 +42,12 @@ def build(cid):
  for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex='canopy')
  for i,c in enumerate([(.38,.025,.025),(.04,.08,.16),(.62,.60,.55),(.12,.15,.16)]):mat('Spectator'+str(i),c,.95)
  mat('Skin',(.43,.28,.19),.9)
+ if night:
+  mat('Travertine',(.62,.40,.21),.65,emission=.34)
+  mat('WarmWindows',(.8,.58,.32),.4,tex='warm-windows',emission=.55)
+  mat('CopperRoof',(.25,.17,.10),.38,.45)
+  mat('Fountain',(.86,.75,.48),.26,emission=3)
+
  for number in [150,100,50]:mat('Brake'+str(number),(.8,.8,.8),tex='brake-'+str(number))
  batches={}
  def face(points,material,uv=None,special=None):
@@ -50,7 +56,7 @@ def build(cid):
  def box(p,size,m,yaw=0):
   x,y,z=p;w,h,d=size;cs=math.cos(yaw);sn=math.sin(yaw)
   v=[(x+xx*cs+zz*sn,y+yy,z-xx*sn+zz*cs) for xx,yy,zz in [(-w/2,-h/2,-d/2),(w/2,-h/2,-d/2),(w/2,h/2,-d/2),(-w/2,h/2,-d/2),(-w/2,-h/2,d/2),(w/2,-h/2,d/2),(w/2,h/2,d/2),(-w/2,h/2,d/2)]]
-  for f in [(3,2,1,0),(4,5,6,7),(0,1,5,4),(7,6,2,3),(1,2,6,5),(4,7,3,0)]:face([v[i] for i in f],m,[(0,0),(w/100 if m=='Windows' else 1,0),(w/100 if m=='Windows' else 1,h/130 if m=='Windows' else 1),(0,h/130 if m=='Windows' else 1)])
+  for f in [(3,2,1,0),(4,5,6,7),(0,1,5,4),(7,6,2,3),(1,2,6,5),(4,7,3,0)]:face([v[i] for i in f],m,[(0,0),(w/100 if m in ('Windows','WarmWindows') else 1,0),(w/100 if m in ('Windows','WarmWindows') else 1,h/130 if m in ('Windows','WarmWindows') else 1),(0,h/130 if m in ('Windows','WarmWindows') else 1)])
  def rod(a,b,r,m,sides=5):
   nonlocal instance_triangles
   if m=='Trunk':
@@ -69,13 +75,13 @@ def build(cid):
  def blob(p,scale,m,segments=8,rings=4,seed=0):
   nonlocal instance_triangles
   segments,rings=(12,6) if m.startswith('Canopy') else (segments,rings)
-  key=(m,segments,rings,seed%4);mesh=prototypes.get(key)
+  key=(m,segments,rings,seed%2);mesh=prototypes.get(key)
   if mesh is None:
    vv=[];ff=[]
    for j in range(rings+1):
     t=math.pi*j/rings
     for i in range(segments):
-     a=i*math.tau/segments;r=1+.12*math.sin(i*2.7+j*3.1+seed%4)+(.06*math.cos(i*7.1-j*4.7) if m.startswith('Canopy') else 0)
+     a=i*math.tau/segments;r=1+.12*math.sin(i*2.7+j*3.1+seed%2)+(.06*math.cos(i*7.1-j*4.7) if m.startswith('Canopy') else 0)
      vv.append((math.sin(t)*math.cos(a)*r,-math.sin(t)*math.sin(a)*r,math.cos(t)))
    for j in range(rings):
     for i in range(segments):
@@ -191,7 +197,7 @@ def build(cid):
   for j in range(12):atbox(c['d']+30+j*1.3,27,.65,(1.1,1.3,1.2),'Red' if j%3 else 'White')
  if not night:
   # Solid multi-lobed oak/hornbeam crowns, varied silhouettes and visible branches.
-  for i in range(4600):
+  for i in range(5100):
    d=random.random()*L;off=random.choice([-1,1])*(43+random.random()**1.6*165);p=pt(d,off);x,y,z=p
    if min((x-q[0])**2+(z-q[1])**2 for q in coarse)<38**2:continue
    if (d>L-460 or d<150) and abs(off)<90:continue
@@ -208,6 +214,14 @@ def build(cid):
     rod((x,y+h*.38,z),(cx,cy,cz),.075,'Trunk')
     blob((cx,cy,cz),(crown*random.uniform(.65,1.12),h*[.24,.28,.28,.14][species],crown*random.uniform(.65,1.05)),'Canopy'+str(species),8,4,i+k)
 
+  # A second vegetation stratum breaks the bare-trunk horizon; no billboard foliage.
+  # Reuse crown prototypes so shrubs and saplings stay in the existing instanced batches.
+  for i in range(1800):
+   d=random.random()*L;off=random.choice([-1,1])*random.uniform(39,105);x,y,z=pt(d,off)
+   if min((x-q[0])**2+(z-q[1])**2 for q in coarse)<36**2:continue
+   if (d>L-470 or d<170) and abs(off)<92:continue
+   h=random.uniform(1.4,5.5);species=i%4
+   for k in range(2):blob((x+k*1.8,y+h*.65,z+math.sin(i)*2),(h*.65,h*.7,h*.6),'Canopy'+str(species),8,4,i+k)
  else:
   for d in range(0,int(L),45):
    for side in [-1,1]:
@@ -215,7 +229,28 @@ def build(cid):
   origin=data['origin'];lat0=origin[1]*math.pi/180
   def project(lon,lat):return ((lon-origin[0])*111320*math.cos(lat0),-(lat-origin[1])*111320)
   def hotel(lon,lat,w,h,dep,name):
-   x,z=project(lon,lat);g=ground(x,z);box((x,g+h/2,z),(w,h,dep),'Windows');box((x,g+4,z),(w+24,8,dep+22),'Concrete')
+   x,z=project(lon,lat);g=ground(x,z)
+   if name=='AURORA':
+    # Bellagio-like crescent massing west of its lake. Original fictional architecture.
+    # Tall central bay, stepped wings, pilasters and warm floodlit limestone cornices.
+    for bay in range(-10,11):
+     zz=z+bay*14;xx=x+abs(bay)**1.6*1.4;hh=145-abs(bay)*3.2;yaw=-math.copysign(.16+abs(bay)*.018,bay) if bay else 0
+     box((xx,g+hh/2,zz),(35,hh,14.7),'WarmWindows',yaw)
+     box((xx+18,g+hh/2,zz),(1.5,hh,1.3),'Travertine',yaw)
+     for yy in [9,17,hh-8,hh]:box((xx,g+yy,zz),(38,1.3,15.5),'Travertine',yaw)
+     box((xx+19,g+hh-6,zz),(.5,1.4,14),'Gold',yaw)
+    box((x+3,g+151,z),(45,12,26),'Travertine')
+    for side in [-1,1]:
+     for bay in range(12):
+      zz=z+side*bay*12;xx=x+48;box((xx,g+8,zz),(30,16,12),'Travertine')
+      box((xx,g+17,zz),(33,1,13),'Gold');box((xx+15.2,g+8,zz),(.4,9,7),'Glass')
+      for dz in [-4.5,4.5]:rod((xx+17,g,zz+dz),(xx+17,g+14,zz+dz),.55,'Travertine',8)
+     # Copper pavilion domes and layered eaves beside the fountains.
+     xx=x+65;zz=z+side*132;box((xx,g+11,zz),(29,22,29),'Travertine')
+     blob((xx,g+23,zz),(18,7,18),'CopperRoof',24,12)
+     for yy in [20,21.5]:box((xx,g+yy,zz),(33,.7,33),'Gold')
+    return
+   box((x,g+h/2,z),(w,h,dep),'Windows');box((x,g+4,z),(w+24,8,dep+22),'Concrete')
    for y in [h*.1,h*.85,h]:box((x,g+y,z),(w+1,.45,dep+1),'Gold')
    for dx in range(-int(w/2),int(w/2),12):box((x+dx,g+h/2,z+dep/2),(.7,h,1),'Concrete')
    # Architectural wings give stepped, compound footprints rather than solitary boxes.
@@ -234,6 +269,9 @@ def build(cid):
   for i in range(330):
    d=random.random()*L;p=pt(d,random.choice([-1,1])*random.uniform(90,530));h=random.uniform(14,115)
    sphereXZ=project(-115.1621,36.1207)
+   lake=project(-115.1745,36.1121)
+   if ((p[0]-lake[0])/180)**2+((p[2]-lake[1])/240)**2<1:continue
+   if any(abs(p[0]-project(lon,lat)[0])<95 and abs(p[2]-project(lon,lat)[1])<95 for lon,lat in [(-115.172,36.1125),(-115.1766,36.1127)]):continue
    if math.hypot(p[0]-sphereXZ[0],p[2]-sphereXZ[1])<140:continue
    if min((p[0]-q[0])**2+(p[2]-q[1])**2 for q in coarse)<65**2:continue
    w=random.uniform(20,58);dep=random.uniform(22,60);angle=random.choice([0,.12,-.18,.3]);box((p[0],p[1]+h/2,p[2]),(w,h,dep),'Windows',angle)
@@ -248,6 +286,15 @@ def build(cid):
   x,z=project(-115.1745,36.1121);g=ground(x,z)
   for i in range(80):
    a=i*math.tau/80;b=(i+1)*math.tau/80;face([(x,g+.1,z),(x+95*math.cos(a),g+.1,z+135*math.sin(a)),(x+95*math.cos(b),g+.1,z+135*math.sin(b))],'Water');h=4+math.sin(a*3)**2*14;rod((x+65*math.cos(a),g,z+95*math.sin(a)),(x+65*math.cos(a),g+h,z+95*math.sin(a)),.13,'Gold')
+  # Lit rings and parabolic fountain jets, tapered into the water rather than gold poles.
+  for ring,rad in enumerate([35,65]):
+   for i in range(64):
+    a=i*math.tau/64;h=5+math.sin(a*3+ring)**2*14
+    points=[]
+    for j in range(7):
+     t=j/6;r=rad+14*t;points.append((x+r*math.cos(a),g+.3+h*4*t*(1-t),z+r*1.4*math.sin(a)))
+    for j in range(6):rod(points[j],points[j+1],.16*(1-j*.10),'Fountain',5)
+    b=(i+1)*math.tau/64;rod((x+rad*math.cos(a),g+.2,z+rad*1.4*math.sin(a)),(x+rad*math.cos(b),g+.2,z+rad*1.4*math.sin(b)),.23,'Fountain',5)
   x,z=project(-115.172,36.1125);g=ground(x,z)
   for level in range(10):
    y=g+level*12;a=25*(1-level/11)**1.6;b=25*(1-(level+1)/11)**1.6

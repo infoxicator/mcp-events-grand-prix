@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {fingerCurl} from './grip';
 import {embeddedGLB} from './embedded-glb';
 import highURL from './assets/jgp26-high.glb.gz?url&inline';
 import lowURL from './assets/jgp26-low.glb.gz?url&inline';
@@ -23,22 +24,24 @@ export function createCar(team:'a'|'b'){
  const root=new T.Group(),chassis=new T.Group(),lod=new T.LOD();root.add(chassis);chassis.add(lod);
  const originals=new Map<T.Mesh,T.Material|T.Material[]>(),clay=new T.MeshStandardMaterial({color:'#deded9',roughness:.83,side:T.DoubleSide}),wire=new T.MeshBasicMaterial({color:'#15222b',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}),lineMaterial=new T.LineBasicMaterial({color:'#9ab8ca',transparent:true,opacity:.7,depthWrite:false}),wireLines:T.LineSegments[]=[];
  const carbonMap=twill(),grainMap=grain(),tyreUniforms:{spin:{value:number};load:{value:number};side:number;front:boolean}[]=[],aoMap=new T.TextureLoader().load(aoURL);aoMap.flipY=false;let ready=false,dead=false,finish:Finish='colour',error:string|null=null;
+ const fingerRigs=new WeakMap<T.Group,{node:T.Object3D;side:-1|1;digit:number}[]>();
  const mirrors:T.MeshPhysicalMaterial[]=[];const rigs:T.Group[]=[],dashTextures:T.CanvasTexture[]=[],dashContexts:CanvasRenderingContext2D[]=[],lights:T.MeshBasicMaterial[][]=[];
  function setFinish(next:Finish){finish=next;wireLines.forEach(o=>o.visible=next==='wireframe');for(const [mesh,original] of originals)mesh.material=next==='colour'?original:next==='clay'?clay:wire;}
  const loaded=assets().then(models=>{if(dead)return;models.forEach((template,index)=>{
   const model=template.clone(true);const materials=new Map<T.Material,T.Material>();
   model.traverse(o=>{if(o instanceof T.Mesh){o.geometry=o.geometry.clone();const make=(original:T.MeshStandardMaterial)=>{const wheelRubber=original.name==='Rubber'&&!!o.parent?.name.match(/^(Front|Rear)[LR]$/);let m=wheelRubber?undefined:materials.get(original);if(!m){const p=new T.MeshPhysicalMaterial({color:original.color,roughness:original.roughness,metalness:original.metalness,map:original.map,transparent:original.transparent,opacity:original.opacity});p.name=original.name;
-   if(p.name==='Livery'){p.color.set(team==='a'?'#bd071b':'#08a59b');p.roughness=.38;p.metalness=.16;p.clearcoat=.15;p.clearcoatRoughness=.35;p.specularIntensity=.65;p.roughnessMap=grainMap;p.bumpMap=grainMap;p.bumpScale=.000018;}
+   if(p.name==='Livery'){p.color.set(team==='a'?'#bd071b':'#08a59b');p.roughness=.38;p.metalness=.16;p.clearcoat=.28;p.clearcoatRoughness=.22;p.specularIntensity=.85;p.roughnessMap=grainMap;p.bumpMap=grainMap;p.bumpScale=.000018;}
+   if(p.name==='Ivory'){p.roughness=.36;p.clearcoat=.22;p.clearcoatRoughness=.23;}
    if(p.name==='Ivory'&&team==='b'){p.color.set('#adbfc5');p.metalness=.65;p.roughness=.38;}
    if(p.name==='WheelDish'){p.color.set('#343c47');p.roughness=.29;p.metalness=.68;p.envMapIntensity=1.25;p.clearcoat=.1;}
    if(p.name==='BrakeDisc'){p.roughness=.65;p.metalness=.45;}
    if(p.name==='Sleeve'){p.color.set(team==='a'?'#692331':'#15494b');p.roughness=.95;p.sheen=.4;}
-   if(p.name==='Carbon'){p.color.set('#101318');p.bumpMap=carbonMap;p.bumpScale=.00022;p.roughnessMap=carbonMap;p.roughness=.34;p.metalness=.10;p.clearcoat=.1;p.specularIntensity=.65;p.envMapIntensity=.7;}
+   if(p.name==='Carbon'){p.color.set('#101318');p.bumpMap=carbonMap;p.bumpScale=.00022;p.roughnessMap=carbonMap;p.roughness=.32;p.metalness=.10;p.clearcoat=.1;p.specularIntensity=.65;p.envMapIntensity=.55;}
    if(p.name==='Mirror'){
     mirrors.push(p);o.geometry.computeBoundingBox();const bounds=o.geometry.boundingBox!,pos=o.geometry.getAttribute('position'),uv=new Float32Array(pos.count*2),mid=(bounds.min.x+bounds.max.x)/2;
     for(let i=0;i<pos.count;i++){const cx=pos.getX(i)<mid?bounds.min.x+.0875:bounds.max.x-.0875;uv[i*2]=.5+(pos.getX(i)-cx)/.175;uv[i*2+1]=(pos.getY(i)-bounds.min.y)/.038;}o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
    }
-   if(p.name==='GloveFabric'){p.roughness=.87;p.bumpMap=carbonMap;p.bumpScale=.00007;p.sheen=.3;p.sheenColor.set('#bcb9b1');p.sheenRoughness=.9;}
+   if(p.name==='GloveFabric'){p.color.set('#73767a');p.roughness=.95;p.bumpMap=carbonMap;p.bumpScale=.00007;p.sheen=.3;p.sheenColor.set('#bcb9b1');p.sheenRoughness=.9;}
    if(p.name==='Rubber'){p.color.set('#17181a');p.roughness=.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
    if(p.name==='Rubber'&&o.parent?.name.match(/^(Front|Rear)[LR]$/)){
     const u={spin:{value:0},load:{value:.008},side:o.parent.name.endsWith('L')?-1:1,front:o.parent.name.startsWith('Front')};tyreUniforms.push(u);
@@ -52,6 +55,7 @@ export function createCar(team:'a'|'b'){
    p.aoMap=['Mirror','MarkWhite'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='GloveFabric'?.25:p.name==='WheelDish'?.28:.65;p.side=T.DoubleSide;m=p;if(!wheelRubber)materials.set(original,m);
   }return m;};o.material=Array.isArray(o.material)?o.material.map(m=>make(m as T.MeshStandardMaterial)):make(o.material as T.MeshStandardMaterial);o.castShadow=true;o.receiveShadow=true;originals.set(o,o.material);}});
   const unused=model.getObjectByName(team==='a'?'NumberB':'NumberA');if(unused)unused.visible=false;
+  fingerRigs.set(model,([-1,1] as const).flatMap(side=>Array.from({length:5},(_,digit)=>({node:model.getObjectByName(`Finger${side<0?'L':'R'}${digit}`)!,side,digit})).filter(binding=>!!binding.node)));
   rigs.push(model);lod.addLevel(model,index===0?0:32);const meshes:T.Mesh[]=[];model.traverse(o=>{if(o instanceof T.Mesh)meshes.push(o);});for(const m of meshes){const lines=new T.LineSegments(new T.WireframeGeometry(m.geometry),lineMaterial);lines.renderOrder=1;lines.visible=false;m.add(lines);wireLines.push(lines);}
   const steering=model.getObjectByName('Steering');
   if(steering){const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;const material=new T.MeshBasicMaterial({map:tex,toneMapped:false});const display=new T.Mesh(new T.PlaneGeometry(.182,.101),material);display.position.set(0,.025,-.025);display.rotation.y=Math.PI;steering.add(display);originals.set(display,material);dashTextures.push(tex);dashContexts.push(canvas.getContext('2d')!);
@@ -64,6 +68,9 @@ export function createCar(team:'a'|'b'){
   for(const u of tyreUniforms){u.spin.value=studio?0:c.distance/.36;u.load.value=T.MathUtils.clamp(.007+(studio?0:c.speed*c.speed*.0000012+(u.front?1:-1)*-(c.acceleration??0)*.00022+u.side*(c.lateralG??0)*.0012),.003,.024);}
   for(const model of rigs){for(const name of ['FrontL','FrontR','RearL','RearR']){const w=model.getObjectByName(name);if(w){w.position.y=.36-T.MathUtils.clamp(.007+(studio?0:c.speed*c.speed*.0000012+(name.startsWith('Front')?1:-1)*-(c.acceleration??0)*.00022+(name.endsWith('L')?-1:1)*(c.lateralG??0)*.0012),.003,.024);w.rotation.set(0,name.startsWith('Front')?(c.steering??0):0,0);w.rotateX(studio?0:c.distance/.36);}}
    const hands=model.getObjectByName('Hands');if(hands)hands.visible=!studio;
+   for(const {node,side,digit} of fingerRigs.get(model)??[]){
+    const pose=fingerCurl(side,digit,c.steering??0,c.distance,c.speed);node.rotation.y=pose.curl;node.rotation.z=pose.spread;
+   }
    const h=model.getObjectByName('Helmet');if(h)h.visible=!onboard;
    const s=model.getObjectByName('Steering');if(s){s.rotation.z=-(c.steering??0)*3.6;
     for(const side of [-1,1]){const arm=model.getObjectByName(side<0?'ForearmL':'ForearmR');if(arm){arm.visible=!studio;elbow.set(side*.29,.29,-.25);wrist.set(side*.208,-.082,-.057).applyQuaternion(s.quaternion).add(s.position);direction.copy(wrist).sub(elbow);arm.position.copy(elbow);arm.scale.set(1,direction.length(),1);arm.quaternion.setFromUnitVectors(axis,direction.normalize());}}

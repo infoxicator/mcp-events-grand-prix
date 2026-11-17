@@ -287,7 +287,7 @@ All trees and seated spectators are now solid Blender meshes. Native `EXT_mesh_g
 
 Builds enforce the Worker's **25 MiB per-file limit**. Web circuits use gzip-wrapped Draco; MCP uses native instancing and `KHR_mesh_quantization`, decoded without WASM/workers under the existing strict CSP. Car positions stay float precision. Blender circuit position quantization is under 2 cm per step (normally a few millimetres); this never changes the authoritative simulation path. Regenerate models with the existing `model:build` and `circuit:build` commands. `JGP_FONT` can select a bold italic font on another platform; the Mac build uses the installed Arial Bold Italic and exports its lettering as geometry.
 
-Blender remains **5.2.2 LTS**. A slow mass-deletion step was fixed with its batch-removal API, and instances were parented as required by its native glTF exporter. No procedural Three.js model fallback was introduced. Baked AO and planar reflections approximate studio shading; this remains visibly short of the reference's hand-sculpted surfaces and ray-traced finish. See the review for the specific remaining gaps.
+Blender remains **5.2.2 LTS**. A slow mass-deletion step was fixed with its batch-removal API, and instances were parented as required by its native glTF exporter. No procedural Three.js model fallback was introduced. Baked AO and planar reflections approximate studio shading; this remains visibly short of the reference's sculpted surfaces and lighting finish. See the review for the specific remaining gaps.
 
 ## Realism round 5
 
@@ -298,3 +298,13 @@ The Blender hands and sleeves have independent rigs. In the browser, each forear
 Monza combines four crown proportions, varied rotation/scale and species bands, with earlier far LODs and a shorter nearby shadow range. Vegas adds varied infill towers, roof setbacks, illuminated signs and accent strips. A 64 px local cube capture, refreshed every 240 m, supplies nearby building/light reflections; it is not ray tracing and can lag between probe updates. The road is visually damp; race weather/tyre forces are unchanged.
 
 Before/after views, reference comparisons, rejected iterations and final verification logs live in `artifacts/realism-v5/`. Read `REVIEW.md` there for the remaining gaps. `python3 scripts/review-v5.py after` regenerates the comparison/contact sheets from saved captures and local reference frames.
+
+## Realism round 6
+
+The Blender airbox now follows measurements from the approved video: a taller tapered duct with upper/lower passages, a wider sidepod mouth and matching cutouts. `python3 scripts/measure-car.py` audits actual exported GLB bounds: approximately **5.627 m long × 2.000 m wide**, **3.600 m wheelbase** and **1.171 m highest point including T-camera**. The earlier nominal height did not describe the camera/airbox silhouette. Measurements from the video are approximate and perspective-dependent, documented in `artifacts/realism-v6/REVIEW.md`.
+
+Each glove has five exported finger pivots. Their subtly different curls respond to steering pressure and motion while the existing forearm articulation keeps the grip attached. This is deterministic visual animation, not biomechanical or cloth simulation. New `angle=airbox` and `angle=sidepod` showroom views expose the inlet details. Satin paint uses a modest sharper clearcoat layer; the studio has reflected overhead/side/rim softboxes and Blender-baked contact AO.
+
+Monza adds a lower vegetation layer and denser mixed crown placement, sharing fewer prototypes and switching to Blender-authored distant crowns at 115 m. Vegas adds a curved, warm-stone lakeside hotel, pilasters, domed pavilions and fountain arcs/rings inspired by the Bellagio area, with fictional branding. Existing Sphere and casino towers remain. The architecture is an interpretation, and reflections remain a low-resolution local probe rather than ray tracing.
+
+Before/after PNGs, every-camera contact sheets and reference comparisons are in `artifacts/realism-v6/`. `python3 scripts/review-v6.py after` regenerates sheets. Build source remains Blender 5.2.2 LTS; `npm run model:build` and `npm run circuit:build` regenerate the assets. Full mock checks and measured three-window performance are recorded in `VERIFICATION.md`.

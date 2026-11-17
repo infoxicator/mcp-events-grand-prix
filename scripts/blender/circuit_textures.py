@@ -26,6 +26,16 @@ for y in range(0,512,16):
   v=random.choice([(150,121,77),(215,180,120),(80,102,125),(23,29,36),(23,29,36)])
   d.rectangle((x+3,y+3,x+9,y+12),fill=v)
 save(im,'windows')
+# Floodlit limestone facade: opaque stone between recessed windows, not glowing black glass.
+im=Image.new('RGB',(256,512),(154,115,73));d=ImageDraw.Draw(im)
+for y in range(0,512,16):
+ d.rectangle((0,y,255,y+2),fill=(187,146,97));d.line((0,y+15,255,y+15),fill=(97,69,44))
+ for x in range(0,256,12):
+  d.rectangle((x+2,y+3,x+10,y+14),fill=(90,64,43))
+  v=random.choice([(190,159,106),(223,191,132),(35,34,32),(35,34,32),(51,49,43)])
+  d.rectangle((x+3,y+4,x+9,y+13),fill=v);d.line((x+6,y+4,x+6,y+13),fill=(73,59,43))
+save(im,'warm-windows')
+
 im=Image.new('RGBA',(256,256));d=ImageDraw.Draw(im)
 for i in range(8):
  x=i*32+16;v=random.choice([(35,49,63),(160,57,40),(205,202,183),(54,78,69)])

@@ -144,13 +144,13 @@ for s in [-1,1]:
  loft('Inner carbon cockpit wall',[[-.8,s*.22,.03,.36,.65],[-.4,s*.285,.025,.36,.65],[.13,s*.285,.025,.35,.61]],carbon)
  # Sidepod undercut is distinct, visibly hollow forward of the red shoulder.
  loft('Carbon undercut',[[-1.95,s*.28,.07,.18,.28],[-1.3,s*.43,.18,.13,.35],[-.5,s*.48,.24,.17,.41],[.22,s*.47,.22,.24,.48]],carbon)
- sidepods[s]=loft('Downwash sidepod',[[-2.03,s*.25,.035,.23,.3],[-1.55,s*.39,.13,.23,.38],[-1.0,s*.49,.23,.26,.48],[-.45,s*.53,.285,.31,.59],[.05,s*.55,.29,.39,.63],[.27,s*.55,.27,.43,.63],[.43,s*.55,.23,.475,.605],[.48,s*.55,.205,.49,.595]],paint,power=.84)
+ sidepods[s]=loft('Downwash sidepod',[[-2.03,s*.25,.035,.23,.3],[-1.55,s*.39,.13,.23,.38],[-1.0,s*.49,.23,.26,.48],[-.45,s*.53,.295,.30,.60],[.05,s*.55,.30,.38,.635],[.27,s*.55,.285,.42,.635],[.43,s*.55,.255,.47,.62],[.49,s*.55,.232,.49,.605]],paint,power=.84)
  # Wide, shallow aperture with rolled lip.
  # A true letterbox tunnel, sharply rolled upper lip and recessed throat.
  pts=[]
  for j in range(48):
   a=j*math.tau/48;c,t=math.cos(a),math.sin(a)
-  pts.append((math.copysign(abs(c)**.6,c)*.207,math.copysign(abs(t)**.65,t)*.043))
+  pts.append((math.copysign(abs(c)**.52,c)*.232,math.copysign(abs(t)**.62,t)*.049))
  vv=[]
  for depth,scale in [(0,1.08),(.008,1),(-.13,.80)]:
   for x,y in pts:vv.append((s*.55+x*scale,.548+y*scale,.493+depth))
@@ -160,7 +160,7 @@ for s in [-1,1]:
  mesh('Continuous rolled inlet lip',vv,ff,carbon)
  # White shoulder fairing blends the cockpit edge into the red downwash body.
  loft('Cockpit shoulder',[[-1.33,s*.25,.045,.39,.48],[-.95,s*.32,.13,.46,.58],[-.45,s*.385,.145,.60,.635],[.02,s*.405,.13,.615,.645],[.28,s*.39,.09,.59,.62],[.46,s*.34,.025,.55,.585]],white,power=.9)
- box('Deep intake throat',(s*.55,.548,.345),(.36,.065,.005),black,r=.012)
+ box('Deep intake throat',(s*.55,.548,.345),(.42,.078,.005),black,r=.012)
  # Rolled tunnel already supplies the lip; no overlapping trim curve.
  for i in range(7):box('Cooling louvre',(s*.49,.55-i*.009,-.48-i*.07),(.19,.009,.022),black,r=.003)
  curve('Mirror stay',[(s*.3,.62,.29),(s*.48,.67,.37),(s*.65,.71,.36)],.011)
@@ -172,15 +172,29 @@ for s in [-1,1]:
  text('VOLT', (s*.73,.42,-1.08),.065,silver,rot)
  text('AEROLINK',(s*.318,.46,.78),.05,silver,rot)
 # White airbox front, red engine cover, split white/red vertical fin.
-loft('Red engine cover',[[-2.2,0,.12,.19,.47],[-1.7,0,.25,.20,.57],[-1.25,0,.29,.26,.73],[-.86,0,.24,.44,.94],[-.67,0,.16,.61,.99]],paint)
+loft('Red engine cover',[[-2.2,0,.12,.19,.47],[-1.7,0,.25,.20,.57],[-1.25,0,.29,.26,.73],[-.86,0,.23,.44,1.04],[-.67,0,.15,.61,1.09]],paint)
 cover=bpy.data.objects['Red engine cover'];cover.data.materials.append(white)
 for poly in cover.data.polygons:
  centre=sum((cover.data.vertices[i].co for i in poly.vertices),Vector())/len(poly.vertices)
  if centre.z>-1.25:poly.material_index=1
 mod=cover.modifiers.new('Paint boundary preserving subdivision','SUBSURF');mod.levels=1;bpy.context.view_layer.objects.active=cover;bpy.ops.object.modifier_apply(modifier=mod.name)
-loft('White airbox',[[-.85,0,.185,.72,.99],[-.70,0,.16,.745,1.025],[-.60,0,.135,.77,1.025],[-.565,0,.11,.795,1.005]],white)
-ellipsoid('Air intake',(0,.9,-.565),(.092,.102,.015),black)
-rod('Intake divider',(0,.802,-.54),(0,.995,-.54),.008)
+loft('White airbox',[[-.95,0,.17,.70,1.00],[-.78,0,.15,.72,1.095],[-.63,0,.13,.755,1.125],[-.524,0,.112,.78,1.122]],white,power=.92)
+# Reference 00:01: tall pear-shaped opening, upper duct and split lower passages.
+# An actual recessed tunnel replaces the circular black disc; rim is carbon inside white skin.
+aircontrols=[(-.077,.80),(-.101,.835),(-.088,.94),(-.063,1.065),(0,1.105),(.063,1.065),(.088,.94),(.101,.835),(.077,.80),(0,.787)]
+# Resample the same smooth profile for the visible lip, throat and Boolean boundary.
+airoutline=[]
+for j in range(len(aircontrols)):
+ a,b,c,d=[aircontrols[(j+k)%len(aircontrols)] for k in [-1,0,1,2]]
+ for k in range(6):
+  t=k/6;airoutline.append(tuple(.5*(2*b[i]+(-a[i]+c[i])*t+(2*a[i]-5*b[i]+4*c[i]-d[i])*t*t+(-a[i]+3*b[i]-3*c[i]+d[i])*t*t*t) for i in range(2)))
+AN=len(airoutline)
+airvs=[(x*scale,.945+(y-.945)*scale,z) for z,scale in [(-.532,1),(-.64,.88)] for x,y in airoutline]
+mesh('Airbox deep duct',airvs,[(i,(i+1)%AN,(i+1)%AN+AN,i+AN) for i in range(AN)]+[tuple(range(AN,2*AN))],black)
+curve('Carbon airbox lip',[(x,y,-.529) for x,y in aircontrols+[aircontrols[0]]],.006)
+rod('Intake horizontal splitter',(-.09,.904,-.525),(.09,.904,-.525),.006)
+for side in [-1,1]:curve('Lower intake divider',[(side*.038,.80,-.523),(side*.043,.85,-.523),(0,.904,-.523)],.0045)
+
 panel('Red shark fin',[(0,.47,-2.19),(0,.87,-2.19),(0,.97,-1.26),(0,.56,-1.26)],.018,paint)
 panel('White shark fin',[(0,.56,-1.27),(0,.97,-1.27),(0,1.015,-.88),(0,.73,-.88)],.02,white)
 for s in [-1,1]:
@@ -192,7 +206,8 @@ for s in [-1,1]:
 # Halo carbon arch, centre pillar, camera pod.
 curve('Halo',[(-.32,.67,-.53),(-.37,.84,-.39),(-.34,.91,.1),(-.21,.91,.43),(0,.885,.58),(.21,.91,.43),(.34,.91,.1),(.37,.84,-.39),(.32,.67,-.53)],.031)
 curve('Halo central pillar',[(0,.62,.68),(0,.74,.64),(0,.885,.58)],.029)
-box('T camera',(0,1.056,-.72),(.28,.042,.058),carbon,r=.012)
+box('T camera',(0,1.15,-.72),(.28,.042,.058),carbon,r=.012)
+rod('Camera pedestal',(0,1.09,-.72),(0,1.14,-.72),.022)
 # Main plane plus three cascading contoured flaps. All exposed carbon.
 for i in range(4):wing('Front wing element '+str(i),1.99-i*.035,2.73-i*.145,.115+i*.028,.27 if i==0 else .20,carbon,sweep=.17,lift=.065)
 for s in [-1,1]:
@@ -239,10 +254,15 @@ for side in [-1,1]:
  hand=group('HandL' if side<0 else 'HandR');hand.parent=hands
  ellipsoid('Gloved palm',(side*.197,-.025,-.051),(.034,.055,.028),fabric,hand)
  ellipsoid('Soft wrist cuff',(side*.208,-.082,-.057),(.033,.026,.029),fabric,hand)
- for j in range(4):
-  yy=.014-j*.021
-  curve('Curled glove finger',[(side*.216,yy,-.057),(side*.181,yy+.002,-.074),(side*.154,yy-.002,-.048),(side*.163,yy-.005,-.008)],.0085,fabric,hand)
- curve('Opposed thumb',[(side*.207,-.060,-.061),(side*.164,-.045,-.081),(side*.144,-.018,-.057)],.0105,fabric,hand)
+ for j in range(5):
+  # Independent, embedded knuckle pivots. Different lengths/curl avoid parallel tubes.
+  finger=group(('FingerL' if side<0 else 'FingerR')+str(j));finger.parent=hand
+  yy=.017-j*.020;root=Vector((side*.216,yy,-.055)) if j<4 else Vector((side*.207,-.060,-.061));finger.location=root
+  reach=[.064,.070,.065,.052][j] if j<4 else 0
+  pts=[tuple(root),(side*(.216-reach*.55),yy+.003-j*.001,-.076),(side*(.216-reach),yy-.003-j*.001,-.047),(side*(.221-reach),yy-.008,-.012+j*.002)] if j<4 else [tuple(root),(side*.164,-.045,-.081),(side*.144,-.018,-.057)]
+  digit=curve('Articulated fabric digit',[tuple(Vector(v)-root) for v in pts],(.0090-j*.00050) if j<4 else .0105,fabric,finger)
+  for point,radius in zip(digit.data.splines[0].bezier_points,[1,1.04,.90,.76] if j<4 else [1,1,.8]):point.radius=radius
+
  for j in range(3):curve('Stitched knuckle dart',[(side*(.19+j*.009),.012,-.078),(side*(.20+j*.009),-.042,-.077)],.00045,silver,hand)
  for j in range(4):
   curve('Cuff fabric fold',[(side*.181,-.071-j*.004,-.060),(side*.209,-.075-j*.004,-.087),(side*.23,-.075-j*.004,-.063)],.0012,fabric,hand)
@@ -253,7 +273,7 @@ for side in [-1,1]:
 # Tyres with radial sidewall typography, dish covers and tiny fasteners.
 for front in [True,False]:
  for s in [-1,1]:
-  z=1.55 if front else -2.05;w=.305 if front else .405;x=s*(.835 if front else .795)
+  z=1.55 if front else -2.05;w=.305 if front else .405;x=s*(.8175 if front else .7675)
   # Upright, spaced ball joints and inboard pickup brackets (not one shared hub point).
   ux=x-s*.10
   rod('Upright',(ux,.22,z),(ux,.48,z),.029,metal,vertices=12)
@@ -335,7 +355,8 @@ bpy.context.view_layer.objects.active=parts[0];bpy.ops.object.join();skin=bpy.co
 bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
 rem=skin.modifiers.new('Fuse continuous body seams','REMESH');rem.mode='VOXEL';rem.voxel_size=.008;rem.use_smooth_shade=True;bpy.ops.object.modifier_apply(modifier=rem.name)
 sm=skin.modifiers.new('Sculpt fillets','SMOOTH');sm.factor=.75;sm.iterations=7;bpy.ops.object.modifier_apply(modifier=sm.name)
-d=skin.modifiers.new('Curvature preserving reduction','DECIMATE');d.ratio=.112;bpy.ops.object.modifier_apply(modifier=d.name)
+d=skin.modifiers.new('Curvature preserving reduction','DECIMATE');d.ratio=.106;bpy.ops.object.modifier_apply(modifier=d.name)
+sm=skin.modifiers.new('Relax reduction ripples','SMOOTH');sm.factor=.22;sm.iterations=3;bpy.ops.object.modifier_apply(modifier=sm.name)
 # Voxel union does not retain multi-material paint regions: repaint the continuous skin.
 # Cut topology exactly along paint-mask boundaries so low-poly triangles cannot serrate the livery.
 bm=bmesh.new();bm.from_mesh(skin.data)
@@ -352,8 +373,37 @@ for poly in skin.data.polygons:
  elif (co.z<.28 and co.y<.395 and abs(co.x)>.30) or (-.95<co.z<.50 and abs(co.x)<.36 and co.y<.562):poly.material_index=2
  else:poly.material_index=0
 for side in [-1,1]:
- cutter=box('Intake aperture cutter',(side*.55,.548,.46),(.37,.070,.29),black,parent=None,r=.017)
+ outline=[(side*.55+math.copysign(abs(math.cos(j*math.tau/48))**.52,math.cos(j*math.tau/48))*.228,.548+math.copysign(abs(math.sin(j*math.tau/48))**.62,math.sin(j*math.tau/48))*.047) for j in range(48)]
+ cutter=mesh('Matching sidepod aperture',[(x,y,z) for z in [.31,.59] for x,y in outline],[tuple(range(48)),tuple(range(48,96))]+[(i,(i+1)%48,(i+1)%48+48,i+48) for i in range(48)],black,parent=None)
+ bm=bmesh.new();bm.from_mesh(cutter.data);bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(cutter.data);bm.free()
  bpy.context.view_layer.objects.active=skin;mod=skin.modifiers.new('Open intake throat','BOOLEAN');mod.operation='DIFFERENCE';mod.solver='EXACT';mod.object=cutter;bpy.ops.object.modifier_apply(modifier=mod.name);bpy.data.objects.remove(cutter,do_unlink=True)
+
+# Cut the exact tapered mouth profile through the united skin, not a rounded rectangle.
+cutvs=[(x*.98,.945+(y-.945)*.98,z) for z in [-.76,-.48] for x,y in airoutline]
+cutter=mesh('Airbox throat cutter',cutvs,[tuple(reversed(range(AN))),tuple(range(AN,2*AN))]+[(i,(i+1)%AN,(i+1)%AN+AN,i+AN) for i in range(AN)],black,parent=None)
+bm=bmesh.new();bm.from_mesh(cutter.data);bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(cutter.data);bm.free()
+bpy.context.view_layer.objects.active=skin;mod=skin.modifiers.new('Open divided airbox','BOOLEAN');mod.operation='DIFFERENCE';mod.solver='EXACT';mod.object=cutter;bpy.ops.object.modifier_apply(modifier=mod.name);bpy.data.objects.remove(cutter,do_unlink=True)
+for poly in skin.data.polygons:poly.use_smooth=True
+# Tiny real aperture edge radii, retaining the single connected body and paint regions.
+mod=skin.modifiers.new('Manufactured aperture edge radius','BEVEL');mod.width=.0018;mod.segments=2;mod.limit_method='ANGLE';mod.angle_limit=.65;bpy.ops.object.modifier_apply(modifier=mod.name)
+# Surface decals use one projected sheet, never a collapsed ellipsoid with overlapping faces.
+for o in list(bpy.context.scene.objects):
+ if o.name.startswith('Blue airbox badge'):bpy.data.objects.remove(o,do_unlink=True)
+for side in [-1,1]:
+ vs=[];fs=[];N=48
+ for ring in range(4):
+  for j in range(N):
+   a=j*math.tau/N;r=ring/3;y=.90+math.cos(a)*.055*r;z=-.90+math.sin(a)*.064*r
+   hit,co,no,face=skin.ray_cast(Vector((side*1.2,y,z)),Vector((-side,0,0)))
+   if not hit:raise RuntimeError('Airbox badge ray missed skin')
+   vs.append((co.x+side*.0025,co.y,co.z))
+ for ring in range(3):
+  for j in range(N):a=ring*N+j;b=ring*N+(j+1)%N;fs.append((a,b,b+N,a+N))
+ mesh('Conformal blue badge',vs,fs,brandblue,decals)
+for o in list(bpy.context.scene.objects):
+ if o.type=='MESH' and o.name.startswith('Mark nx'):
+  side=1 if o.location.x>0 else -1;o.location=(side*.5,.90,-.90);o.parent=decals
+  bpy.context.view_layer.objects.active=o;mod=o.modifiers.new('Conformal airbox lettering','SHRINKWRAP');mod.target=skin;mod.wrap_method='PROJECT';mod.use_project_z=True;mod.use_positive_direction=False;mod.use_negative_direction=True;mod.offset=.004;bpy.ops.object.modifier_apply(modifier=mod.name)
 
 # Leave physical carbon halo mounts with soft roots into the deck.
 for side in [-1,1]:
@@ -421,7 +471,7 @@ for o in bpy.context.scene.objects:
  if o.type=='MESH' and len(o.data.polygons)>80:
   d=o.modifiers.new('Distance LOD','DECIMATE');d.ratio=.24
 export('jgp26-low.glb')
-(OUT/'jgp26-manifest.json').write_text(json.dumps({'source':'scripts/blender/build_car.py','highTriangles':tri,'dimensions':{'length':5.62,'width':2.0,'wheelbase':3.6,'bodyHeight':1.08},'lodDistanceMetres':32,'licence':'Original project asset; fictional branding'},indent=2)+'\n')
+(OUT/'jgp26-manifest.json').write_text(json.dumps({'source':'scripts/blender/build_car.py','highTriangles':tri,'dimensions':{'length':5.62,'width':2.0,'wheelbase':3.6,'bodyHeight':1.171},'lodDistanceMetres':32,'licence':'Original project asset; fictional branding'},indent=2)+'\n')
 sys.path.insert(0,str(Path(__file__).parent))
 from pack_glb import pack
 for level in ['high','low']:pack(OUT/f'jgp26-{level}.glb',OUT/f'jgp26-{level}.glb.gz')

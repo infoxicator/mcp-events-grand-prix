@@ -396,3 +396,36 @@ Final isolated performance and launcher commands (same Node/mock prefix):
 These are the last measurements on the retained code, not the best of the experiments. **The ~110 FPS Monza stretch target was not reached.** Each run used Apple M4 Pro / ANGLE Metal, three independent headed Chromium contexts at 1100×850, 50 samples at 500 ms after loading/warmup, with no overlapping Blender or other browser tests. The benchmark asserts both mean and minimum sampled smoothed FPS >=60. HUD EMA samples do not guarantee every individual frame or every MacBook reaches that rate. Raw samples, rejected experiments and `performance-summary.json` are saved in the round folder.
 
 The restored build's largest static file is **23,242,425 / 26,214,400 bytes**. Final build/typecheck/unit checks passed again; the full race/MCP/Worker suite had already passed on this exact retained renderer before the two reverted experiments. The server remains available on port 5477 in mock mode. All per-command logs are under `artifacts/realism-v5/logs/`.
+
+## Realism v6 — 17 November 2026
+
+Baseline **884c3f2** preserved. All changes are local. Models built with **Blender 5.2.2 LTS** (`d13f752e3b9c`), factory startup, CPU Cycles AO. No Blender crash or runtime repair was needed. Visual review caught and fixed a wrongly oriented Boolean cutter, mismatched inlet contours and a folded decal projection. No Three.js model fallback, push, publishing or deployment.
+
+Commands used Node 24.14.0 via `PATH=/Users/ruben.casas@postman.com/.nvm/versions/node/v24.14.0/bin:$PATH`, with **`JEV_MOCK=1 ENGINEER_MOCK=1`** throughout. `WRANGLER_SEND_METRICS=false` and `WRANGLER_LOG_PATH=/tmp/jgp-v6-wrangler.log` were used for Worker commands. Exact sequential verification commands are retained in `artifacts/realism-v6/verify.sh`; individual logs are in its `logs/` directory.
+
+| Command | Final result |
+| --- | --- |
+| `/Applications/Blender.app/Contents/MacOS/Blender --version` | 5.2.2 LTS |
+| `/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_car.py` | PASS; final high LOD **242,859 triangles**, cap unchanged at 245k; editable .blend, GLBs and AO retained |
+| `npm run circuit:build` | PASS; Blender round 6 Monza and Vegas, native instancing/LOD and MCP assets |
+| `python3 scripts/measure-car.py` | Actual GLB bounds: **5.6274 m length, 2.0000 m width, 3.6000 m wheelbase**, highest point 1.171 m |
+| `npm run build` | PASS, including both TypeScript configurations and web/MCP/host bundles; largest asset **23,595,217 / 26,214,400 bytes** |
+| `npm run typecheck` | PASS; repeated after adding the aperture regression test |
+| `npm test` | **55 passed / 8 files**; exported mouths, connected skin, rigs, budgets, track, physics, timing and brains |
+| `CAR_REVIEW_DIR=realism-v6/after/cars CIRCUIT_REVIEW_DIR=realism-v6/after npm run test:e2e` | **9 passed**, headed GPU Chromium; three independent WebSocket contexts, Jev/Jev and Jev/Luna mock races, radio changes, pit stops, laps, results, both circuits and all camera/finish captures |
+| `npm run test:mcp` | **2 passed**; separate MCP app contexts, invitations, blocked-clipboard fallback, browser joining/spectating, both circuits, strict CSP |
+| `npm run test:worker` | **2 passed** against local workerd; Durable Object physics/agents/radio, disconnect and ownership checks, MCP invitation resource |
+| `npm run worker:check` | PASS; `wrangler deploy --dry-run` only, no deployment |
+| `npm run test:handling` | PASS; fixed-step handling and calibration reports |
+| `PORT=5577 npm run test:performance` | PASS; Monza means **97.23 / 96.77 / 97.41 FPS**, minima of smoothed samples **82.75 / 82.14 / 81.22** |
+| `RACE_CIRCUIT=las-vegas PORT=5578 npm run test:performance` | PASS; Vegas means **100.36 / 100.24 / 100.45 FPS**, minima **84.71 / 83.59 / 86.07** |
+| `PORT=5579 npm run demo:smoke` | PASS; three independent windows, both players connected, mock decisions, racing phase and HTTP health; own resources cleaned up |
+| `curl --fail --silent http://127.0.0.1:5477/health` | PASS; existing server remains mock, **paidCalls: 0** |
+| `curl --fail --silent -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:5477/` | **HTTP 200** |
+| `python3 scripts/review-v6.py after` | Final reference pairs, before/after pairs and every-view contact sheets generated and inspected |
+
+FPS order is Vector / Chaos / Broadcast. Each benchmark used three independent headed Chromium contexts at 1100×850, Apple M4 Pro / ANGLE Metal, 50 samples at 500 ms after warmup, without overlapping Blender/browser tests. Both means and minimum sampled smoothed FPS exceeded 60. **The 110 FPS Monza stretch target was not reached.** These are HUD EMA samples, not a guarantee for every frame or every MacBook. Raw measurements and summary are in the round folder.
+
+Before-shots, three intermediate review sets, final shots, rejected-run logs and detailed critique are in `artifacts/realism-v6/`. The script run on the rejected capped-mouth asset was stopped before benchmarks. Full verification was repeated on the corrected asset; after that, only an additional exported-aperture regression test and documentation were added. Build/typecheck and the complete 55-test unit suite were rerun. No gameplay/provider logic changed. All measured/tested agent decisions used mock mode; no real Jev/Luna/engineer API calls were made.
+
+Final review confirms the inlet silhouette, individual finger motion, foliage depth and warm lakeside landmark changes. It does **not** claim reference-level photorealism: cockpit coaming/halo-root transitions, tyre/controls detail, solid tree crowns, generic surrounding towers and approximate reflections remain visible gaps. See `artifacts/realism-v6/REVIEW.md` for concrete comparisons and perspective limitations.

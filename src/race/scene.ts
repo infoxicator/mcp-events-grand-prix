@@ -46,8 +46,8 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   sun.position.set(p.x-80,p.y+120,p.z-50);sun.target.position.copy(p);
   if(mode==='showroom'){
    studio.scene.add(cars.a.root);cars.a.root.position.set(0,0,0);cars.a.root.rotation.set(0,0,0);cars.a.update({...race.cars.a,steering:0,drs:false},true,true);
-   const angle=params.get('angle')??'front';const pos=angle==='rear'?new T.Vector3(-2.7,3.4,-6.6):angle==='side'?new T.Vector3(-8.6,1.2,0):angle==='steering'?new T.Vector3(-.06,.77,-.34):angle==='wheel'?new T.Vector3(-2.2,.85,2.75):new T.Vector3(-5.3,2.8,5.3);
-   if(turntable&&!params.has('angle'))pos.applyAxisAngle(new T.Vector3(0,1,0),elapsed*.10);camera.position.copy(pos);camera.lookAt(angle==='steering'?new T.Vector3(0,.51,.16):angle==='wheel'?new T.Vector3(-.83,.36,1.55):new T.Vector3(0,.42,0));camera.fov=angle==='steering'?50:angle==='wheel'?32:36;cameraLabel=`JGP–26 / STUDIO / ${finish.toUpperCase()}`;
+   const angle=params.get('angle')??'front';const pos=angle==='airbox'?new T.Vector3(-.6,1.2,.65):angle==='sidepod'?new T.Vector3(-1.8,.85,1.9):angle==='rear'?new T.Vector3(-2.7,3.4,-6.6):angle==='side'?new T.Vector3(-8.6,1.2,0):angle==='steering'?new T.Vector3(-.06,.77,-.34):angle==='wheel'?new T.Vector3(-2.2,.85,2.75):new T.Vector3(-5.3,2.8,5.3);
+   if(turntable&&!params.has('angle'))pos.applyAxisAngle(new T.Vector3(0,1,0),elapsed*.10);camera.position.copy(pos);camera.lookAt(angle==='airbox'?new T.Vector3(0,.94,-.6):angle==='sidepod'?new T.Vector3(-.55,.54,.35):angle==='steering'?new T.Vector3(0,.51,.16):angle==='wheel'?new T.Vector3(-.83,.36,1.55):new T.Vector3(0,.42,0));camera.fov=angle==='steering'?50:angle==='wheel'?32:36;cameraLabel=`JGP–26 / STUDIO / ${finish.toUpperCase()}`;
   }else if(mode.startsWith('cockpit')||mode.startsWith('tcam')){
    const id=mode.endsWith('-a')?'a':'b',v=race.cars[id],q=carPosition(v),dir=tangentAt(v.distance),yaw=Math.atan2(dir.x,dir.z)+(v.heading??0);
    const tc=mode.startsWith('tcam'),height=tc?1.20:.70,back=tc?.70:.55;const shake=Math.min(v.speed/85,1)*.0016;

@@ -36,7 +36,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
    if(farGeometry){
     const centre=new T.Vector3();for(const o of objects)centre.add(new T.Vector3().setFromMatrixPosition(o.matrix));centre.divideScalar(objects.length);
     const offset=new T.Matrix4().makeTranslation(-centre.x,-centre.y,-centre.z),far=new T.InstancedMesh(farGeometry,first.material,objects.length),lod=new T.LOD();far.name=first.name+'_far';
-    objects.forEach((o,i)=>{const matrix=o.matrix.clone().premultiply(offset);batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);});batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);lod.addLevel(batch,0);lod.addLevel(far,130,.18);lod.addLevel(new T.Group(),950,.1);gltf.scene.add(lod);
+    objects.forEach((o,i)=>{const matrix=o.matrix.clone().premultiply(offset);batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);});batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);lod.addLevel(batch,0);lod.addLevel(far,115,.18);lod.addLevel(new T.Group(),950,.1);gltf.scene.add(lod);
    }else{objects.forEach((o,i)=>batch.setMatrixAt(i,o.matrix));batch.computeBoundingSphere();gltf.scene.add(batch);}
   }
   gltf.scene.updateMatrixWorld(true);
@@ -47,8 +47,11 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
     if(m.name==='Asphalt'){m.color.set(track.night?'#737982':'#777b7e');m.normalMap=normal;m.normalScale.set(.09,.09);m.roughness=track.night?.32:.91;m.roughnessMap=null;
      if(track.night)m.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 roadUv;').replace('#include <begin_vertex>','#include <begin_vertex>\nroadUv=uv;');s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 roadUv;').replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nfloat pool=.5+.5*cos(roadUv.y*3.*6.283185/45.);totalEmissiveRadiance+=diffuseColor.rgb*(.16+.38*pool);');};
     }
-    if(m.name.startsWith('Canopy')){m.color.set(['#6a7947','#708447','#526e43','#808448'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.32;m.roughness=1;}
+    if(m.name.startsWith('Canopy')){m.color.set(['#6a7947','#708447','#526e43','#808448'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.13;m.roughness=1;if(m.map)m.map.repeat.set(2,2);}
     if(m.name==='Windows'&&m.map){m.map.repeat.set(2.25,1.25);m.color.set('#85888d');m.emissiveIntensity=.55;}
+    if(m.name==='WarmWindows'&&m.map){m.map.repeat.set(1,1);m.color.set('#ffdfae');m.emissiveIntensity=.65;}
+    if(m.name==='Travertine'){m.emissive.set('#c28b43');m.emissiveIntensity=.30;m.envMapIntensity=.8;}
+    if(m.name==='Water'){m.envMapIntensity=1.6;m.roughness=.16;m.metalness=.55;m.normalMap=normal;m.normalScale.set(.05,.05);}
     if(m.name==='Grass')m.color.set('#708554');
     if(m.name==='Gravel'){m.bumpMap=m.map;m.bumpScale=.008;}
     if(['Concrete','White','Steel','Foliage','Trunk'].includes(m.name)||m.name.startsWith('Canopy'))casters.push(o);
