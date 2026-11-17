@@ -2,7 +2,7 @@
 Coordinates deliberately use glTF axes: X lateral, Y up, +Z forward. Metres.
 Reference: approved SF–26 clip; all marks are original fictional branding.
 """
-import bpy, math, json, os, sys, gzip
+import bpy, bmesh, math, json, os, sys, gzip
 from mathutils import Vector
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
@@ -96,6 +96,7 @@ def wing(name,span,z,y,chord,m,parent=body,sweep=.15,lift=.05):
 def text(label,pos,size,m=silver,rotation=(0,0,0),parent=body):
  cu=bpy.data.curves.new('Mark '+label,'FONT');cu.body=label;cu.font=brandfont;cu.align_x='CENTER';cu.align_y='CENTER';cu.size=size;cu.shear=.14 if label in ['44','23','NOVA','NEXUS'] else 0;cu.extrude=.00015;cu.offset=.0006 if len(label)==1 else 0;cu.resolution_u=3
  o=bpy.data.objects.new('Mark '+label,cu);bpy.context.collection.objects.link(o);o.location=pos;o.rotation_euler=rotation;o.data.materials.append(m);o.parent=parent;return o
+dish=mat('WheelDish','343a42',.29,.62);brake=mat('BrakeDisc','565859',.63,.45);sleeve=mat('Sleeve','60212b',.9)
 mirror=mat('Mirror','b8c4cc',.08,.9)
 # Thin floor and sculpted venturi channels, curled edge rails, rear diffuser.
 floor=group('Floor');floor.parent=body
@@ -122,7 +123,7 @@ for s in [-1,1]:
  for i in range(3):panel('Floor inlet fence',[(s*(.43+i*.13),.11,.9),(s*(.48+i*.13),.25,.63),(s*(.5+i*.13),.13,.12)],.012,carbon)
 for x in [-.6,-.4,-.2,0,.2,.4,.6]:panel('Diffuser strake',[(x,.07,-2.72),(x,.33,-2.72),(x,.14,-2.05),(x,.07,-1.9)],.012,carbon)
 # Raised tapering nose; no box-shaped body.
-loft('Nose',[ [.34,0,.33,.22,.64],[.75,0,.32,.22,.62],[1.2,0,.24,.23,.52],[1.85,0,.155,.22,.39],[2.5,0,.10,.17,.27],[2.86,0,.055,.15,.21],[2.9,0,.018,.17,.19]],paint,power=.84)
+loft('Nose',[ [.34,0,.33,.22,.64],[.75,0,.32,.22,.62],[1.2,0,.265,.23,.53],[1.85,0,.17,.22,.40],[2.5,0,.10,.17,.27],[2.86,0,.055,.15,.21],[2.9,0,.018,.17,.19]],paint,power=.84)
 loft('Cockpit tub',[[-1.05,0,.3,.17,.49],[-.5,0,.39,.17,.49],[.35,0,.33,.2,.5]],carbon)
 # Opaque carbon inner tub surfaces and front bulkhead, independent of outer paint.
 for side in [-1,1]:
@@ -231,18 +232,24 @@ for x,y,m in [(-.067,-.066,green),(0,-.073,yellow),(.072,-.089,blue)]:
  for i in range(20):
   a=i*math.tau/20;rod('Knurl',(x+.021*math.cos(a),y+.021*math.sin(a),-.036),(x+.021*math.cos(a),y+.021*math.sin(a),-.056),.0016,black,steer,5)
  box('Dial pointer',(x-.004,y+.009,-.059),(.003,.014,.001),silver,steer)
-fabric=mat('GloveFabric','dedbd4',.87)
-# Hands are Blender geometry, attached to the steering rig; hidden in the studio.
+fabric=mat('GloveFabric','777d83',.92)
+# Sculpted grip pose. Hand and forearm pivots are exported separately for articulation.
 hands=group('Hands');hands.parent=steer
 for side in [-1,1]:
- glove=ellipsoid('Gloved palm',(side*.195,-.026,-.055),(.043,.066,.036),fabric,hands)
- ellipsoid('Glove cuff',(side*.216,-.087,-.069),(.042,.035,.034),fabric,hands)
- curve('Suit forearm',[(side*.215,-.086,-.065),(side*.26,-.15,-.16),(side*.27,-.21,-.30)],.039,fabric,hands)
+ hand=group('HandL' if side<0 else 'HandR');hand.parent=hands
+ ellipsoid('Gloved palm',(side*.197,-.025,-.051),(.034,.055,.028),fabric,hand)
+ ellipsoid('Soft wrist cuff',(side*.208,-.082,-.057),(.033,.026,.029),fabric,hand)
  for j in range(4):
-  yy=.011-j*.024
-  curve('Curled gloved finger',[(side*.21,yy,-.072),(side*.159,yy,-.065),(side*.145,yy,-.028),(side*.17,yy,.011)],.009,fabric,hands)
- curve('Gloved thumb',[(side*.186,-.063,-.073),(side*.136,-.035,-.075),(side*.13,-.015,-.048)],.013,fabric,hands)
- for j in range(3):curve('Glove stitched seam',[(side*(.19+j*.008),.009,-.09),(side*(.20+j*.008),-.058,-.085)],.0008,carbon,hands)
+  yy=.014-j*.021
+  curve('Curled glove finger',[(side*.216,yy,-.057),(side*.181,yy+.002,-.074),(side*.154,yy-.002,-.048),(side*.163,yy-.005,-.008)],.0085,fabric,hand)
+ curve('Opposed thumb',[(side*.207,-.060,-.061),(side*.164,-.045,-.081),(side*.144,-.018,-.057)],.0105,fabric,hand)
+ for j in range(3):curve('Stitched knuckle dart',[(side*(.19+j*.009),.012,-.078),(side*(.20+j*.009),-.042,-.077)],.00045,silver,hand)
+ for j in range(4):
+  curve('Cuff fabric fold',[(side*.181,-.071-j*.004,-.060),(side*.209,-.075-j*.004,-.087),(side*.23,-.075-j*.004,-.063)],.0012,fabric,hand)
+ arm=group('ForearmL' if side<0 else 'ForearmR');arm.parent=body
+ # Unit Y-axis tapered sleeve; runtime aims it from elbow to moving wrist.
+ ellipsoid('Sleeve capsule',(0,.5,0),(.037,.53,.036),sleeve,arm,seg=24,rings=16)
+ for j in range(3):curve('Elbow folds',[(-.032,.18+j*.055,0),(0,.20+j*.055,-.034),(.032,.18+j*.055,0)],.0018,fabric,arm)
 # Tyres with radial sidewall typography, dish covers and tiny fasteners.
 for front in [True,False]:
  for s in [-1,1]:
@@ -273,11 +280,15 @@ for front in [True,False]:
   lathe('Slick tyre',[(-w/2,.228),(-w*.52,.26),(-w*.525,.285),(-w*.49,.316),(-w*.43,.341),(-w*.34,.357),(-w*.2,.36),(0,.361),(w*.2,.36),(w*.34,.357),(w*.43,.341),(w*.49,.316),(w*.525,.285),(w*.52,.26),(w/2,.228)],rubber)
   for side in [-1,1]:
    xx=side*w/2
-   lathe('Recessed black dish',[(xx,.231),(xx-side*.012,.224),(xx-side*.037,.19),(xx-side*.046,.12),(xx-side*.04,.04)],carbon)
-   lathe('Rim lip',[(xx,.231),(xx+side*.003,.232),(xx+side*.004,.226),(xx,.224)],carbon)
+   lathe('Recessed black dish',[(xx,.231),(xx-side*.012,.224),(xx-side*.019,.212),(xx-side*.034,.19),(xx-side*.043,.12),(xx-side*.04,.04)],dish)
+   lathe('Rim lip',[(xx,.231),(xx+side*.003,.232),(xx+side*.004,.226),(xx,.224)],dish)
    rod('Centre nut',(xx-side*.04,0,0),(xx+side*.015,0,0),.034,metal,pivot,6)
    rod('Nut red ring',(xx+side*.015,0,0),(xx+side*.023,0,0),.025,red,pivot,24)
    rod('Nut yellow centre',(xx+side*.024,0,0),(xx+side*.03,0,0),.013,yellow,pivot,20)
+   lathe('Ventilated carbon brake rotor',[(xx-side*.07,.075),(xx-side*.07,.205),(xx-side*.083,.205),(xx-side*.083,.075)],brake)
+   box('Brake caliper',(xx-side*.092,.155,0),(.045,.09,.13),metal,pivot,r=.012)
+   for j in range(18):
+    a=j*math.tau/18;rod('Rotor cooling vein',(xx-side*.087,.09*math.cos(a),.09*math.sin(a)),(xx-side*.087,.20*math.cos(a+.05),.20*math.sin(a+.05)),.003,black,pivot,5)
    # Plane text local X runs around sidewall; normal faces +/-X.
    for label,centre in [('PZ-RACE',0),('ZERO SLICK',math.pi)]:
     for i,ch in enumerate(label):
@@ -308,6 +319,46 @@ for o in list(bpy.context.scene.objects):
   bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.mesh.quads_convert_to_tris();bpy.ops.mesh.subdivide(number_cuts=3,smoothness=0);bpy.ops.object.mode_set(mode='OBJECT');o.parent=decals
   side=1 if o.location.x>0 else -1;mod=o.modifiers.new('Painted conformal wordmark','SHRINKWRAP');mod.target=sidepods[side];mod.wrap_method='PROJECT';mod.use_project_x=False;mod.use_project_y=False;mod.use_project_z=True;mod.use_positive_direction=False;mod.use_negative_direction=True;mod.offset=.004
   bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=mod.name)
+# Continuous manufactured outer shell: join overlapping skins, voxel-union and relax fillets.
+# Keep the cockpit aperture and inlet mouths open; paint is assigned to the resulting skin.
+body_names=('Nose','Downwash sidepod','Cockpit shoulder','Red engine cover','White airbox','White cockpit deck','Carbon undercut')
+parts=[o for o in bpy.context.scene.objects if o.type=='MESH' and any(o.name==n or o.name.startswith(n+'.') for n in body_names)]
+for o in parts:
+ bpy.context.view_layer.objects.active=o
+ if o.name.startswith('Downwash sidepod'):
+  bpy.ops.object.select_all(action='DESELECT');o.select_set(True);bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.mesh.fill_holes(sides=0);bpy.ops.object.mode_set(mode='OBJECT')
+ if o.name=='White cockpit deck':
+  mod=o.modifiers.new('Deck wall thickness','SOLIDIFY');mod.thickness=.022;bpy.ops.object.modifier_apply(modifier=mod.name)
+bpy.ops.object.select_all(action='DESELECT')
+for o in parts:o.select_set(True)
+bpy.context.view_layer.objects.active=parts[0];bpy.ops.object.join();skin=bpy.context.object;skin.name='Unified sculpted body';skin.parent=body
+bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
+rem=skin.modifiers.new('Fuse continuous body seams','REMESH');rem.mode='VOXEL';rem.voxel_size=.008;rem.use_smooth_shade=True;bpy.ops.object.modifier_apply(modifier=rem.name)
+sm=skin.modifiers.new('Sculpt fillets','SMOOTH');sm.factor=.75;sm.iterations=7;bpy.ops.object.modifier_apply(modifier=sm.name)
+d=skin.modifiers.new('Curvature preserving reduction','DECIMATE');d.ratio=.112;bpy.ops.object.modifier_apply(modifier=d.name)
+# Voxel union does not retain multi-material paint regions: repaint the continuous skin.
+# Cut topology exactly along paint-mask boundaries so low-poly triangles cannot serrate the livery.
+bm=bmesh.new();bm.from_mesh(skin.data)
+for axis,value in [(2,-1.32),(2,.55),(1,.562),(0,-.50),(0,.50),(2,-1.28),(2,-.54),(1,.66),(2,.28),(1,.395),(0,-.30),(0,.30),(0,-.36),(0,.36),(2,-.95),(2,.50)]:
+ co=[0.,0.,0.];no=[0.,0.,0.];co[axis]=value;no[axis]=1.
+ bmesh.ops.bisect_plane(bm,geom=list(bm.verts)+list(bm.edges)+list(bm.faces),dist=.000001,plane_co=co,plane_no=no,clear_inner=False,clear_outer=False)
+bm.to_mesh(skin.data);bm.free();skin.data.update()
+skin.data.materials.clear()
+for material in [paint,white,carbon]:skin.data.materials.append(material)
+for poly in skin.data.polygons:
+ poly.use_smooth=True
+ co=sum((skin.data.vertices[i].co for i in poly.vertices),Vector())/len(poly.vertices)
+ if (-1.32<co.z<.55 and co.y>.562 and abs(co.x)<.50) or (co.z> -1.28 and co.z<-.54 and co.y>.66):poly.material_index=1
+ elif (co.z<.28 and co.y<.395 and abs(co.x)>.30) or (-.95<co.z<.50 and abs(co.x)<.36 and co.y<.562):poly.material_index=2
+ else:poly.material_index=0
+for side in [-1,1]:
+ cutter=box('Intake aperture cutter',(side*.55,.548,.46),(.37,.070,.29),black,parent=None,r=.017)
+ bpy.context.view_layer.objects.active=skin;mod=skin.modifiers.new('Open intake throat','BOOLEAN');mod.operation='DIFFERENCE';mod.solver='EXACT';mod.object=cutter;bpy.ops.object.modifier_apply(modifier=mod.name);bpy.data.objects.remove(cutter,do_unlink=True)
+
+# Leave physical carbon halo mounts with soft roots into the deck.
+for side in [-1,1]:
+ ellipsoid('Halo root fairing',(side*.32,.665,-.53),(.052,.05,.065),carbon)
+ellipsoid('Halo front root',(0,.625,.675),(.044,.032,.068),carbon)
 for parent in list(groups.values()):
  buckets={}
  for o in list(parent.children):
@@ -322,15 +373,15 @@ for parent in list(groups.values()):
   if name=='Carbon':
    bpy.ops.object.mode_set(mode='EDIT');bpy.ops.uv.smart_project(angle_limit=1.15,island_margin=.015);bpy.ops.object.mode_set(mode='OBJECT')
 # Merge glove skin at finger/palm intersections, retaining thin seams separately.
-for o in list(hands.children):
+for o in [v for hand in hands.children for v in hand.children]:
  if o.type=='MESH' and o.data.materials[0].name=='GloveFabric':
   bpy.context.view_layer.objects.active=o
-  rem=o.modifiers.new('Continuous glove fabric','REMESH');rem.mode='VOXEL';rem.voxel_size=.0035;rem.use_smooth_shade=True;bpy.ops.object.modifier_apply(modifier=rem.name)
-  sm=o.modifiers.new('Relax textile surface','SMOOTH');sm.factor=.8;sm.iterations=4;bpy.ops.object.modifier_apply(modifier=sm.name)
+  rem=o.modifiers.new('Continuous glove fabric','REMESH');rem.mode='VOXEL';rem.voxel_size=.0025;rem.use_smooth_shade=True;bpy.ops.object.modifier_apply(modifier=rem.name)
+  sm=o.modifiers.new('Relax textile surface','SMOOTH');sm.factor=.8;sm.iterations=5;bpy.ops.object.modifier_apply(modifier=sm.name)
   for poly in o.data.polygons:poly.use_smooth=True
 # Preserve curved painted skins and tyre shoulders; simplify small mechanical parts only.
 for o in bpy.context.scene.objects:
- if o.type=='MESH' and o.parent!=floor and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','Rubber','GloveFabric'] for m in o.data.materials):
+ if o.type=='MESH' and o.parent!=floor and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','Rubber','GloveFabric','Sleeve'] for m in o.data.materials):
   d=o.modifiers.new('Optimised smooth production topology','DECIMATE');d.ratio=.57
   bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=d.name)
 # Bake actual Cycles CPU occlusion into a shared packed UV atlas.

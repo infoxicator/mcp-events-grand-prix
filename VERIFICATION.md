@@ -342,3 +342,57 @@ The existing server returned HTTP 200 and `mode: mock`, `paidCalls: 0`. It remai
 Failures were corrected rather than accepted: reserved GLSL identifier hid tyres; open tube ends broke glove remeshing; low-detail untextured crowns looked like balls; letter faces cut into convex bodywork; mirror UVs sampled only a tiny image region; the T-cam looked into its own pod; dark albedo in the roughness slot over-amplified Vegas glare; HDR nearest filtering pixelated the sky; scene-root instances did not trigger Blender native instancing; oversized embedded bundles exceeded the Worker limit. An overlapping benchmark/test run was rejected, and the first isolated Monza run still dipped to 48 FPS; distant crown LODs brought the minimum saved sample above 66 FPS.
 
 The final review remains candid: compound body joins, glove anatomy, tyre carcass behaviour, foliage silhouettes, architectural specificity and GI/reflections still trail the reference. Tyre deformation is visual only; coarse DEM, game physics, provider configuration and room/radio/invitation behaviour are preserved. Reference video frames and location photographs are comparison evidence, not production textures or a claim of measured visual parity.
+
+## Realism round 5 — 17 November 2026
+
+Baseline **47aedf6**. Before/after images, reference comparisons, steering-lock poses and rejected iterations are saved in `artifacts/realism-v5/`. Modelling stayed in **Blender 5.2.2 LTS**, using factory startup and CPU Cycles AO. No push, deployment, publishing or paid API calls.
+
+Exact Node prefix used:
+
+```sh
+env PATH=/Users/ruben.casas@postman.com/.nvm/versions/node/v24.14.0/bin:$PATH
+```
+
+All test commands used `JEV_MOCK=1 ENGINEER_MOCK=1`. Worker commands also used `WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jgp-v5-wrangler.log`.
+
+| Command after the prefix/environment above | Result |
+| --- | --- |
+| `npm run build` | PASS: main/Worker typechecks, web/MCP/host builds and 25 MiB asset check |
+| `npm run typecheck` | PASS independently |
+| `npm test` | PASS: **53 tests / 8 files**; new connected-body-shell check, articulated rig/material presence, existing geometry/physics/brains/providers/rooms |
+| `CAR_REVIEW_DIR=realism-v5/after/cars CIRCUIT_REVIEW_DIR=realism-v5/after npm run test:e2e` | PASS: **9 tests, 3.5 min**, on the final 244,212-triangle Blender car and circuit assets; full races, radio→intent, pits/laps/results, all car/studio modes, two added steering-lock poses, day/night switching and visual captures |
+| `npm run test:mcp` | PASS: **2 tests, 35.4 s**; both circuits, independent app contexts, invite joining, browser spectator/joining, clipboard fallback and teardown; paidCalls 0, errors [] |
+| `npm run test:worker` | PASS: **2 local workerd tests, 12.0 s**; assets, Durable Object simulation, intents, radio, owner authorization and MCP invitations; paid calls 0 |
+| `npm run worker:check` | PASS: **dry-run only**, Worker 1290.24 KiB / gzip 234.46 KiB; no upload |
+| `npm run test:handling` | PASS: deterministic handling/calibration; physics was not changed |
+
+Additional commands:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender --version
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_car.py
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_circuits.py -- 5
+python3 scripts/review-v5.py iteration-2
+python3 scripts/review-v5.py iteration-3
+python3 scripts/review-v5.py after
+curl --fail --silent http://127.0.0.1:5477/health
+curl --fail --silent -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:5477/
+```
+
+The existing server returned HTTP 200 and mock health with zero paid calls; its health response is saved in the round folder. Blender exports succeeded. The final car is **244,212 triangles**, within the unchanged 245k cap; the unified outer skin passes a one-connected-component check across its material primitives. Monza totals **2,375,190** high-detail instanced triangles, Vegas **519,624**, before runtime LOD/culling. Source .blend files, normal/LOD GLBs and MCP-compatible packed assets are retained.
+
+Visual review rejected and corrected dropped paint materials and sealed intake mouths after voxel fusion, jagged triangle-based livery boundaries, over-budget topology, red inner cockpit panels and over-bright Vegas highlights. The shared preview failed twice with `Preview automation snapshot timed out after 15000ms`; its owned tab was closed and the requested headed Playwright workflow supplied the captures.
+
+After the full suite passed, two performance-only experiments (alternate-frame shadows and static world-matrix caching) showed no useful benefit and were reverted exactly. Build/typecheck/unit tests and isolated benchmarks were repeated on the restored, already browser-verified renderer. No reduced shadow cadence or frozen matrix behaviour remains. See `artifacts/realism-v5/REVIEW.md` for honest visual limitations and the experiment measurements.
+
+Final isolated performance and launcher commands (same Node/mock prefix):
+
+| Command | Result |
+| --- | --- |
+| `PORT=5577 npm run test:performance` | PASS: Monza Vector/Chaos/Broadcast means **90.96 / 90.04 / 91.17 FPS**; minimum smoothed samples **70.35 / 69.60 / 74.14** |
+| `RACE_CIRCUIT=las-vegas PORT=5578 npm run test:performance` | PASS: Vegas means **103.80 / 103.68 / 104.19 FPS**; minimum smoothed samples **90.24 / 90.43 / 86.99** |
+| `PORT=5579 npm run demo:smoke` | PASS: three independent windows, both players connected, mock decisions visible, racing phase, HTTP health; own windows/server cleaned up |
+
+These are the last measurements on the retained code, not the best of the experiments. **The ~110 FPS Monza stretch target was not reached.** Each run used Apple M4 Pro / ANGLE Metal, three independent headed Chromium contexts at 1100×850, 50 samples at 500 ms after loading/warmup, with no overlapping Blender or other browser tests. The benchmark asserts both mean and minimum sampled smoothed FPS >=60. HUD EMA samples do not guarantee every individual frame or every MacBook reaches that rate. Raw samples, rejected experiments and `performance-summary.json` are saved in the round folder.
+
+The restored build's largest static file is **23,242,425 / 26,214,400 bytes**. Final build/typecheck/unit checks passed again; the full race/MCP/Worker suite had already passed on this exact retained renderer before the two reverted experiments. The server remains available on port 5477 in mock mode. All per-command logs are under `artifacts/realism-v5/logs/`.

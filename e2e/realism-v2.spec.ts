@@ -18,6 +18,7 @@ test('Blender cars, onboard, studio finishes and live camera transitions',async(
  for(const finish of ['Clay','Wireframe']){await page.getByRole('button',{name:finish,exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).__renderStats.finish)).toBe(finish.toLowerCase());await page.waitForTimeout(250);await page.locator('#viewport').screenshot({path:`artifacts/${process.env.CAR_REVIEW_DIR??'realism-v2'}/showroom-${finish.toLowerCase()}.png`});}
  await page.getByRole('button',{name:'Back to race'}).click();await expect(page.locator('#camera-name')).not.toContainText('STUDIO');await expect(page.locator('.studio-controls')).toBeHidden();
  await shot('chase','chase');await shot('cockpit-onboard','cockpit-a');await shot('tcam','tcam-a');
+ fixture.race.cars.a.steering=.20;await shot('onboard-left-lock','cockpit-a');fixture.race.cars.a.steering=-.20;await shot('onboard-right-lock','cockpit-a');fixture.race.cars.a.steering=.012;
  await page.getByRole('button',{name:'Showroom',exact:true}).click();await expect(page.locator('.studio-controls')).toBeVisible();await page.getByRole('button',{name:'Pause rotation'}).click();await expect(page.getByRole('button',{name:'Rotate',exact:true})).toBeVisible();
  expect(errors).toEqual([]);expect(failed).toEqual([]);expect(fixture.paidCalls).toBe(0);await writeFile(`artifacts/${process.env.CAR_REVIEW_DIR??'realism-v2'}/render-stats.json`,JSON.stringify(records,null,2));
 });

@@ -288,3 +288,13 @@ All trees and seated spectators are now solid Blender meshes. Native `EXT_mesh_g
 Builds enforce the Worker's **25 MiB per-file limit**. Web circuits use gzip-wrapped Draco; MCP uses native instancing and `KHR_mesh_quantization`, decoded without WASM/workers under the existing strict CSP. Car positions stay float precision. Blender circuit position quantization is under 2 cm per step (normally a few millimetres); this never changes the authoritative simulation path. Regenerate models with the existing `model:build` and `circuit:build` commands. `JGP_FONT` can select a bold italic font on another platform; the Mac build uses the installed Arial Bold Italic and exports its lettering as geometry.
 
 Blender remains **5.2.2 LTS**. A slow mass-deletion step was fixed with its batch-removal API, and instances were parented as required by its native glTF exporter. No procedural Three.js model fallback was introduced. Baked AO and planar reflections approximate studio shading; this remains visibly short of the reference's hand-sculpted surfaces and ray-traced finish. See the review for the specific remaining gaps.
+
+## Realism round 5
+
+The outer car body is now a single connected Blender surface: voxel union and relaxed fillets join the nose, cockpit deck, sidepods, undercuts and engine/airbox skins. Exact mesh cuts define the paint boundaries; rounded Boolean apertures keep the sidepod intakes open. A unit test checks connectivity across material boundaries. Wheel dishes have independent graphite PBR response, a rounded inner rim and inboard brake rotor/caliper geometry. The opaque aero covers still hide most brake hardware from outside.
+
+The Blender hands and sleeves have independent rigs. In the browser, each forearm aims from a stable elbow to the wrist moving with the steering wheel. Fingers retain a sculpted grip pose; this is wrist/forearm articulation, not individual finger physics. Left/right-lock captures accompany the normal onboard shot.
+
+Monza combines four crown proportions, varied rotation/scale and species bands, with earlier far LODs and a shorter nearby shadow range. Vegas adds varied infill towers, roof setbacks, illuminated signs and accent strips. A 64 px local cube capture, refreshed every 240 m, supplies nearby building/light reflections; it is not ray tracing and can lag between probe updates. The road is visually damp; race weather/tyre forces are unchanged.
+
+Before/after views, reference comparisons, rejected iterations and final verification logs live in `artifacts/realism-v5/`. Read `REVIEW.md` there for the remaining gaps. `python3 scripts/review-v5.py after` regenerates the comparison/contact sheets from saved captures and local reference frames.

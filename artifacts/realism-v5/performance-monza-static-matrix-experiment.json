@@ -1,0 +1,1963 @@
+{
+  "date": "2026-11-17T03:16:42.261Z",
+  "gpu": [
+    "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))"
+  ],
+  "viewport": {
+    "width": 1100,
+    "height": 850
+  },
+  "mode": "mock",
+  "circuit": "monza",
+  "samples": [
+    [
+      {
+        "frame": 462,
+        "calls": 743,
+        "triangles": 1113724,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 74.17511584003061
+      },
+      {
+        "frame": 517,
+        "calls": 1016,
+        "triangles": 1506430,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 73.2094532875048
+      },
+      {
+        "frame": 507,
+        "calls": 898,
+        "triangles": 756498,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 73.28512154275658
+      }
+    ],
+    [
+      {
+        "frame": 509,
+        "calls": 601,
+        "triangles": 1070960,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.29068849896971
+      },
+      {
+        "frame": 562,
+        "calls": 716,
+        "triangles": 1309426,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.1869883466879
+      },
+      {
+        "frame": 546,
+        "calls": 920,
+        "triangles": 836154,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.75975260637397
+      }
+    ],
+    [
+      {
+        "frame": 560,
+        "calls": 576,
+        "triangles": 834185,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 99.5046887755478
+      },
+      {
+        "frame": 615,
+        "calls": 655,
+        "triangles": 905374,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 99.10296719165929
+      },
+      {
+        "frame": 591,
+        "calls": 422,
+        "triangles": 535812,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 98.11913883742146
+      }
+    ],
+    [
+      {
+        "frame": 615,
+        "calls": 579,
+        "triangles": 824717,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.95161952355406
+      },
+      {
+        "frame": 670,
+        "calls": 660,
+        "triangles": 913008,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 98.83138167957074
+      },
+      {
+        "frame": 638,
+        "calls": 354,
+        "triangles": 487846,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 99.86166284035048
+      }
+    ],
+    [
+      {
+        "frame": 671,
+        "calls": 688,
+        "triangles": 901611,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 101.31736885930239
+      },
+      {
+        "frame": 726,
+        "calls": 724,
+        "triangles": 921792,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.61358467167744
+      },
+      {
+        "frame": 686,
+        "calls": 372,
+        "triangles": 676643,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 101.89835278482651
+      }
+    ],
+    [
+      {
+        "frame": 721,
+        "calls": 778,
+        "triangles": 1031847,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 91.61461676533652
+      },
+      {
+        "frame": 776,
+        "calls": 828,
+        "triangles": 1055858,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.34897806135986
+      },
+      {
+        "frame": 729,
+        "calls": 432,
+        "triangles": 750745,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 93.11273987517495
+      }
+    ],
+    [
+      {
+        "frame": 769,
+        "calls": 828,
+        "triangles": 1050813,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.13323269055594
+      },
+      {
+        "frame": 823,
+        "calls": 1271,
+        "triangles": 1444102,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.2196965619089
+      },
+      {
+        "frame": 769,
+        "calls": 480,
+        "triangles": 603816,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.46369293425921
+      }
+    ],
+    [
+      {
+        "frame": 816,
+        "calls": 1153,
+        "triangles": 1349154,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.26021968087767
+      },
+      {
+        "frame": 870,
+        "calls": 812,
+        "triangles": 1028732,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.92481422186638
+      },
+      {
+        "frame": 810,
+        "calls": 590,
+        "triangles": 696862,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.85258221855935
+      }
+    ],
+    [
+      {
+        "frame": 865,
+        "calls": 1079,
+        "triangles": 1649032,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.67347719058363
+      },
+      {
+        "frame": 918,
+        "calls": 689,
+        "triangles": 1288784,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.32417677810889
+      },
+      {
+        "frame": 851,
+        "calls": 882,
+        "triangles": 734598,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.70830814459445
+      }
+    ],
+    [
+      {
+        "frame": 915,
+        "calls": 555,
+        "triangles": 1009742,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 97.05695629467964
+      },
+      {
+        "frame": 970,
+        "calls": 842,
+        "triangles": 1349904,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.24228575700982
+      },
+      {
+        "frame": 895,
+        "calls": 485,
+        "triangles": 1150206,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.05019861604848
+      }
+    ],
+    [
+      {
+        "frame": 971,
+        "calls": 492,
+        "triangles": 800711,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 101.57025272360929
+      },
+      {
+        "frame": 1026,
+        "calls": 1098,
+        "triangles": 1301072,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.19877706493351
+      },
+      {
+        "frame": 943,
+        "calls": 600,
+        "triangles": 556130,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.67445055459673
+      }
+    ],
+    [
+      {
+        "frame": 1031,
+        "calls": 342,
+        "triangles": 650020,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 107.44021335003191
+      },
+      {
+        "frame": 1086,
+        "calls": 534,
+        "triangles": 631416,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 105.50799013144982
+      },
+      {
+        "frame": 994,
+        "calls": 474,
+        "triangles": 425457,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 107.12580928262648
+      }
+    ],
+    [
+      {
+        "frame": 1097,
+        "calls": 345,
+        "triangles": 631678,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 112.7945614460057
+      },
+      {
+        "frame": 1152,
+        "calls": 832,
+        "triangles": 905216,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 113.26492927069917
+      },
+      {
+        "frame": 1051,
+        "calls": 373,
+        "triangles": 334554,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 112.81224821551756
+      }
+    ],
+    [
+      {
+        "frame": 1160,
+        "calls": 835,
+        "triangles": 922916,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 104.67487417968437
+      },
+      {
+        "frame": 1215,
+        "calls": 722,
+        "triangles": 847636,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 106.09303054269564
+      },
+      {
+        "frame": 1104,
+        "calls": 409,
+        "triangles": 371684,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 107.15135541059975
+      }
+    ],
+    [
+      {
+        "frame": 1219,
+        "calls": 715,
+        "triangles": 847338,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 106.20841999424552
+      },
+      {
+        "frame": 1274,
+        "calls": 517,
+        "triangles": 565394,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 104.03792693224264
+      },
+      {
+        "frame": 1156,
+        "calls": 401,
+        "triangles": 372582,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 105.42871855695137
+      }
+    ],
+    [
+      {
+        "frame": 1273,
+        "calls": 912,
+        "triangles": 932636,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 95.19077369033559
+      },
+      {
+        "frame": 1328,
+        "calls": 950,
+        "triangles": 820558,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 93.92258825112212
+      },
+      {
+        "frame": 1201,
+        "calls": 429,
+        "triangles": 397148,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.31537819659631
+      }
+    ],
+    [
+      {
+        "frame": 1320,
+        "calls": 1294,
+        "triangles": 1260233,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.47219508888665
+      },
+      {
+        "frame": 1374,
+        "calls": 808,
+        "triangles": 713830,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.04221959653961
+      },
+      {
+        "frame": 1242,
+        "calls": 465,
+        "triangles": 434498,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.50484027293301
+      }
+    ],
+    [
+      {
+        "frame": 1365,
+        "calls": 998,
+        "triangles": 1039110,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.00253268165156
+      },
+      {
+        "frame": 1420,
+        "calls": 1113,
+        "triangles": 935596,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 82.65590286963419
+      },
+      {
+        "frame": 1280,
+        "calls": 448,
+        "triangles": 410580,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.19149359270459
+      }
+    ],
+    [
+      {
+        "frame": 1408,
+        "calls": 918,
+        "triangles": 1043044,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 78.92953868960298
+      },
+      {
+        "frame": 1462,
+        "calls": 1135,
+        "triangles": 983448,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 78.40444000021307
+      },
+      {
+        "frame": 1317,
+        "calls": 471,
+        "triangles": 430652,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 79.10729903573916
+      }
+    ],
+    [
+      {
+        "frame": 1450,
+        "calls": 922,
+        "triangles": 1057378,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 79.94884009280366
+      },
+      {
+        "frame": 1505,
+        "calls": 1110,
+        "triangles": 975016,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 78.54607427538701
+      },
+      {
+        "frame": 1354,
+        "calls": 443,
+        "triangles": 407644,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 79.90098942912363
+      }
+    ],
+    [
+      {
+        "frame": 1493,
+        "calls": 868,
+        "triangles": 1063490,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 79.44505871122257
+      },
+      {
+        "frame": 1548,
+        "calls": 1024,
+        "triangles": 953198,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 78.68130890081417
+      },
+      {
+        "frame": 1390,
+        "calls": 478,
+        "triangles": 419554,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 78.26197508135616
+      }
+    ],
+    [
+      {
+        "frame": 1537,
+        "calls": 1341,
+        "triangles": 1502867,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 79.44546941269024
+      },
+      {
+        "frame": 1591,
+        "calls": 1026,
+        "triangles": 976352,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 80.42375265700706
+      },
+      {
+        "frame": 1428,
+        "calls": 496,
+        "triangles": 469418,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 79.51191844829384
+      }
+    ],
+    [
+      {
+        "frame": 1580,
+        "calls": 864,
+        "triangles": 1164122,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 78.27967744773142
+      },
+      {
+        "frame": 1635,
+        "calls": 1380,
+        "triangles": 1433154,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 80.82337453703009
+      },
+      {
+        "frame": 1464,
+        "calls": 502,
+        "triangles": 487530,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 79.90588586169103
+      }
+    ],
+    [
+      {
+        "frame": 1624,
+        "calls": 804,
+        "triangles": 1096792,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 80.37962916419794
+      },
+      {
+        "frame": 1679,
+        "calls": 995,
+        "triangles": 1116916,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 81.88943844852261
+      },
+      {
+        "frame": 1502,
+        "calls": 489,
+        "triangles": 467360,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 82.38915063089799
+      }
+    ],
+    [
+      {
+        "frame": 1667,
+        "calls": 808,
+        "triangles": 1132056,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 80.4639665140022
+      },
+      {
+        "frame": 1722,
+        "calls": 951,
+        "triangles": 1062824,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 82.45166881930506
+      },
+      {
+        "frame": 1540,
+        "calls": 505,
+        "triangles": 521622,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 80.81421408866177
+      }
+    ],
+    [
+      {
+        "frame": 1713,
+        "calls": 790,
+        "triangles": 1118828,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.73907550367947
+      },
+      {
+        "frame": 1768,
+        "calls": 1409,
+        "triangles": 1475580,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 84.45143451375218
+      },
+      {
+        "frame": 1579,
+        "calls": 450,
+        "triangles": 464752,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.73815130392117
+      }
+    ],
+    [
+      {
+        "frame": 1759,
+        "calls": 754,
+        "triangles": 1050802,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.0881820641822
+      },
+      {
+        "frame": 1813,
+        "calls": 920,
+        "triangles": 1015568,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.57373278671938
+      },
+      {
+        "frame": 1618,
+        "calls": 432,
+        "triangles": 438438,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.01519685661638
+      }
+    ],
+    [
+      {
+        "frame": 1807,
+        "calls": 672,
+        "triangles": 936222,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.0540297853053
+      },
+      {
+        "frame": 1861,
+        "calls": 881,
+        "triangles": 980704,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.94398118510131
+      },
+      {
+        "frame": 1659,
+        "calls": 442,
+        "triangles": 469430,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.34429595663396
+      }
+    ],
+    [
+      {
+        "frame": 1857,
+        "calls": 547,
+        "triangles": 843134,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 93.02806384177107
+      },
+      {
+        "frame": 1911,
+        "calls": 841,
+        "triangles": 935038,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.05636693662525
+      },
+      {
+        "frame": 1702,
+        "calls": 480,
+        "triangles": 529634,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.49879349414027
+      }
+    ],
+    [
+      {
+        "frame": 1912,
+        "calls": 372,
+        "triangles": 623130,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.15042933442281
+      },
+      {
+        "frame": 1966,
+        "calls": 735,
+        "triangles": 801368,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 101.39786567658236
+      },
+      {
+        "frame": 1749,
+        "calls": 410,
+        "triangles": 369514,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 99.92615928156528
+      }
+    ],
+    [
+      {
+        "frame": 1973,
+        "calls": 303,
+        "triangles": 549840,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 108.01239803986917
+      },
+      {
+        "frame": 2028,
+        "calls": 601,
+        "triangles": 635212,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 106.26864837582653
+      },
+      {
+        "frame": 1801,
+        "calls": 387,
+        "triangles": 306576,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 107.7027249438663
+      }
+    ],
+    [
+      {
+        "frame": 2039,
+        "calls": 415,
+        "triangles": 685014,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 113.4786964146595
+      },
+      {
+        "frame": 2094,
+        "calls": 453,
+        "triangles": 536466,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 114.62958918132038
+      },
+      {
+        "frame": 1859,
+        "calls": 400,
+        "triangles": 299580,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 114.9832530616203
+      }
+    ],
+    [
+      {
+        "frame": 2104,
+        "calls": 1084,
+        "triangles": 1268719,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 109.94901686246654
+      },
+      {
+        "frame": 2158,
+        "calls": 289,
+        "triangles": 363302,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 107.48999250768746
+      },
+      {
+        "frame": 1913,
+        "calls": 464,
+        "triangles": 708658,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 108.36401358217738
+      }
+    ],
+    [
+      {
+        "frame": 2161,
+        "calls": 772,
+        "triangles": 1018450,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 102.63462885347266
+      },
+      {
+        "frame": 2216,
+        "calls": 720,
+        "triangles": 753276,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 101.233288707212
+      },
+      {
+        "frame": 1963,
+        "calls": 509,
+        "triangles": 771688,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 102.35728109468323
+      }
+    ],
+    [
+      {
+        "frame": 2212,
+        "calls": 958,
+        "triangles": 1136343,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.11725560934227
+      },
+      {
+        "frame": 2266,
+        "calls": 1020,
+        "triangles": 1238474,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.32828573964262
+      },
+      {
+        "frame": 2006,
+        "calls": 687,
+        "triangles": 930439,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 91.86245735152421
+      }
+    ],
+    [
+      {
+        "frame": 2255,
+        "calls": 1162,
+        "triangles": 1266014,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.73372991144169
+      },
+      {
+        "frame": 2300,
+        "calls": 1407,
+        "triangles": 1766186,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 75.54206611061173
+      },
+      {
+        "frame": 2043,
+        "calls": 441,
+        "triangles": 699180,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.84895594442445
+      }
+    ],
+    [
+      {
+        "frame": 2372,
+        "calls": 1086,
+        "triangles": 1037685,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.57832181387437
+      },
+      {
+        "frame": 2346,
+        "calls": 912,
+        "triangles": 1013178,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 84.42379821631454
+      },
+      {
+        "frame": 2143,
+        "calls": 278,
+        "triangles": 534274,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.40755450450744
+      }
+    ],
+    [
+      {
+        "frame": 2416,
+        "calls": 1107,
+        "triangles": 1063525,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 83.24857478740162
+      },
+      {
+        "frame": 2392,
+        "calls": 912,
+        "triangles": 1041608,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 82.04671661522333
+      },
+      {
+        "frame": 2182,
+        "calls": 289,
+        "triangles": 558920,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 83.47277011218948
+      }
+    ],
+    [
+      {
+        "frame": 2462,
+        "calls": 1128,
+        "triangles": 1096411,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 84.80355874434262
+      },
+      {
+        "frame": 2436,
+        "calls": 847,
+        "triangles": 1030002,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 83.9068019024646
+      },
+      {
+        "frame": 2221,
+        "calls": 291,
+        "triangles": 615638,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 81.3590361508135
+      }
+    ],
+    [
+      {
+        "frame": 2506,
+        "calls": 1144,
+        "triangles": 1106515,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 83.24811614915501
+      },
+      {
+        "frame": 2482,
+        "calls": 1109,
+        "triangles": 1308336,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 82.55670743788298
+      },
+      {
+        "frame": 2259,
+        "calls": 269,
+        "triangles": 611382,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 84.09239006956199
+      }
+    ],
+    [
+      {
+        "frame": 2550,
+        "calls": 1097,
+        "triangles": 989197,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.79220509857812
+      },
+      {
+        "frame": 2532,
+        "calls": 677,
+        "triangles": 840020,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.3075317467283
+      },
+      {
+        "frame": 2301,
+        "calls": 267,
+        "triangles": 610066,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.27051303355069
+      }
+    ],
+    [
+      {
+        "frame": 2598,
+        "calls": 1116,
+        "triangles": 1025101,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.97394506055085
+      },
+      {
+        "frame": 2580,
+        "calls": 1179,
+        "triangles": 1345424,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.76563802469427
+      },
+      {
+        "frame": 2343,
+        "calls": 421,
+        "triangles": 353456,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.6053932860457
+      }
+    ],
+    [
+      {
+        "frame": 2645,
+        "calls": 1112,
+        "triangles": 1009889,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.29490203400024
+      },
+      {
+        "frame": 2626,
+        "calls": 896,
+        "triangles": 1059028,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.47642337218122
+      },
+      {
+        "frame": 2382,
+        "calls": 333,
+        "triangles": 317032,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.61241768245026
+      }
+    ],
+    [
+      {
+        "frame": 2692,
+        "calls": 1385,
+        "triangles": 1192669,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.61383905029462
+      },
+      {
+        "frame": 2673,
+        "calls": 576,
+        "triangles": 820040,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.78980117658273
+      },
+      {
+        "frame": 2423,
+        "calls": 306,
+        "triangles": 634328,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.59510853412482
+      }
+    ],
+    [
+      {
+        "frame": 2744,
+        "calls": 1059,
+        "triangles": 973177,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 93.92704624918758
+      },
+      {
+        "frame": 2724,
+        "calls": 517,
+        "triangles": 787598,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 95.40567094514411
+      },
+      {
+        "frame": 2467,
+        "calls": 648,
+        "triangles": 588386,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 95.87492747161316
+      }
+    ],
+    [
+      {
+        "frame": 2795,
+        "calls": 1066,
+        "triangles": 974037,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.27086153880025
+      },
+      {
+        "frame": 2776,
+        "calls": 905,
+        "triangles": 1170206,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.39033727171933
+      },
+      {
+        "frame": 2511,
+        "calls": 309,
+        "triangles": 282218,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.35072356140599
+      }
+    ],
+    [
+      {
+        "frame": 2848,
+        "calls": 1061,
+        "triangles": 982451,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.58275095780873
+      },
+      {
+        "frame": 2828,
+        "calls": 558,
+        "triangles": 801398,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 97.20831546277445
+      },
+      {
+        "frame": 2556,
+        "calls": 294,
+        "triangles": 251562,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 97.57303956553304
+      }
+    ],
+    [
+      {
+        "frame": 2898,
+        "calls": 1041,
+        "triangles": 974355,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.39193825698342
+      },
+      {
+        "frame": 2879,
+        "calls": 638,
+        "triangles": 887492,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.03613047223978
+      },
+      {
+        "frame": 2600,
+        "calls": 279,
+        "triangles": 262044,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 93.79769096844288
+      }
+    ],
+    [
+      {
+        "frame": 2947,
+        "calls": 1071,
+        "triangles": 1000009,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 91.3627787237585
+      },
+      {
+        "frame": 2928,
+        "calls": 737,
+        "triangles": 968368,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 91.26710787436706
+      },
+      {
+        "frame": 2642,
+        "calls": 386,
+        "triangles": 350414,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 91.24908596316142
+      }
+    ],
+    [
+      {
+        "frame": 2994,
+        "calls": 1083,
+        "triangles": 1011091,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.0075817872911
+      },
+      {
+        "frame": 2975,
+        "calls": 698,
+        "triangles": 905056,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.78257300826897
+      },
+      {
+        "frame": 2682,
+        "calls": 407,
+        "triangles": 339474,
+        "points": 0,
+        "lines": 0,
+        "sparks": 0,
+        "circuit": "monza",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.69358418167506
+      }
+    ]
+  ],
+  "health": {
+    "ok": true,
+    "game": "Jev Grand Prix",
+    "mode": "mock",
+    "matchup": "jev-vs-jev",
+    "circuit": "monza",
+    "players": {
+      "a": {
+        "engine": "jev",
+        "name": "JEV",
+        "model": "jev-latest",
+        "provider": "mock",
+        "mock": true,
+        "intervalMs": 200
+      },
+      "b": {
+        "engine": "jev",
+        "name": "JEV",
+        "model": "jev-latest",
+        "provider": "mock",
+        "mock": true,
+        "intervalMs": 200
+      }
+    },
+    "physicsHz": 120,
+    "snapshotHz": 30,
+    "speed": 4,
+    "rooms": 1,
+    "tick": 15182,
+    "connected": {
+      "a": true,
+      "b": true
+    },
+    "drivers": {
+      "a": {
+        "attempts": 0,
+        "successes": 0,
+        "fallbacks": 0,
+        "source": "mock"
+      },
+      "b": {
+        "attempts": 0,
+        "successes": 0,
+        "fallbacks": 0,
+        "source": "mock"
+      }
+    },
+    "paidCalls": 0
+  }
+}

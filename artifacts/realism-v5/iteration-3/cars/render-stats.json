@@ -1,0 +1,167 @@
+[
+  {
+    "name": "front-beauty",
+    "stats": {
+      "frame": 368,
+      "calls": 211,
+      "triangles": 590585,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 116.12646563389487
+    }
+  },
+  {
+    "name": "rear-three-quarter",
+    "stats": {
+      "frame": 414,
+      "calls": 211,
+      "triangles": 590585,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 115.23558270135521
+    }
+  },
+  {
+    "name": "side-profile",
+    "stats": {
+      "frame": 410,
+      "calls": 211,
+      "triangles": 590585,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 112.0231688137691
+    }
+  },
+  {
+    "name": "wheel-closeup",
+    "stats": {
+      "frame": 412,
+      "calls": 193,
+      "triangles": 571673,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 111.69569868575194
+    }
+  },
+  {
+    "name": "steering-closeup",
+    "stats": {
+      "frame": 410,
+      "calls": 147,
+      "triangles": 525437,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 116.79025972058339
+    }
+  },
+  {
+    "name": "showroom-colour",
+    "stats": {
+      "frame": 412,
+      "calls": 211,
+      "triangles": 590585,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 110.38051555421207
+    }
+  },
+  {
+    "name": "chase",
+    "stats": {
+      "frame": 277,
+      "calls": 826,
+      "triangles": 1574138,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 109.13595415972512
+    }
+  },
+  {
+    "name": "cockpit-onboard",
+    "stats": {
+      "frame": 289,
+      "calls": 858,
+      "triangles": 1414176,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 113.68126762223584
+    }
+  },
+  {
+    "name": "tcam",
+    "stats": {
+      "frame": 288,
+      "calls": 845,
+      "triangles": 1404510,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 110.55187238046804
+    }
+  },
+  {
+    "name": "onboard-left-lock",
+    "stats": {
+      "frame": 291,
+      "calls": 1375,
+      "triangles": 2067958,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 109.91149824061202
+    }
+  },
+  {
+    "name": "onboard-right-lock",
+    "stats": {
+      "frame": 288,
+      "calls": 858,
+      "triangles": 1414176,
+      "points": 0,
+      "lines": 0,
+      "sparks": 0,
+      "circuit": "monza",
+      "modelsReady": true,
+      "finish": "colour",
+      "fps": 115.5452267794204
+    }
+  }
+]

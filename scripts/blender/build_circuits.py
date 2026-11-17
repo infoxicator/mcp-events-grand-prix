@@ -68,7 +68,7 @@ def build(cid):
  prototypes={};instance_triangles=0
  def blob(p,scale,m,segments=8,rings=4,seed=0):
   nonlocal instance_triangles
-  segments,rings=(16,8) if m.startswith('Canopy') else (segments,rings)
+  segments,rings=(12,6) if m.startswith('Canopy') else (segments,rings)
   key=(m,segments,rings,seed%4);mesh=prototypes.get(key)
   if mesh is None:
    vv=[];ff=[]
@@ -88,7 +88,7 @@ def build(cid):
     for li in poly.loop_indices:
      co=mesh.vertices[mesh.loops[li].vertex_index].co;uv.data[li].uv=(math.atan2(co.y,co.x)/math.tau+.5,math.acos(max(-1,min(1,co.z)))/math.pi)
    prototypes[key]=mesh
-  o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(p[0],-p[2],p[1]);o.scale=(scale[0],scale[2],scale[1]);instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+  o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(p[0],-p[2],p[1]);o.scale=(scale[0],scale[2],scale[1]);o.rotation_euler.z=(seed*2.39996 if m.startswith('Canopy') else 0);instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
  def strip(start,end,left,right,m,y=.02,step=2,ys=None):
   count=math.ceil((end-start)/step)
   for i in range(count):
@@ -196,12 +196,18 @@ def build(cid):
    if min((x-q[0])**2+(z-q[1])**2 for q in coarse)<38**2:continue
    if (d>L-460 or d<150) and abs(off)<90:continue
    if min((x-pt(v,side)[0])**2+(z-pt(v,side)[2])**2 for v in range(int(L)-420,int(L)+100,35) for side in [-38,40])<28**2:continue
-   h=random.uniform(13,25);crown=h*random.uniform(.27,.36);rod(p,(x,y+h*.68,z),.22,'Trunk',6)
-   species=random.randrange(4)
-   for k in range(5):
-    a=k*math.tau/5+i;cx=x+math.cos(a)*crown*.5;cz=z+math.sin(a)*crown*.5;cy=y+h*(.68+random.random()*.14)
-    rod((x,y+h*.4,z),(cx,cy,cz),.09,'Trunk')
-    blob((cx,cy,cz),(crown*random.uniform(.75,1.05),h*random.uniform(.20,.29),crown*.85),'Canopy'+str(species),8,4,i+k)
+   species=(int(d/170)+i%7)%4
+   h=random.uniform(10,24)*(1.18 if species==2 else 1);crown=h*[.31,.24,.13,.34][species]
+   rod(p,(x,y+h*.71,z),random.uniform(.16,.30),'Trunk',6)
+   # Oak, hornbeam, columnar poplar and spreading pine: distinct crown proportions.
+   lobes=[4,3,3,4][species]
+   for k in range(lobes):
+    a=k*math.tau/lobes+i*2.39996;spread=crown*(.28 if species==2 else .65)
+    cx=x+math.cos(a)*spread;cz=z+math.sin(a)*spread
+    cy=y+h*([.66,.72,.55,.78][species]+k*[.035,.04,.14,.025][species])
+    rod((x,y+h*.38,z),(cx,cy,cz),.075,'Trunk')
+    blob((cx,cy,cz),(crown*random.uniform(.65,1.12),h*[.24,.28,.28,.14][species],crown*random.uniform(.65,1.05)),'Canopy'+str(species),8,4,i+k)
+
  else:
   for d in range(0,int(L),45):
    for side in [-1,1]:
@@ -225,12 +231,20 @@ def build(cid):
     else:
      for yy in range(12,int(h),8):box((x,g+yy,z+dep/2+.4),(w,.22,.4),'Gold' if name=='EDEN' else 'Steel')
   for args in [(-115.1766,36.1127,220,145,54,'AURORA'),(-115.1762,36.1175,150,125,60,'IMPERIAL'),(-115.1699,36.1212,160,145,70,'SERENISSIMA'),(-115.1688,36.1245,140,145,58,'PALATIAL'),(-115.1655,36.1271,150,185,55,'EDEN'),(-115.1706,36.1127,145,105,50,'LUMIERE'),(-115.1745,36.1086,80,180,54,'METROPOLIS')]:hotel(*args)
-  for i in range(100):
-   d=random.random()*L;p=pt(d,random.choice([-1,1])*random.uniform(90,360));h=random.uniform(6,36)
+  for i in range(330):
+   d=random.random()*L;p=pt(d,random.choice([-1,1])*random.uniform(90,530));h=random.uniform(14,115)
    sphereXZ=project(-115.1621,36.1207)
    if math.hypot(p[0]-sphereXZ[0],p[2]-sphereXZ[1])<140:continue
    if min((p[0]-q[0])**2+(p[2]-q[1])**2 for q in coarse)<65**2:continue
-   box((p[0],p[1]+h/2,p[2]),(random.uniform(16,42),h,random.uniform(20,45)),'Windows')
+   w=random.uniform(20,58);dep=random.uniform(22,60);angle=random.choice([0,.12,-.18,.3]);box((p[0],p[1]+h/2,p[2]),(w,h,dep),'Windows',angle)
+   box((p[0],p[1]+3,p[2]),(w+12,6,dep+10),'Concrete',angle)
+   for level in range(random.randint(1,3)):
+    box((p[0],p[1]+h+level*4+2,p[2]),(w*(.8-level*.16),4,dep*(.8-level*.16)),'Glass',angle)
+   accent=['Gold','Ice','Pink'][i%3]
+   if i%3==0:box((p[0],p[1]+h*.83,p[2]+dep/2+.2),(w*.8,2,.4),accent)
+   if i%5==0:
+    box((p[0]+w/2+.25,p[1]+h*.6,p[2]),(.5,h*.6,1),accent)
+    box((p[0],p[1]+h*.65,p[2]+dep/2+.3),(w*.7,8,.5),'Sign')
   x,z=project(-115.1745,36.1121);g=ground(x,z)
   for i in range(80):
    a=i*math.tau/80;b=(i+1)*math.tau/80;face([(x,g+.1,z),(x+95*math.cos(a),g+.1,z+135*math.sin(a)),(x+95*math.cos(b),g+.1,z+135*math.sin(b))],'Water');h=4+math.sin(a*3)**2*14;rod((x+65*math.cos(a),g,z+95*math.sin(a)),(x+65*math.cos(a),g+h,z+95*math.sin(a)),.13,'Gold')

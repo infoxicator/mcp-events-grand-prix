@@ -36,14 +36,15 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
    if(farGeometry){
     const centre=new T.Vector3();for(const o of objects)centre.add(new T.Vector3().setFromMatrixPosition(o.matrix));centre.divideScalar(objects.length);
     const offset=new T.Matrix4().makeTranslation(-centre.x,-centre.y,-centre.z),far=new T.InstancedMesh(farGeometry,first.material,objects.length),lod=new T.LOD();far.name=first.name+'_far';
-    objects.forEach((o,i)=>{const matrix=o.matrix.clone().premultiply(offset);batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);});batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);lod.addLevel(batch,0);lod.addLevel(far,220,.15);lod.addLevel(new T.Group(),950,.1);gltf.scene.add(lod);
+    objects.forEach((o,i)=>{const matrix=o.matrix.clone().premultiply(offset);batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);});batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);lod.addLevel(batch,0);lod.addLevel(far,130,.18);lod.addLevel(new T.Group(),950,.1);gltf.scene.add(lod);
    }else{objects.forEach((o,i)=>batch.setMatrixAt(i,o.matrix));batch.computeBoundingSphere();gltf.scene.add(batch);}
   }
   gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;o.receiveShadow=true;o.castShadow=false;o.geometry.computeBoundingSphere();o.userData.cullCenter=(o instanceof T.InstancedMesh?o.boundingSphere!:o.geometry.boundingSphere!).center.clone().applyMatrix4(o.matrixWorld);
    const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){const m=material as T.MeshStandardMaterial;m.side=T.DoubleSide;
     if(m.map){m.map.anisotropy=anisotropy;m.map.wrapS=m.map.wrapT=T.RepeatWrapping;}
-    if(m.name==='Asphalt'){m.color.set(track.night?'#737982':'#777b7e');m.normalMap=normal;m.normalScale.set(.09,.09);m.roughness=track.night?.45:.91;m.roughnessMap=null;
+    if(track.night&&['Asphalt','Concrete','Steel'].includes(m.name)){m.envMapIntensity=m.name==='Asphalt'?1.4:.7;m.roughness=m.name==='Asphalt'?.32:.38;m.metalness=m.name==='Asphalt'?.08:.25;}
+    if(m.name==='Asphalt'){m.color.set(track.night?'#737982':'#777b7e');m.normalMap=normal;m.normalScale.set(.09,.09);m.roughness=track.night?.32:.91;m.roughnessMap=null;
      if(track.night)m.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 roadUv;').replace('#include <begin_vertex>','#include <begin_vertex>\nroadUv=uv;');s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 roadUv;').replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nfloat pool=.5+.5*cos(roadUv.y*3.*6.283185/45.);totalEmissiveRadiance+=diffuseColor.rgb*(.16+.38*pool);');};
     }
     if(m.name.startsWith('Canopy')){m.color.set(['#6a7947','#708447','#526e43','#808448'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.32;m.roughness=1;}
@@ -62,5 +63,5 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
    }
   });scene.add(gltf.scene);ready=true;
  }).catch(e=>{draco?.dispose();error=String(e);console.error('Blender circuit asset failed',e);});
- return {loaded,heightAt,spherePosition,get ready(){return ready;},get error(){return error;},update:(time:number,focus?:T.Vector3)=>{for(const s of spheres)s.uniforms.time.value=time;if(focus)for(const o of casters){const p=o.userData.cullCenter as T.Vector3;o.castShadow=Math.hypot(p.x-focus.x,p.z-focus.z)<170;}if(focus)for(const o of distant){const p=o.userData.cullCenter as T.Vector3;o.visible=Math.hypot(p.x-focus.x,p.z-focus.z)<950;}},dispose:()=>{disposed=true;normal.dispose();art.dispose();}};
+ return {loaded,heightAt,spherePosition,get ready(){return ready;},get error(){return error;},update:(time:number,focus?:T.Vector3)=>{for(const s of spheres)s.uniforms.time.value=time;if(focus)for(const o of casters){const p=o.userData.cullCenter as T.Vector3;o.castShadow=Math.hypot(p.x-focus.x,p.z-focus.z)<105;}if(focus)for(const o of distant){const p=o.userData.cullCenter as T.Vector3;o.visible=Math.hypot(p.x-focus.x,p.z-focus.z)<950;}},dispose:()=>{disposed=true;normal.dispose();art.dispose();}};
 }

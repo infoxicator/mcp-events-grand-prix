@@ -1,0 +1,120 @@
+
+> jev-grand-prix@1.0.0 test:e2e
+> playwright test e2e/race.spec.ts e2e/provider-ui.spec.ts e2e/realism.spec.ts e2e/vegas.spec.ts e2e/realism-v2.spec.ts e2e/circuit-review.spec.ts
+
+[WebServer] (node:55266) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:55317) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 9 tests using 1 worker
+
+(node:55318) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/circuit-review.spec.ts:4:1 › circuit review: fixed straight, signature corner, aerial and pit views (34.3s)
+  ✓  2 e2e/provider-ui.spec.ts:3:1 › provider UI distinguishes credentials, confirmed Jev/Luna replies and authentication fallback (2.2s)
+{
+  "race": "8aa5b487-20c4-4ecd-b0df-cfe24242571d",
+  "circuit": "monza",
+  "matchup": "jev-vs-jev",
+  "winner": "a",
+  "lapTimes": {
+    "a": [
+      88.47500000001648,
+      115.54166666662897,
+      98.0083333332442
+    ],
+    "b": [
+      89.70000000001745,
+      112.3749999999631,
+      97.70833333324447
+    ]
+  },
+  "stops": {
+    "a": 1,
+    "b": 1
+  },
+  "intents": {
+    "a": 75,
+    "b": 69
+  },
+  "engineerCalls": {
+    "a": 22,
+    "b": 26
+  },
+  "paidCalls": 0,
+  "errors": []
+}
+  ✓  3 e2e/race.spec.ts:4:118 › three independent WebSocket contexts race from lights out to results with radio and a pit stop (monza, jev-vs-jev) (30.2s)
+{
+  "race": "8aa5b487-20c4-4ecd-b0df-cfe24242571d",
+  "circuit": "monza",
+  "matchup": "jev-vs-luna",
+  "winner": "a",
+  "lapTimes": {
+    "a": [
+      88.52500000001652,
+      115.1249999999626,
+      100.38333333324204
+    ],
+    "b": [
+      90.14166666668447,
+      111.48333333329649,
+      97.44166666657804
+    ]
+  },
+  "stops": {
+    "a": 1,
+    "b": 1
+  },
+  "intents": {
+    "a": 70,
+    "b": 70
+  },
+  "engineerCalls": {
+    "a": 22,
+    "b": 26
+  },
+  "paidCalls": 0,
+  "errors": []
+}
+  ✓  4 e2e/race.spec.ts:4:118 › three independent WebSocket contexts race from lights out to results with radio and a pit stop (monza, jev-vs-luna) (30.6s)
+{
+  "race": "8aa5b487-20c4-4ecd-b0df-cfe24242571d",
+  "circuit": "las-vegas",
+  "matchup": "jev-vs-luna",
+  "winner": "b",
+  "lapTimes": {
+    "a": [
+      96.2166666666893,
+      125.50833333327337,
+      111.64166666656513
+    ],
+    "b": [
+      99.75000000002545,
+      123.76666666660226,
+      108.75833333323442
+    ]
+  },
+  "stops": {
+    "a": 1,
+    "b": 1
+  },
+  "intents": {
+    "a": 81,
+    "b": 78
+  },
+  "engineerCalls": {
+    "a": 24,
+    "b": 28
+  },
+  "paidCalls": 0,
+  "errors": []
+}
+  ✓  5 e2e/race.spec.ts:4:118 › three independent WebSocket contexts race from lights out to results with radio and a pit stop (las-vegas, jev-vs-luna) (35.1s)
+  ✓  6 e2e/realism-v2.spec.ts:4:1 › Blender cars, onboard, studio finishes and live camera transitions (31.6s)
+  ✓  7 e2e/realism.spec.ts:4:1 › detailed cars render from front and rear, with textured aerial and cockpit views (9.9s)
+  ✓  8 e2e/vegas.spec.ts:4:1 › Las Vegas night scene renders Sphere, Strip, cockpit and skid sparks without missing assets or shader errors (17.2s)
+  ✓  9 e2e/vegas.spec.ts:17:1 › owner switches day and night scenes without losing the shared room or retaining extra canvases (9.7s)
+
+  9 passed (3.4m)

@@ -30,13 +30,16 @@ export function createCar(team:'a'|'b'){
   model.traverse(o=>{if(o instanceof T.Mesh){o.geometry=o.geometry.clone();const make=(original:T.MeshStandardMaterial)=>{const wheelRubber=original.name==='Rubber'&&!!o.parent?.name.match(/^(Front|Rear)[LR]$/);let m=wheelRubber?undefined:materials.get(original);if(!m){const p=new T.MeshPhysicalMaterial({color:original.color,roughness:original.roughness,metalness:original.metalness,map:original.map,transparent:original.transparent,opacity:original.opacity});p.name=original.name;
    if(p.name==='Livery'){p.color.set(team==='a'?'#bd071b':'#08a59b');p.roughness=.38;p.metalness=.16;p.clearcoat=.15;p.clearcoatRoughness=.35;p.specularIntensity=.65;p.roughnessMap=grainMap;p.bumpMap=grainMap;p.bumpScale=.000018;}
    if(p.name==='Ivory'&&team==='b'){p.color.set('#adbfc5');p.metalness=.65;p.roughness=.38;}
-   if(p.name==='Carbon'){p.color.set('#101318');p.bumpMap=carbonMap;p.bumpScale=.00022;p.roughnessMap=carbonMap;p.roughness=.38;p.metalness=.12;p.clearcoat=.12;p.specularIntensity=.65;p.envMapIntensity=.7;}
+   if(p.name==='WheelDish'){p.color.set('#343c47');p.roughness=.29;p.metalness=.68;p.envMapIntensity=1.25;p.clearcoat=.1;}
+   if(p.name==='BrakeDisc'){p.roughness=.65;p.metalness=.45;}
+   if(p.name==='Sleeve'){p.color.set(team==='a'?'#692331':'#15494b');p.roughness=.95;p.sheen=.4;}
+   if(p.name==='Carbon'){p.color.set('#101318');p.bumpMap=carbonMap;p.bumpScale=.00022;p.roughnessMap=carbonMap;p.roughness=.34;p.metalness=.10;p.clearcoat=.1;p.specularIntensity=.65;p.envMapIntensity=.7;}
    if(p.name==='Mirror'){
     mirrors.push(p);o.geometry.computeBoundingBox();const bounds=o.geometry.boundingBox!,pos=o.geometry.getAttribute('position'),uv=new Float32Array(pos.count*2),mid=(bounds.min.x+bounds.max.x)/2;
     for(let i=0;i<pos.count;i++){const cx=pos.getX(i)<mid?bounds.min.x+.0875:bounds.max.x-.0875;uv[i*2]=.5+(pos.getX(i)-cx)/.175;uv[i*2+1]=(pos.getY(i)-bounds.min.y)/.038;}o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
    }
    if(p.name==='GloveFabric'){p.roughness=.87;p.bumpMap=carbonMap;p.bumpScale=.00007;p.sheen=.3;p.sheenColor.set('#bcb9b1');p.sheenRoughness=.9;}
-   if(p.name==='Rubber'){p.color.set('#17181a');p.roughness=.94;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
+   if(p.name==='Rubber'){p.color.set('#17181a');p.roughness=.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
    if(p.name==='Rubber'&&o.parent?.name.match(/^(Front|Rear)[LR]$/)){
     const u={spin:{value:0},load:{value:.008},side:o.parent.name.endsWith('L')?-1:1,front:o.parent.name.startsWith('Front')};tyreUniforms.push(u);
     p.onBeforeCompile=shader=>{shader.uniforms.tyreSpin=u.spin;shader.uniforms.tyreLoad=u.load;shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform float tyreSpin;uniform float tyreLoad;').replace('#include <begin_vertex>',`#include <begin_vertex>
@@ -46,7 +49,7 @@ export function createCar(team:'a'|'b'){
      transformed.x+=sign(position.x)*tyreLoad*.4*contactWeight;
     `);};p.customProgramCacheKey=()=> 'loaded-slick-v1';
    }
-   p.aoMap=['Mirror','MarkWhite'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='GloveFabric'?.15:.72;p.side=T.DoubleSide;m=p;if(!wheelRubber)materials.set(original,m);
+   p.aoMap=['Mirror','MarkWhite'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='GloveFabric'?.25:p.name==='WheelDish'?.28:.65;p.side=T.DoubleSide;m=p;if(!wheelRubber)materials.set(original,m);
   }return m;};o.material=Array.isArray(o.material)?o.material.map(m=>make(m as T.MeshStandardMaterial)):make(o.material as T.MeshStandardMaterial);o.castShadow=true;o.receiveShadow=true;originals.set(o,o.material);}});
   const unused=model.getObjectByName(team==='a'?'NumberB':'NumberA');if(unused)unused.visible=false;
   rigs.push(model);lod.addLevel(model,index===0?0:32);const meshes:T.Mesh[]=[];model.traverse(o=>{if(o instanceof T.Mesh)meshes.push(o);});for(const m of meshes){const lines=new T.LineSegments(new T.WireframeGeometry(m.geometry),lineMaterial);lines.renderOrder=1;lines.visible=false;m.add(lines);wireLines.push(lines);}
@@ -55,14 +58,16 @@ export function createCar(team:'a'|'b'){
    const row:T.MeshBasicMaterial[]=[];for(let i=0;i<12;i++){const lm=new T.MeshBasicMaterial({color:'#14211a',toneMapped:false});const led=new T.Mesh(new T.SphereGeometry(.0028,8,4),lm);led.position.set((i-5.5)*.010,.078,-.025);steering.add(led);originals.set(led,lm);row.push(lm);}lights.push(row);
   }
  });ready=true;setFinish(finish);}).catch(e=>{error=String(e);console.error('Car asset failed',e);});
- let lastDash=-1;
+ let lastDash=-1;const elbow=new T.Vector3(),wrist=new T.Vector3(),axis=new T.Vector3(0,1,0),direction=new T.Vector3();
  return {root,chassis,loaded,get ready(){return ready;},get error(){return error;},setFinish,setMirror(texture:T.Texture|null){for(const m of mirrors){if(m.map!==texture){m.map=texture;m.emissiveMap=texture;m.emissive.set(texture?'#ffffff':'#000000');m.emissiveIntensity=.7;m.roughness=texture?1:.08;m.metalness=texture?0:.9;m.needsUpdate=true;}}},
  update(c:CarTelemetry,onboard=false,studio=false){
   for(const u of tyreUniforms){u.spin.value=studio?0:c.distance/.36;u.load.value=T.MathUtils.clamp(.007+(studio?0:c.speed*c.speed*.0000012+(u.front?1:-1)*-(c.acceleration??0)*.00022+u.side*(c.lateralG??0)*.0012),.003,.024);}
   for(const model of rigs){for(const name of ['FrontL','FrontR','RearL','RearR']){const w=model.getObjectByName(name);if(w){w.position.y=.36-T.MathUtils.clamp(.007+(studio?0:c.speed*c.speed*.0000012+(name.startsWith('Front')?1:-1)*-(c.acceleration??0)*.00022+(name.endsWith('L')?-1:1)*(c.lateralG??0)*.0012),.003,.024);w.rotation.set(0,name.startsWith('Front')?(c.steering??0):0,0);w.rotateX(studio?0:c.distance/.36);}}
    const hands=model.getObjectByName('Hands');if(hands)hands.visible=!studio;
    const h=model.getObjectByName('Helmet');if(h)h.visible=!onboard;
-   const s=model.getObjectByName('Steering');if(s)s.rotation.z=-(c.steering??0)*3.6;
+   const s=model.getObjectByName('Steering');if(s){s.rotation.z=-(c.steering??0)*3.6;
+    for(const side of [-1,1]){const arm=model.getObjectByName(side<0?'ForearmL':'ForearmR');if(arm){arm.visible=!studio;elbow.set(side*.29,.29,-.25);wrist.set(side*.208,-.082,-.057).applyQuaternion(s.quaternion).add(s.position);direction.copy(wrist).sub(elbow);arm.position.copy(elbow);arm.scale.set(1,direction.length(),1);arm.quaternion.setFromUnitVectors(axis,direction.normalize());}}
+   }
    const d=model.getObjectByName('DRS');if(d)d.rotation.x=c.drs?-.43:0;
   }
   chassis.rotation.x=studio?0:T.MathUtils.clamp((c.acceleration??0)*.00045,-.018,.012);chassis.rotation.z=studio?0:T.MathUtils.clamp((c.lateralG??0)*-.003,-.015,.015);
