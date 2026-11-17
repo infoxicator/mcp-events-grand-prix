@@ -115,3 +115,6 @@ for q in [128,384]:
  d.line((0,q,512,q),fill=(61,53,47),width=5)
  for x in range(0,512,12):d.line((x,q,x+4,q),fill=(118,104,79))
 save(im,'city-blocks')
+
+# Retain the full-resolution normal-map master and compress the browser copy.
+Image.open(out.parent/'asphalt-normal.jpg').save(out.parent/'asphalt-normal.webp','WEBP',quality=92,method=6)

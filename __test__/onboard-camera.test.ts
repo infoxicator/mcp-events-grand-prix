@@ -1,14 +1,14 @@
+import {loadCar} from './load-car';
 import {describe,it,expect,beforeAll} from 'vitest';
 import {readFileSync} from 'node:fs';
 import * as T from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {onboardLens} from '../src/race/onboard-camera';
 import {bindGloveCompression,fingerCurl,poseForearms} from '../src/race/grip';
 
 let model:T.Group;
 beforeAll(async()=>{
  const bytes=readFileSync(new URL('../src/race/assets/jgp26-high.glb',import.meta.url));
- model=(await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'')).scene;
+ model=(await loadCar(bytes)).scene;
  // Match the renderer's two-sided materials so liner backfaces cannot make
  // an occluded glove appear clear in this regression.
  model.traverse(o=>{if(o instanceof T.Mesh)for(const m of Array.isArray(o.material)?o.material:[o.material])m.side=T.DoubleSide;});
@@ -69,7 +69,7 @@ describe('onboard sightlines through the exported Blender car',()=>{
 
 for(const level of ['high','low'])it(level+' holds the glove width and both sleeve lengths through a full steering sweep',async()=>{
  const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
- const {scene}=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+ const {scene}=await loadCar(bytes);
  const steering=scene.getObjectByName('Steering')!;
  for(const [suffix,side] of [['L',-1],['R',1]] as const){
   const upper=scene.getObjectByName('UpperArm'+suffix)!,fore=scene.getObjectByName('Forearm'+suffix)!;
@@ -106,7 +106,7 @@ for(const level of ['high','low'])it(level+' holds the glove width and both slee
 
 for(const level of ['high','low'])it(level+' keeps the five separately weighted digits in contact with the ergonomic grip',async()=>{
  const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
- const {scene}=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+ const {scene}=await loadCar(bytes);
  const wheel=scene.getObjectByName('Steering')!,rubber=wheel.getObjectByName('Steering_Rubber') as T.Mesh;
  for(const [suffix,side] of [['L',-1],['R',1]] as const){
   wheel.rotation.z=0;scene.updateMatrixWorld(true);

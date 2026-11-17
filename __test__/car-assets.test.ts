@@ -1,3 +1,4 @@
+import {loadCar} from './load-car';
 import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 function glb(name:string){const data=readFileSync(new URL(`../src/race/assets/jgp26-${name}.glb`,import.meta.url));expect(data.toString('ascii',0,4)).toBe('glTF');expect(data.readUInt32LE(4)).toBe(2);return JSON.parse(data.toString('utf8',20,20+data.readUInt32LE(12)));}
@@ -46,11 +47,10 @@ it('leaves the airbox and sidepod mouths physically open in the exported painted
 });
 
 it('keeps the aerofoil stacks and the moving DRS flap on both sides at each LOD',async()=>{
- const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
  const {Raycaster,Vector3}=await import('three');
  for(const level of ['high','low']){
   const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
-  const {scene}=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+  const {scene}=await loadCar(bytes);
   scene.updateMatrixWorld(true);
   for(const [part,z] of [['Chassis',2.70],['Chassis',2.53],['Chassis',2.40],['Chassis',2.27],['Chassis',-2.40],['DRS',-2.52]] as const){
    const heights=[-.58,.58].map(x=>{
@@ -60,6 +60,23 @@ it('keeps the aerofoil stacks and the moving DRS flap on both sides at each LOD'
     return hit.point.y;
    });
    expect(Math.abs(heights[0]-heights[1])).toBeLessThan(.008);
+  }
+ }
+});
+
+it('prints the sidewall artwork on a dedicated UV set at both wheel LODs',async()=>{
+ const {Mesh,MeshStandardMaterial,DataTexture}=await import('three');
+ for(const level of ['high','low']){
+  const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
+  const {scene}=await loadCar(bytes);
+  for(const wheel of ['FrontL','FrontR','RearL','RearR']){
+   const tyre=scene.getObjectByName(wheel)!.children.find(o=>o instanceof Mesh&&o.material.name==='SlickRubber') as InstanceType<typeof Mesh>;
+   const map=(tyre.material as InstanceType<typeof MeshStandardMaterial>).map;
+   if(!(map instanceof DataTexture))throw new Error('Expected decoded sidewall print');
+   expect(tyre.geometry.getAttribute('uv1').count).toBe(tyre.geometry.getAttribute('position').count);
+   expect(map.channel).toBe(1);
+   expect(map.image.width).toBe(1024);
+   expect(map.image.data?.some((channel:number,i:number)=>i%4===0&&channel>200)).toBe(true);
   }
  }
 });

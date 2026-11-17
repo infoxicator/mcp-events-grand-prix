@@ -29,7 +29,7 @@
     "test:handling": "node --import tsx scripts/handling-check.ts && node --import tsx scripts/calibrate.ts",
     "demo:vegas": "RACE_CIRCUIT=las-vegas RACE_SPEED=1 node scripts/demo.mjs",
     "model:build": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/blender/build_car.py",
-    "circuit:build": "node --import tsx scripts/export-circuit.ts && python3 scripts/blender/circuit_textures.py && /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/blender/build_circuits.py -- 10"
+    "circuit:build": "node --import tsx scripts/export-circuit.ts && python3 scripts/blender/circuit_textures.py && /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/blender/build_circuits.py -- 11"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261113.1",
@@ -38,6 +38,7 @@
     "@types/three": "^0.187.0",
     "@types/ws": "^8.18.2",
     "@vitest/browser-playwright": "^4.0.8",
+    "sharp": "0.35.5",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vite-plugin-singlefile": "^2.3.4",

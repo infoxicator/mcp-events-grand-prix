@@ -35,14 +35,15 @@ def build(cid):
   if emission:bs.inputs['Emission Color'].default_value=(*color,1);bs.inputs['Emission Strength'].default_value=emission
   if tex:
    p=OUT/(tex+'.png') if tex not in ('asphalt-color','grass-color') else ROOT/'src/race/assets'/(tex+'.jpg')
-   if tex=='formed-concrete':p=OUT/'formed-concrete.jpg'
+   if tex in ('formed-concrete','garage-backplate','resort-facade','hospitality-glass','desert-screen','desert-district'):p=OUT/(tex+'.jpg')
    node=m.node_tree.nodes.new('ShaderNodeTexImage');node.image=bpy.data.images.load(str(p),check_existing=True);m.node_tree.links.new(node.outputs['Color'],bs.inputs['Base Color'])
    if emission:m.node_tree.links.new(node.outputs['Color'],bs.inputs['Emission Color'])
    if alpha:m.node_tree.links.new(node.outputs['Alpha'],bs.inputs['Alpha']);m.surface_render_method='DITHERED'
   mats[name]=m;return name
- mat('Asphalt',(.19,.20,.21),.52 if night else .91,tex='asphalt-color');mat('Grass',(.23,.26,.15),tex='grass-color');mat('Gravel',(.62,.58,.49),tex='gravel');mat('White',(.76,.75,.68));mat('Red',(.46,.027,.022));mat('Green',(.10,.24,.15));mat('Steel',(.38,.42,.45),.48,.65);mat('Concrete',(.47,.48,.45),.86,tex='formed-concrete');mat('Dark',(.022,.027,.032));mat('Glass',(.10,.16,.20),.22,.45);mat('Foliage',(.3,.4,.2),tex='foliage',alpha=True);mat('Fence',(.5,.5,.5),tex='fence',alpha=True);mat('Crowd',(.5,.5,.5),tex='crowd',alpha=True);mat('Sign',(.6,.6,.6),tex='sign',emission=.25 if night else 0);mat('Windows',(.5,.4,.3),tex='windows',emission=.65);mat('Gold',(.85,.52,.19),.5,emission=2);mat('Ice',(.6,.8,1),.5,emission=4);mat('Pink',(.8,.04,.3),emission=2);mat('Rubber',(.1,.1,.1),tex='rubber',alpha=True);mat('Water',(.015,.045,.06),.18,.5);mat('Trunk',(.14,.10,.07));mat('Sphere',(.1,.5,.6),tex='sphere-art',emission=1)
+ mat('Asphalt',(.19,.20,.21),.52 if night else .91,tex='asphalt-color');mat('Grass',(.23,.26,.15),tex='grass-color');mat('Gravel',(.62,.58,.49),tex='gravel');mat('White',(.76,.75,.68));mat('Red',(.46,.027,.022));mat('Green',(.10,.24,.15));mat('Steel',(.38,.42,.45),.48,.65);mat('Concrete',(.47,.48,.45),.86,tex='formed-concrete');mat('Dark',(.022,.027,.032));mat('Glass',(.10,.16,.20),.22,.45);mat('Foliage',(.3,.4,.2),tex='foliage',alpha=True);mat('Fence',(.5,.5,.5),tex='fence',alpha=True);mat('Crowd',(.5,.5,.5),tex='crowd',alpha=True);mat('Sign',(.6,.6,.6),tex='sign',emission=.25 if night else 0);mat('Windows',(.5,.4,.3),tex='hospitality-glass',emission=.70);mat('Gold',(.85,.52,.19),.5,emission=2);mat('Ice',(.6,.8,1),.5,emission=4);mat('Pink',(.8,.04,.3),emission=2);mat('Rubber',(.1,.1,.1),tex='rubber',alpha=True);mat('Water',(.015,.045,.06),.18,.5);mat('Trunk',(.14,.10,.07));mat('Sphere',(.1,.5,.6),tex='desert-screen',emission=1)
  for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex='hornbeam',alpha=True)
  for i,c in enumerate([(.38,.025,.025),(.04,.08,.16),(.62,.60,.55),(.12,.15,.16)]):mat('Spectator'+str(i),c,.95)
+ mat('WorkshopBack',(.8,.8,.8),.85,tex='garage-backplate',emission=.38 if night else .12)
  mat('GarageInterior',(.105,.103,.097),.92)
  mat('GarageFloor',(.18,.18,.17),.69)
  mat('ServiceRed',(.27,.026,.029),.56,.16)
@@ -51,11 +52,14 @@ def build(cid):
  mat('Cabinet',(.11,.14,.15),.55,.23)
  mat('SignalLens',(.084,.012,.009),.28,.15)
  mat('Skin',(.43,.28,.19),.9)
+ mat('Hospitality',(.62,.68,.72),.31,.16,tex='hospitality-glass')
+ mat('Balustrade',(.49,.60,.62),.17,.12)
+ if not night:mat('ParkHorizon',(.68,.72,.65),tex='park-horizon',alpha=True)
  if night:
-  mat('CityGround',(.29,.31,.34),.92,tex='city-blocks',emission=.62)
+  mat('CityGround',(.29,.31,.34),.92,tex='desert-district',emission=.49)
   mat('DistantRidge',(.045,.048,.060),.94)
   mat('Travertine',(.62,.40,.21),.65,emission=.34)
-  mat('WarmWindows',(.8,.58,.32),.4,tex='warm-windows',emission=.55)
+  mat('WarmWindows',(.8,.58,.32),.4,tex='resort-facade',emission=.84)
   mat('CopperRoof',(.25,.17,.10),.38,.45)
   mat('Fountain',(.86,.75,.48),.26,emission=3)
 
@@ -69,7 +73,22 @@ def build(cid):
  def box(p,size,m,yaw=0):
   x,y,z=p;w,h,d=size;cs=math.cos(yaw);sn=math.sin(yaw)
   v=[(x+xx*cs+zz*sn,y+yy,z-xx*sn+zz*cs) for xx,yy,zz in [(-w/2,-h/2,-d/2),(w/2,-h/2,-d/2),(w/2,h/2,-d/2),(-w/2,h/2,-d/2),(-w/2,-h/2,d/2),(w/2,-h/2,d/2),(w/2,h/2,d/2),(-w/2,h/2,d/2)]]
-  for f in [(3,2,1,0),(4,5,6,7),(0,1,5,4),(7,6,2,3),(1,2,6,5),(4,7,3,0)]:face([v[i] for i in f],m,[(0,0),(w/100 if m in ('Windows','WarmWindows') else 1,0),(w/100 if m in ('Windows','WarmWindows') else 1,h/130 if m in ('Windows','WarmWindows') else 1),(0,h/130 if m in ('Windows','WarmWindows') else 1)])
+  for index,f in enumerate([(3,2,1,0),(4,5,6,7),(0,1,5,4),(7,6,2,3),(1,2,6,5),(4,7,3,0)]):
+   points=[v[i] for i in f]
+   if m in ('Windows','WarmWindows','Hospitality','StoreGlass'):
+    # Map by world height and facade length on each of the four walls. The
+    # lateral faces on narrow tower bays previously stretched a single window.
+    period_x,period_y=(39,23) if m=='WarmWindows' else (36,20.4)
+    span=d if index>=4 else w
+    shift=(round(x/12)*.293+round(z/12)*.137)%1
+    if index in (2,3):
+     face(points,'RoofSheet');continue
+    # Same vertical datum on all four walls; align sills around a corner.
+    along=([0,1,1,0,0,1,1,0] if index<2 else [0,0,0,0,1,1,1,1])
+    uv=[(shift+along[j]*span/period_x,(v[j][1]-y+h/2)/period_y) for j in f]
+   else:uv=None
+   face(points,m,uv)
+
  def rod(a,b,r,m,sides=5):
   nonlocal instance_triangles
   if m=='Trunk':
@@ -212,16 +231,26 @@ def build(cid):
  for i in range(20):
   d=-8-i*8;off=3 if i%2 else -3;strip(d,d+.12,off-1.1,off+1.1,'White',.05);strip(d-4,d,off-1.1,off-1,'White',.05)
  def inpit(d):return d>data['pitEntry']-8 or d<data['pitExit']+15
+ def edge(d):
+  if night:return sample(d)['width']+2
+  # Keep runoff and the main straight clear. The forest sections narrow.
+  width=16.
+  for corner in data['corners']:
+   delta=abs((d-corner['d']+L/2)%L-L/2)
+   radius=275 if corner['name']=='Parabolica' else 144
+   width=max(width,16+16*(.5+.5*math.cos(math.pi*min(1,delta/radius))))
+  finish=abs((d+155+L/2)%L-L/2)
+  return max(width,16+15*(1-min(1,max(0,(finish-255)/100))))
  for d in range(0,int(L),8):
   for side in [-1,1]:
    if side<0 and inpit(d):continue
-   off=side*(sample(d)['width']+2 if night else 31);a=pt(d,off);b=pt(d+8,off);yaw=math.atan2(b[0]-a[0],b[2]-a[2]);mid=tuple((a[i]+b[i])/2 for i in range(3));length=math.dist(a,b)
+   off=side*edge(d);a=pt(d,off);b=pt(d+8,side*edge(d+8));yaw=math.atan2(b[0]-a[0],b[2]-a[2]);mid=tuple((a[i]+b[i])/2 for i in range(3));length=math.dist(a,b)
    # Cross-sections run between the actual endpoint frames so changing grade
    # and curvature remain continuous. Split joints cast a narrow contact shadow.
    def barrier_section(start, end, levels, material):
     for (h0,x0),(h1,x1) in zip(levels,levels[1:]):
-     face([pt(start,off-side*x0,h0),pt(end,off-side*x0,h0),
-           pt(end,off-side*x1,h1),pt(start,off-side*x1,h1)],material,
+     face([pt(start,side*edge(start)-side*x0,h0),pt(end,side*edge(end)-side*x0,h0),
+           pt(end,side*edge(end)-side*x1,h1),pt(start,side*edge(start)-side*x1,h1)],material,
           [(start/4,h0),(end/4,h0),(end/4,h1),(start/4,h1)])
    if night:
     profile=[(.02,.34),(.19,.34),(.53,.17),(.98,.12),(1.05,.085),(1.05,-.12),(.03,-.30)]
@@ -233,13 +262,13 @@ def build(cid):
     for h in [.17,.48,.79]:
      levels=[(h+dy,x) for dy,x in [(0,.12),(.044,.20),(.09,.205),(.154,.12),(.218,.205),(.265,.20),(.31,.12)]]
      barrier_section(d,d+8,levels,'Steel')
-    for station in [d,d+4]:atbox(station,off+side*.11,.54,(.12,1.08,.15),'Steel')
+    for station in [d,d+4]:atbox(station,side*(edge(station)+.11),.54,(.12,1.08,.15),'Steel')
    rod(a,(a[0],a[1]+4,a[2]),.045,'Steel');rod((a[0],a[1]+4,a[2]),pt(d,off-side*.5,4.6),.035,'Steel');
-   for hh in [1.7,2.6,3.4]:rod(pt(d,off,hh),pt(d+8,off,hh),.009,'Steel',4)
+   for hh in [1.7,2.6,3.4]:rod(pt(d,off,hh),pt(d+8,side*edge(d+8),hh),.009,'Steel',4)
    rod((a[0],a[1]+3.9,a[2]),(b[0],b[1]+3.9,b[2]),.026,'Steel')
    face([(a[0],a[1]+1,a[2]),(b[0],b[1]+1,b[2]),(b[0],b[1]+3.9,b[2]),(a[0],a[1]+3.9,a[2])],'Fence',[(0,0),(8,0),(8,3),(0,3)])
    if night or d%40==0:
-    toward=-side*.35;aa=pt(d+.08,off+toward,.22);bb=pt(d+7.92,off+toward,.22);face([aa,bb,(bb[0],bb[1]+.75,bb[2]),(aa[0],aa[1]+.75,aa[2])],'Sign',[(1,0),(0,0),(0,1),(1,1)] if side>0 else None)
+    toward=-side*.35;aa=pt(d+.08,off+toward,.22);bb=pt(d+7.92,side*edge(d+7.92)+toward,.22);face([aa,bb,(bb[0],bb[1]+.75,bb[2]),(aa[0],aa[1]+.75,aa[2])],'Sign',[(1,0),(0,0),(0,1),(1,1)] if side>0 else None)
  strip(L-405,L+45,-26,-8,'Asphalt',.026)
  # Separate protected pit wall, keeping entry/exit gaps open.
  for d in range(int(L)-390,int(L)-20,8):atbox(d,-12,.65,(.45,1.3,8),'Concrete')
@@ -267,6 +296,8 @@ def build(cid):
    atbox(d,-12.43,2.72,(2.0,.14,7.63),'Red' if i%4 else 'Dark')
    atbox(d,-11.47,2.62,(.07,.18,7.65),'White')
   for j in [-9,0,9]:
+   uv=[(0,0),(1,0),(1,1),(0,1)] if (i+j)%2 else [(1,0),(0,0),(0,1),(1,1)]
+   face([pt(d+j-4.02,-33.82,.16),pt(d+j+4.02,-33.82,.16),pt(d+j+4.02,-33.82,3.99),pt(d+j-4.02,-33.82,3.99)],'WorkshopBack',uv)
    atbox(d+j,-33.96,2.1,(.09,3.8,8.4),'Dark')
    atbox(d+j+4.34,-29.5,2.14,(9,4.28,.28),'GarageInterior')
    atbox(d+j-2.15,-30.6,.76,(.92,1.45,2.2),'Cabinet')
@@ -290,7 +321,7 @@ def build(cid):
    for slat in range(5):atbox(d+j,-24.73,3.08+slat*.16,(.18,.115,7.12),'Steel')
    atbox(d+j,-24.65,.12,(.5,.16,7.2),'Concrete')
    for k in [-4.2,4.2]:atbox(d+j+k,-24.9,2.2,(.25,4.4,.22),'White')
-  atbox(d,-24.9,5.8,(.1,2.1,27),'Glass')
+  atbox(d,-24.9,5.8,(.1,2.1,27),'Hospitality')
   for j in range(-13,14,3):atbox(d+j,-24.75,5.8,(.17,2.2,.1),'Steel')
   for j in [-11,-4,3,10]:
    rod(pt(d+j,-24.8,5.1),pt(d+j,-22.95,6.94),.07,'Steel')
@@ -298,6 +329,25 @@ def build(cid):
   atbox(d,-23.9,7.25,(2.1,.15,28),'White')
   for j in range(-13,14,4):atbox(d+j,-22.9,7.8,(.06,1.1,.06),'Steel')
   atbox(d,-22.9,8.35,(.06,.06,28),'Steel')
+  if not night:
+   # Two occupied lounge levels over the working garage, with continuous
+   # cantilevered terraces and vertical stair cores at the module joints.
+   for deck in range(2):
+    h=7.7+deck*3.35
+    atbox(d,-33.0,h+1.47,(12.4,2.94,27.95),'Hospitality')
+    atbox(d,-26.23,h,(4.0,.26,27.95),'Concrete')
+    atbox(d,-24.22,h+.72,(.08,1.0,27.85),'Balustrade')
+    for station in range(-12,14,4):
+     atbox(d+station,-26.65,h+1.53,(.22,3.12,.16),'White')
+     atbox(d+station,-24.18,h+.68,(.085,1.16,.085),'Steel')
+    atbox(d,-24.20,h+1.30,(.073,.075,27.96),'Steel')
+    for jj in range(-11,13,3):
+     if (i+jj)%4: spectator(pt(d+jj,-25.47,h+.05),1.0,math.atan2(sample(d)['tx'],sample(d)['tz'])-math.pi/2,'Spectator'+str((i+jj)%4),(i+jj)%3)
+   atbox(d,-32.7,14.52,(17.2,.30,28),'White')
+   atbox(d,-24.2,14.48,(.16,.49,28),'RoofSheet')
+   if i%4==2:
+    atbox(d+9,-34,8.0,(10.2,15.9,4.5),'Concrete')
+    for yy in [4.0,7.5,11.0,14.5]:atbox(d+9,-28.78,yy,(.08,.70,3.15),'Glass')
   if night:atbox(d,-24.6,10.7,(.15,.12,27),'Pink')
   for off in [-20,-17]:strip(d-10,d+10,off,off+.1,'White',.05)
  if not night:
@@ -381,8 +431,8 @@ def build(cid):
  if not night:
   # Layered, perforated oak/hornbeam branchlet fans and exposed branch structure.
   for i in range(5100):
-   d=random.random()*L;off=random.choice([-1,1])*(43+random.random()**1.6*165);p=pt(d,off);x,y,z=p;y=ground(x,z)-2;p=(x,y,z)
-   if min((x-q[0])**2+(z-q[1])**2 for q in coarse)<38**2:continue
+   d=random.random()*L;off=random.choice([-1,1])*(edge(d)+4+random.random()**1.6*175);p=pt(d,off);x,y,z=p;y=(height(d)-.07 if abs(off)<38 else ground(x,z)-2);p=(x,y,z)
+   if min((x-q[0])**2+(z-q[1])**2 for q in coarse)<(edge(d)+1)**2:continue
    if (d>L-460 or d<150) and abs(off)<90:continue
    if min((x-pt(v,side)[0])**2+(z-pt(v,side)[2])**2 for v in range(int(L)-420,int(L)+100,35) for side in [-38,40])<28**2:continue
    species=(int(d/170)+i%7)%4
@@ -397,6 +447,17 @@ def build(cid):
     rod((x,y+h*.38,z),(cx,cy,cz),.075,'Trunk')
     blob((cx,cy,cz),(crown*random.uniform(.65,1.12),h*[.24,.28,.28,.14][species],crown*random.uniform(.65,1.05)),'Canopy'+str(species),8,4,i+k)
 
+  # Distant oak stands sit beyond the individual trees. Map continuous
+  # canopy silhouettes along shallow arcs so the nearest layers retain parallax.
+  for side in [-1,1]:
+   for d in range(170,int(L)-485,20):
+    offsets=[side*(108+12*math.sin(st/127)+8*math.sin(st/72)) for st in (d,d+20)]
+    endpoints=[pt(st,off) for st,off in zip((d,d+20),offsets)]
+    if any(min((x-q[0])**2+(z-q[1])**2 for q in coarse)<60**2 for x,_,z in endpoints):continue
+    pts=[]
+    for st,(x,_,z) in zip((d,d+20),endpoints):
+     base=ground(x,z)-4;pts.append(((x,base,z),(x,base+23+3*math.sin(st/83),z)))
+    face([pts[0][0],pts[1][0],pts[1][1],pts[0][1]],'ParkHorizon',[(d/74,0),((d+20)/74,0),((d+20)/74,1),(d/74,1)])
   # A second vegetation stratum breaks the bare-trunk horizon; no billboard foliage.
   # Reuse crown prototypes so shrubs and saplings stay in the existing instanced batches.
   for i in range(1800):
@@ -432,6 +493,43 @@ def build(cid):
     h=85+layer*85+63*math.sin(3*a+layer)+47*math.cos(7*a)+22*math.sin(19*a+.9*layer)
     return (r*math.cos(a),-8 if base else h,r*math.sin(a))
    for j in range(128):face([ridge(j,True),ridge(j+1,True),ridge(j+1,False),ridge(j,False)],'DistantRidge')
+  # Street-level scale: parallel service lanes, stone pavements, safe
+  # pedestrian crossings and lit resort porte-cocheres alongside the Strip.
+  for offside in [-1,1]:
+   for d0 in range(3150,4920,120):
+    strip(d0,d0+118,offside*11.6,offside*19.4,'Concrete',.016,step=10)
+    strip(d0,d0+118,offside*19.5,offside*29.2,'Asphalt',.018,step=10)
+    for station in range(0,114,13):strip(d0+station,d0+station+4.6,offside*24.05,offside*24.19,'White',.035,step=6)
+    for j in range(6):strip(d0+109+j*1.1,d0+109+j*1.1+.44,offside*19.72,offside*28.98,'White',.041,step=2)
+    for j in [16,48,80]:
+     atbox(d0+j,offside*15.4,.38,(1.5,.72,5.5),'Travertine')
+     atbox(d0+j,offside*15.4,.83,(1.25,.29,5.15),'Green')
+    if (d0//120+offside)%3==0:
+     atbox(d0+51,offside*35.8,4.4,(10.6,.47,22),'CopperRoof')
+     atbox(d0+51,offside*30.42,4.32,(.12,.17,22),'Gold')
+     for j in [-8.6,8.6]:rod(pt(d0+51+j,offside*31.3),pt(d0+51+j,offside*31.3,4.22),.31,'Travertine',8)
+  # A continuous pedestrian frontage frames the road under the resort towers.
+  # Keep the lake's side open beside its surveyed shoreline.
+  mat('Marquee',(.9,.85,.72),.52,tex='boulevard-marquees',emission=1.8)
+  mat('StoreGlass',(.76,.72,.66),.38,.12,tex='hospitality-glass',emission=.92)
+  frontage=random.Random(947)
+  for side in [-1,1]:
+   for block in range(3040,5200,62):
+    if side>0 and 4460<block<4860:continue
+    d=block+frontage.uniform(-3,3);length=frontage.uniform(37,56);h=frontage.choice([6.6,8.5,10.6,13.2])
+    inset=frontage.uniform(32,39);driveway=side*(inset-.12);roof=side*(inset+8)
+    atbox(d,roof,h*.5,(16,h,length),'StoreGlass')
+    atbox(d,roof,h+.24,(18.2,.47,length+1.3),'CopperRoof')
+    for offset in [-length*.44,0,length*.44]:
+     atbox(d+offset,driveway,h*.5,(.7,h,1.3),'Travertine')
+    atbox(d,side*(inset-2.3),3.62,(5.9,.37,length+1.4),'CopperRoof')
+    atbox(d,side*(inset-5.26),3.68,(.16,.24,length+1.4),'Gold' if block%3 else 'Ice')
+    row=(block//62+(side+1))%4
+    a=d-length*.39;b=d+length*.39;off=side*(inset-.42)
+    u=(row+1)/4;v=row/4
+    points=[pt(a,off,h-2.4),pt(b,off,h-2.4),pt(b,off,h-.36),pt(a,off,h-.36)]
+    face(points,'Marquee',[(0 if side<0 else 1,v),(1 if side<0 else 0,v),(1 if side<0 else 0,u),(0 if side<0 else 1,u)])
+    for vent in [-.27,.29]:atbox(d+vent*length,roof,h+1.0,(3.8,1.25,4.3),'Cabinet')
   origin=data['origin'];lat0=origin[1]*math.pi/180
   def project(lon,lat):return ((lon-origin[0])*111320*math.cos(lat0),-(lat-origin[1])*111320)
   def hotel(lon,lat,w,h,dep,name):
@@ -522,7 +620,32 @@ def build(cid):
    if i%5==0:
     box((p[0]+w/2+.25,p[1]+h*.6,p[2]),(.5,h*.6,1),accent)
     box((p[0],p[1]+h*.65,p[2]+dep/2+.3),(w*.7,8,.5),'Sign')
+  # An internally lit Montgolfier-style boulevard marquee, including its
+  # tapered lower skirt, gold meridians and a suspended basket.
+  x,z=project(-115.17173,36.11211);g=ground(x,z)
+  mat('CobaltGlass',(.028,.082,.54),.29,emission=1.22)
+  mat('RubyGlass',(.68,.031,.055),.35,emission=.85)
+  rows=[(18,3.8),(23,5.2),(28,7.2),(34,11.8),(40,14.0),(46,14.4),(52,12.8),(57,8.4),(60,3.3),(61,0.35)]
+  def balloon(k,h,r):
+   a=k*math.tau/48;return (x+r*math.cos(a),g+h,z+r*math.sin(a))
+  for row in range(len(rows)-1):
+   for k in range(48):
+    h,r=rows[row];hh,rr=rows[row+1]
+    material='RubyGlass' if (row in (0,7) or (k%12==0 and row in (2,3,4))) else 'CobaltGlass'
+    face([balloon(k,h,r),balloon(k+1,h,r),balloon(k+1,hh,rr),balloon(k,hh,rr)],material)
+    if k%4==0:rod(balloon(k,h,r+.09),balloon(k,hh,rr+.09),.13,'Gold',5)
+    if row in (1,3,6):rod(balloon(k,h,r+.14),balloon(k+1,h,r+.14),.20,'Gold',5)
+  box((x,g+13,z),(8.5,5.8,8.5),'Travertine')
+  for side in [-1,1]:
+   for dz in [-3.4,3.4]:rod((x+side*3.4,g+5,z+dz),(x+side*3.4,g+18,z+dz),.25,'Gold',6)
+  box((x,g+5.3,z),(12.3,2.8,12.3),'RubyGlass')
   x,z=project(-115.1745,36.1121);g=ground(x,z)
+  # Tiered stone promenade at the water line, with a continuous illuminated coping.
+  for i in range(96):
+   a=i*math.tau/96;b=(i+1)*math.tau/96
+   def shore(angle,rise,h):return (x+(95+rise)*math.cos(angle),g+h,z+(135+rise)*math.sin(angle))
+   for inner,outer,h0,h1,material in [(0,1.55,.11,.7,'Travertine'),(1.55,2.1,.71,.71,'Gold'),(2.1,8.5,.7,.75,'Concrete'),(8.5,9,.75,.94,'Travertine')]:
+    face([shore(a,inner,h0),shore(b,inner,h0),shore(b,outer,h1),shore(a,outer,h1)],material)
   for i in range(80):
    a=i*math.tau/80;b=(i+1)*math.tau/80;face([(x,g+.1,z),(x+95*math.cos(a),g+.1,z+135*math.sin(a)),(x+95*math.cos(b),g+.1,z+135*math.sin(b))],'Water');h=4+math.sin(a*3)**2*14;rod((x+65*math.cos(a),g,z+95*math.sin(a)),(x+65*math.cos(a),g+h,z+95*math.sin(a)),.13,'Gold')
   # Lit rings and parabolic fountain jets, tapered into the water rather than gold poles.
@@ -532,7 +655,7 @@ def build(cid):
     points=[]
     for j in range(7):
      t=j/6;r=rad+14*t;points.append((x+r*math.cos(a),g+.3+h*4*t*(1-t),z+r*1.4*math.sin(a)))
-    for j in range(6):rod(points[j],points[j+1],.16*(1-j*.10),'Fountain',5)
+    for j in range(6):rod(points[j],points[j+1],.33*(1-j*.09),'Fountain',5)
     b=(i+1)*math.tau/64;rod((x+rad*math.cos(a),g+.2,z+rad*1.4*math.sin(a)),(x+rad*math.cos(b),g+.2,z+rad*1.4*math.sin(b)),.23,'Fountain',5)
   x,z=project(-115.172,36.1125);g=ground(x,z)
   for level in range(10):
@@ -540,6 +663,25 @@ def build(cid):
    for sx in [-1,1]:
     for sz in [-1,1]:rod((x+sx*a,y,z+sz*a),(x+sx*b,y+12,z+sz*b),.4,'Gold');rod((x+sx*a,y,z+sz*a),(x-sx*b,y+12,z+sz*b),.1,'Gold')
    if level in [3,6]:box((x,y,z),(a*2+3,1,a*2+3),'Gold')
+  # Wrought lattice and four base arches, visible in the broadcast silhouette.
+  for k in range(30):
+   y0=k*4;y1=y0+4;w0=25*(1-y0/132)**1.6;w1=25*(1-y1/132)**1.6
+   for side in [-1,1]:
+    for axes in [0,1]:
+     def tp(v,w,y):return (x+v if axes==0 else x+side*w,g+y,z+side*w if axes==0 else z+v)
+     rod(tp(-w0,w0,y0),tp(w0,w0,y0),.16 if k<14 else .12,'Gold',5)
+     for edge in [-1,1]:
+      rod(tp(edge*w0,w0,y0),tp(edge*w1*.68,w1,y1),.16,'Travertine',5)
+      rod(tp(edge*w0*.68,w0,y0),tp(edge*w1,w1,y1),.12,'Gold',5)
+  for side in [-1,1]:
+   for axes in [0,1]:
+    def archpoint(t,r):
+     v=r*math.cos(t);yy=3+r*.77*math.sin(t);w=24-yy*.25
+     return (x+v if axes==0 else x+side*w,g+yy,z+side*w if axes==0 else z+v)
+    for j in range(20):
+     a=j*math.pi/20;b=(j+1)*math.pi/20
+     for radius in [19,20.8]:rod(archpoint(a,radius),archpoint(b,radius),.22,'Gold',7)
+     rod(archpoint(a,19),archpoint(b,20.8),.13,'Travertine',5)
   rod((x,g+120,z),(x,g+165,z),.3,'Gold')
   x,z=project(-115.1681,36.1176);g=ground(x,z)
   for i in range(100):
@@ -621,6 +763,9 @@ def build(cid):
  if not night:
   for i in range(4):
    name='Canopy'+str(i);o=bpy.data.objects.new('LOD_'+name,leaf_sprays(name,16,i));bpy.context.collection.objects.link(o)
+ if not night:
+  from canopy_light import bake_canopy_light
+  bake_canopy_light(OUT,samples,height)
  # Export per-material spatial chunks; GLB geometries, including all terrain, are Blender-authored.
  triangles=instance_triangles
  for (tile,m),(verts,faces,uvs) in batches.items():

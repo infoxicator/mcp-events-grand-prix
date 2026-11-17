@@ -60,8 +60,8 @@ export function createCar(team:'a'|'b'){
  function setFinish(next:Finish){finish=next;wireLines.forEach(o=>o.visible=next==='wireframe');for(const [mesh,original] of originals)mesh.material=next==='colour'?original:next==='clay'?clay:wire;}
  const loaded=assets().then(models=>{if(dead)return;models.forEach((template,index)=>{
   const model=cloneSkeleton(template) as T.Group;const materials=new Map<T.Material,T.Material>();
-  model.traverse(o=>{if(o instanceof T.Mesh){o.geometry=o.geometry.clone();const make=(original:T.MeshStandardMaterial)=>{const wheelRubber=original.name==='Rubber'&&!!o.parent?.name.match(/^(Front|Rear)[LR]$/);let m=wheelRubber?undefined:materials.get(original);if(!m){const p=new T.MeshPhysicalMaterial({color:original.color,vertexColors:original.vertexColors,roughness:original.roughness,metalness:original.metalness,map:original.map,transparent:original.transparent,opacity:original.opacity});p.name=original.name;
-   if(p.name==='Livery'){p.color.set(team==='a'?'#bd071b':'#08a59b');p.roughness=.29;p.metalness=.10;p.clearcoat=.62;p.clearcoatRoughness=.14;p.specularIntensity=.85;p.roughnessMap=grainMap;p.bumpMap=grainMap;p.bumpScale=.000018;}
+  model.traverse(o=>{if(o instanceof T.Mesh){o.geometry=o.geometry.clone();const make=(original:T.MeshStandardMaterial)=>{const wheelRubber=original.name==='SlickRubber';let m=wheelRubber?undefined:materials.get(original);if(!m){const p=new T.MeshPhysicalMaterial({color:original.color,vertexColors:original.vertexColors,roughness:original.roughness,metalness:original.metalness,map:original.map,transparent:original.transparent,opacity:original.opacity});p.name=original.name;
+   if(p.name==='Livery'){p.color.set(team==='a'?'#cf0617':'#008f8d');p.roughness=.29;p.metalness=.10;p.clearcoat=.62;p.clearcoatRoughness=.14;p.specularIntensity=.85;p.roughnessMap=grainMap;p.bumpMap=grainMap;p.bumpScale=.000018;}
    if(p.name==='DeepLivery'){p.color.set(team==='a'?'#640c28':'#073749');p.clearcoat=.52;p.clearcoatRoughness=.20;}
    if(p.name==='CompoundInk'){sidewallInks.push(p);p.roughness=.81;}
    if(p.name==='Ivory'){p.roughness=.36;p.clearcoat=.42;p.clearcoatRoughness=.20;}
@@ -106,9 +106,9 @@ export function createCar(team:'a'|'b'){
    }
    if(p.name==='HelmetPaint'){p.color.set(team==='a'?'#e9ed24':'#e5edf0');p.roughness=.30;p.clearcoat=.5;p.clearcoatRoughness=.19;}
    if(p.name==='HelmetVisor'){p.roughness=.13;p.metalness=.65;p.clearcoat=.8;p.envMapIntensity=1.2;}
-   if(p.name==='Rubber'){p.color.set('#17181a');p.roughness=.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
-   if(p.name==='Rubber'&&o.parent?.name.match(/^(Front|Rear)[LR]$/)){
-    const u={spin:{value:0},load:{value:.008},side:o.parent.name.endsWith('L')?-1:1,front:o.parent.name.startsWith('Front')};tyreUniforms.push(u);
+   if(p.name==='Rubber'||wheelRubber){p.color.set(p.map?'#ffffff':'#17181a');p.roughness=.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
+   if(wheelRubber){
+    const u={spin:{value:0},load:{value:.008},side:o.parent!.name.endsWith('L')?-1:1,front:o.parent!.name.startsWith('Front')};tyreUniforms.push(u);
     p.onBeforeCompile=shader=>{// Sidewall mould lines and circumferential tread scrub are anchored to
      // tyre space, so their finish rotates with the wheel and survives LOD changes.
      shader.vertexShader=shader.vertexShader.replace('#include <common>',
