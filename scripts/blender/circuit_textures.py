@@ -92,3 +92,26 @@ for i in range(850):
  x=rng.randrange(512);y=rng.randrange(256);rad=rng.choices([.6,1.1,1.8],weights=[8,3,1])[0]
  d.ellipse((x-rad,y-rad,x+rad,y+rad),fill=rng.randint(112,148))
 base.convert('RGB').save(out/'formed-concrete.jpg',quality=78,optimize=True)
+
+# City blocks at aerial scale, including service alleys, roof plant, parking
+# lots and lit intersections. The all-night Strip has a luminous horizon.
+city_rng=random.Random(503)
+im=Image.new('RGB',(512,512),(29,32,38));d=ImageDraw.Draw(im)
+for j in range(8):
+ for i in range(8):
+  x=i*64;y=j*64
+  d.rectangle((x+5,y+5,x+58,y+58),fill=(23,26,30))
+  for k in range(city_rng.randrange(3,7)):
+   xx=x+city_rng.randrange(7,39);yy=y+city_rng.randrange(7,41);ww=city_rng.randrange(7,21);hh=city_rng.randrange(7,18)
+   shade=city_rng.randrange(33,60)
+   d.rectangle((xx,yy,xx+ww,yy+hh),fill=(shade,shade-2,shade-3))
+   d.line((xx,yy,xx+ww,yy),fill=(shade+15,shade+10,shade+1))
+   d.rectangle((xx+2,yy+2,xx+4,yy+4),fill=(24,26,29))
+  for spot in range(6):
+   d.line((x+7+spot*6,y+52,x+7+spot*6,y+57),fill=(70,66,57),width=1)
+  for xx,yy in [(x+1,y+1),(x+32,y+1),(x+1,y+31)]:
+   d.ellipse((xx-2,yy-2,xx+2,yy+2),fill=(77,60,46));d.point((xx,yy),fill=(239,187,111))
+for q in [128,384]:
+ d.line((0,q,512,q),fill=(61,53,47),width=5)
+ for x in range(0,512,12):d.line((x,q,x+4,q),fill=(118,104,79))
+save(im,'city-blocks')

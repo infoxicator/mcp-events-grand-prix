@@ -66,9 +66,16 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
         diffuseColor.rgb*=.86+.20*binder+.08*grit;
         roughnessFactor=clamp(roughnessFactor+.09*(binder-.5),.47,1.);
        `);
+      if(track.night)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+       vec2 metres=pavementUV*3.;
+       float lane=pow((metres.y-45.*floor(metres.y/45.+.5))/15.,2.);
+       float axial=exp(-lane);
+       float lateral=exp(-pow((abs(metres.x)-7.5)/10.,2.));
+       totalEmissiveRadiance+=diffuseColor.rgb*vec3(.45,.54,.68)*axial*lateral;
+      `);
      };
     }
-    if(m.name.startsWith('Canopy')){m.color.set(['#6a7947','#708447','#526e43','#808448'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.035;m.roughness=1;m.transparent=false;m.alphaTest=.43;m.alphaToCoverage=true;m.depthWrite=true;if(m.map)m.map.repeat.set(1,1);}
+    if(m.name.startsWith('Canopy')){m.color.set(['#a7ad94','#98ab8a','#96a49a','#b1ac8b'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.009;m.roughness=1;m.transparent=false;m.alphaTest=.33;m.alphaToCoverage=true;m.depthWrite=true;if(m.map)m.map.repeat.set(1,1);}
     if(m.name==='Windows'&&m.map){m.map.repeat.set(2.25,1.25);m.color.set('#85888d');m.emissiveIntensity=.55;}
     if(m.name==='WarmWindows'&&m.map){m.map.repeat.set(1,1);m.color.set('#ffdfae');m.emissiveIntensity=.65;}
     if(m.name==='Travertine'){m.emissive.set('#c28b43');m.emissiveIntensity=.30;m.envMapIntensity=.8;}

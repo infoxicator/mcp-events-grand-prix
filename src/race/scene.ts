@@ -21,13 +21,28 @@ export interface RenderCar{distance:number;offset:number;speed:number;steering?:
 export interface RenderRace{cars:Record<'a'|'b',RenderCar>;time:number;phase:string}
 export function createScene(container:HTMLElement,track:Track=getTrack()){
  const {pointAt,tangentAt}=track,night=track.night;
- const scene=new T.Scene();scene.background=new T.Color(night?'#02040d':'#c3ccd2');scene.fog=new T.FogExp2(night?'#02040d':'#c3ccd2',night?.00018:.00026);
+ const scene=new T.Scene();scene.background=new T.Color(night?'#02040d':'#c3ccd2');scene.fog=new T.FogExp2(night?'#02040d':'#c3ccd2',night?.00024:.00083);
  const renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.92;renderer.info.autoReset=false;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
  container.append(renderer.domElement);renderer.domElement.setAttribute('aria-label',`Live 3D ${track.name} ${night?'night ':''}circuit`);
  const camera=new T.PerspectiveCamera(45,1,.06,5000),sun=new T.DirectionalLight(night?'#c9dfff':'#fff0d8',night?1.25:2.7);sun.position.set(-80,120,-50);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-65;sun.shadow.camera.right=65;sun.shadow.camera.top=65;sun.shadow.camera.bottom=-65;sun.shadow.camera.near=1;sun.shadow.camera.far=350;sun.shadow.normalBias=.025;sun.shadow.bias=-.00005;
  scene.add(sun,sun.target,new T.HemisphereLight(night?'#8a9fd0':'#dce6f0',night?'#101323':'#504c3e',night?.5:.65));
  const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();let environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=night?.35:.45;room.dispose();let disposed=false;
  if(!night)assetBytes(daylightURL).then(b=>new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()).then(bytes=>{const hdr=new HDRLoader().parse(bytes),t=new T.DataTexture(hdr.data,hdr.width,hdr.height,T.RGBAFormat,hdr.type);t.magFilter=T.LinearFilter;t.minFilter=T.LinearFilter;t.needsUpdate=true;t.flipY=true;if(disposed){t.dispose();return;}t.mapping=T.EquirectangularReflectionMapping;scene.background=t;scene.backgroundIntensity=.8;scene.environment=pmrem.fromEquirectangular(t).texture;environment.dispose();scene.environmentIntensity=.65;scene.backgroundRotation.y=1.3;scene.environmentRotation.y=1.3;});
+ if(night){
+  // Equirectangular city sky. Warm scattered light stays near the skyline.
+  const sky=document.createElement('canvas');sky.width=1024;sky.height=256;
+  const ctx=sky.getContext('2d')!;const pixels=ctx.createImageData(sky.width,sky.height);
+  for(let y=0;y<sky.height;y++)for(let x=0;x<sky.width;x++){
+   const elev=(.5-y/sky.height)*Math.PI,az=x/sky.width*Math.PI*2;
+   const haze=Math.exp(-Math.max(0,elev)*6.8),stripGlow=.60+.40*Math.cos(az-1.4)**4;
+   const index=(y*sky.width+x)*4;
+   pixels.data[index]=10+37*haze*stripGlow;pixels.data[index+1]=16+29*haze*stripGlow;
+   pixels.data[index+2]=31+21*haze;pixels.data[index+3]=255;
+  }
+  ctx.putImageData(pixels,0,0);const skyMap=new T.CanvasTexture(sky);
+  skyMap.colorSpace=T.SRGBColorSpace;skyMap.mapping=T.EquirectangularReflectionMapping;
+  scene.background=skyMap;scene.fog=new T.FogExp2('#363741',.00034);
+ }
  const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  const circuit=loadCircuit(scene,track,anisotropy),vegas=night?circuit:null;
  const sparks=night?createSparks(scene,track,circuit.heightAt):null;
@@ -55,11 +70,12 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   const c=race.cars[focus],p=carPosition(c),elapsed=now/1000;
   // Resolve the shadow of fingers wrapped around the rim. Keep the larger
   // shadow footprint for external views of the field and trackside scenery.
-  const extent=onboard||mode==='detail'?22:65;
+  const extent=mode.startsWith('cockpit')?8:onboard||mode==='detail'?22:65;
   if(sun.shadow.camera.right!==extent){
    Object.assign(sun.shadow.camera,{left:-extent,right:extent,top:extent,bottom:-extent});
    sun.shadow.camera.updateProjectionMatrix();
-   sun.shadow.normalBias=extent===22?.003:.025;
+   sun.shadow.normalBias=extent===8?.0009:extent===22?.003:.025;
+   sun.shadow.radius=extent===8?2:1;
   }
   circuit.update(race.time,p);sparks?.update(race);lights.forEach((light,i)=>{const d=Math.floor(c.distance/45)*45+(i<2?0:45),q=pointAt(d,i%2?7.5:-7.5);light.position.set(q.x,circuit.heightAt(d)+12.2,q.z);});
   sun.position.set(p.x-80,p.y+120,p.z-50);sun.target.position.copy(p);

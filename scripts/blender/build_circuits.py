@@ -36,12 +36,12 @@ def build(cid):
   if tex:
    p=OUT/(tex+'.png') if tex not in ('asphalt-color','grass-color') else ROOT/'src/race/assets'/(tex+'.jpg')
    if tex=='formed-concrete':p=OUT/'formed-concrete.jpg'
-   node=m.node_tree.nodes.new('ShaderNodeTexImage');node.image=bpy.data.images.load(str(p));m.node_tree.links.new(node.outputs['Color'],bs.inputs['Base Color'])
+   node=m.node_tree.nodes.new('ShaderNodeTexImage');node.image=bpy.data.images.load(str(p),check_existing=True);m.node_tree.links.new(node.outputs['Color'],bs.inputs['Base Color'])
    if emission:m.node_tree.links.new(node.outputs['Color'],bs.inputs['Emission Color'])
    if alpha:m.node_tree.links.new(node.outputs['Alpha'],bs.inputs['Alpha']);m.surface_render_method='DITHERED'
   mats[name]=m;return name
  mat('Asphalt',(.19,.20,.21),.52 if night else .91,tex='asphalt-color');mat('Grass',(.23,.26,.15),tex='grass-color');mat('Gravel',(.62,.58,.49),tex='gravel');mat('White',(.76,.75,.68));mat('Red',(.46,.027,.022));mat('Green',(.10,.24,.15));mat('Steel',(.38,.42,.45),.48,.65);mat('Concrete',(.47,.48,.45),.86,tex='formed-concrete');mat('Dark',(.022,.027,.032));mat('Glass',(.10,.16,.20),.22,.45);mat('Foliage',(.3,.4,.2),tex='foliage',alpha=True);mat('Fence',(.5,.5,.5),tex='fence',alpha=True);mat('Crowd',(.5,.5,.5),tex='crowd',alpha=True);mat('Sign',(.6,.6,.6),tex='sign',emission=.25 if night else 0);mat('Windows',(.5,.4,.3),tex='windows',emission=.65);mat('Gold',(.85,.52,.19),.5,emission=2);mat('Ice',(.6,.8,1),.5,emission=4);mat('Pink',(.8,.04,.3),emission=2);mat('Rubber',(.1,.1,.1),tex='rubber',alpha=True);mat('Water',(.015,.045,.06),.18,.5);mat('Trunk',(.14,.10,.07));mat('Sphere',(.1,.5,.6),tex='sphere-art',emission=1)
- for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex='canopy',alpha=True)
+ for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex='hornbeam',alpha=True)
  for i,c in enumerate([(.38,.025,.025),(.04,.08,.16),(.62,.60,.55),(.12,.15,.16)]):mat('Spectator'+str(i),c,.95)
  mat('GarageInterior',(.105,.103,.097),.92)
  mat('GarageFloor',(.18,.18,.17),.69)
@@ -52,6 +52,8 @@ def build(cid):
  mat('SignalLens',(.084,.012,.009),.28,.15)
  mat('Skin',(.43,.28,.19),.9)
  if night:
+  mat('CityGround',(.29,.31,.34),.92,tex='city-blocks',emission=.62)
+  mat('DistantRidge',(.045,.048,.060),.94)
   mat('Travertine',(.62,.40,.21),.65,emission=.34)
   mat('WarmWindows',(.8,.58,.32),.4,tex='warm-windows',emission=.55)
   mat('CopperRoof',(.25,.17,.10),.38,.45)
@@ -93,7 +95,7 @@ def build(cid):
    normal=Vector((math.cos(a)*rad,math.sin(a)*rad,zz*.6)).normalized()
    u=normal.cross(Vector((0,0,1)))
    if u.length<.01:u=Vector((1,0,0))
-   u.normalize();v=normal.cross(u).normalized();size=rng.uniform(.48,.67) if count>=24 else rng.uniform(.65,.81)
+   u.normalize();v=normal.cross(u).normalized();size=rng.uniform(.62,.90) if count>=24 else rng.uniform(.78,1.05)
    start=len(vv)
    vv.extend([tuple(c+u*x*size+v*y*size) for x,y in [(-1,-1),(1,-1),(1,1),(-1,1)] ]+[tuple(c+normal*.13)])
    uvs.extend([(0,0),(1,0),(1,1),(0,1),(.5,.5)])
@@ -128,6 +130,47 @@ def build(cid):
      co=mesh.vertices[mesh.loops[li].vertex_index].co;uv.data[li].uv=(math.atan2(co.y,co.x)/math.tau+.5,math.acos(max(-1,min(1,co.z)))/math.pi)
    prototypes[key]=mesh
   o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(p[0],-p[2],p[1]);o.scale=(scale[0],scale[2],scale[1]);o.rotation_euler.z=(seed*2.39996 if m.startswith('Canopy') else 0);instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+ def spectator(p,h,yaw,kit,pose):
+  # Each seated silhouette faces the racing surface. Several welded lofts per
+  # material make a shared person, including the negative space between limbs.
+  nonlocal instance_triangles
+  for part,m in [('shirt',kit),('face','Skin'),('legs','Dark')]:
+   key=('seated',m,pose)
+   mesh=prototypes.get(key)
+   if mesh is None:
+    vv=[];ff=[]
+    def section(rows):
+     start=len(vv);n=8
+     for x,y,z,rx,rz in rows:
+      for k in range(n):
+       a=math.tau*k/n;vv.append((x+rx*math.cos(a),-(z+rz*math.sin(a)),y))
+     for j in range(len(rows)-1):
+      for k in range(n):
+       a=start+j*n+k;b=start+j*n+(k+1)%n;ff.append((a,b,b+n,a+n))
+     ff.append(tuple(start+(len(rows)-1)*n+k for k in range(n)))
+    if part=='shirt':
+     section([(0,.16,0,.15,.11),(0,.28,-.011,.16,.12),(0,.49,.014,.205,.125),(0,.56,.017,.174,.095),(0,.585,.017,.071,.070)])
+     for sign in [-1,1]:
+      reach=.1 if pose==1 and sign==1 else .175
+      section([(sign*.145,.52,.01,.070,.07),(sign*.205,.42,.042,.063,.065),(sign*.212,.34,reach*.65,.052,.05)])
+    elif part=='face':
+     turn=(pose-1)*.027
+     section([(0,.555,.013,.063,.062),(turn,.635,.037,.075,.075),(turn,.678,.042,.091,.093),(turn,.75,.022,.096,.096),(turn,.796,.012,.070,.064)])
+     section([(turn,.681,.126,.018,.018),(turn,.712,.115,.016,.021)])
+     for sign in [-1,1]:
+      up=pose==1 and sign==1
+      section([(sign*.21,.345,.105,.050,.05),(sign*.187,.345 if up else .291,.142,.041,.05),(sign*(.106 if up else .14),.618 if up else .22,.178 if up else .24,.034,.044)])
+    else:
+     section([((pose-1)*.027,.741,.013,.099,.099),((pose-1)*.027,.792,.014,.082,.080),((pose-1)*.027,.809,.014,.032,.04)])
+     for sign in [-1,1]:
+      section([(sign*.10,.164,.025,.088,.12),(sign*.105,.215,.065,.091,.146),(sign*.123,.224,.175,.079,.118)])
+      section([(sign*.124,-.17,.211,.074,.119),(sign*.124,-.13,.192,.058,.080),(sign*.124,.136,.241,.065,.069),(sign*.123,.211,.221,.076,.086)])
+    mesh=bpy.data.meshes.new('Seated '+part);mesh.from_pydata(vv,[],ff);mesh.materials.append(mats[m]);mesh.update()
+    for poly in mesh.polygons:poly.use_smooth=True
+    prototypes[key]=mesh
+   o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot
+   o.location=(p[0],-p[2],p[1]);o.scale=(h,h,h);o.rotation_euler.z=yaw
+   instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
  def strip(start,end,left,right,m,y=.02,step=2,ys=None):
   count=math.ceil((end-start)/step)
   for i in range(count):
@@ -138,7 +181,10 @@ def build(cid):
  # Broad land follows the coarse DEM; fine surface always follows exact exported track.
  xs=[s['x'] for s in samples];zs=[s['z'] for s in samples]
  for x in range(int(min(xs))-650,int(max(xs))+650,100):
-  for z in range(int(min(zs))-650,int(max(zs))+650,100):face([(xx,ground(xx,zz)-2.0,zz) for xx,zz in [(x,z),(x,z+100),(x+100,z+100),(x+100,z)]],'Dark' if night else 'Grass',[(x/20,z/20),(x/20,(z+100)/20),((x+100)/20,(z+100)/20),((x+100)/20,z/20)])
+  for z in range(int(min(zs))-650,int(max(zs))+650,100):
+   corners=[(x,z),(x,z+100),(x+100,z+100),(x+100,z)]
+   tile=512 if night else 20
+   face([(xx,ground(xx,zz)-2.0,zz) for xx,zz in corners],'CityGround' if night else 'Grass',[(xx/tile,zz/tile) for xx,zz in corners])
  if not night:strip(0,L,-38,38,'Grass',-.06,step=4)
  strip(0,L,lambda d:-sample(d)['width']-(2 if night else .7),lambda d:sample(d)['width']+(2 if night else .7),'Asphalt')
  for side in [-1,1]:strip(0,L,lambda d:side*sample(d)['width']-.07,lambda d:side*sample(d)['width']+.07,'White',.035)
@@ -208,6 +254,18 @@ def build(cid):
   if i%3==0:
    atbox(d+11,-42,heightB*.45,(5,heightB*.9,4),'Glass')
    for step in range(14):atbox(d+11,-41-step*.2,.3+step*.43,(4,.18,.6),'Steel')
+  # Raised timing islands between the apron and the racing surface.
+  if i%2==0:
+   atbox(d,-12.6,.46,(1.68,.82,7.6),'Concrete')
+   atbox(d,-12.75,1.28,(1.25,.15,7.15),'Cabinet')
+   for j in [-2.8,-1.4,0,1.4,2.8]:
+    atbox(d+j,-12.46,1.83,(.15,.66,1.16),'Dark')
+    atbox(d+j,-12.55,1.86,(.025,.52,1.01),'Glass')
+   for j in [-3.32,3.32]:
+    rod(pt(d+j,-13.11,.76),pt(d+j,-13.11,2.77),.057,'Steel')
+    rod(pt(d+j,-13.11,2.7),pt(d+j,-11.72,2.52),.053,'Steel')
+   atbox(d,-12.43,2.72,(2.0,.14,7.63),'Red' if i%4 else 'Dark')
+   atbox(d,-11.47,2.62,(.07,.18,7.65),'White')
   for j in [-9,0,9]:
    atbox(d+j,-33.96,2.1,(.09,3.8,8.4),'Dark')
    atbox(d+j+4.34,-29.5,2.14,(9,4.28,.28),'GarageInterior')
@@ -242,6 +300,32 @@ def build(cid):
   atbox(d,-22.9,8.35,(.06,.06,28),'Steel')
   if night:atbox(d,-24.6,10.7,(.15,.12,27),'Pink')
   for off in [-20,-17]:strip(d-10,d+10,off,off+.1,'White',.05)
+ if not night:
+  # The podium balcony projects out of the pit building at the finish.
+  # Three stacked decks, a viewing gallery and a cantilevered steel gallery.
+  atbox(-40,-32,9.2,(13,3.1,30),'Glass')
+  for level in [7.8,10.82]:atbox(-40,-32,level,(14,.34,31.5),'White')
+  for station in range(-54,-24,3):
+   atbox(station,-25.45,9.2,(.21,2.95,.15),'Steel')
+  atbox(-40,-23.5,10.7,(6,.46,24),'Concrete')
+  atbox(-40,-20.5,11.3,(.11,1.15,24),'Glass')
+  for station in range(-51,-27,3):atbox(station,-20.47,11.3,(.13,1.2,.13),'Steel')
+  for jj in [-6.8,6.8]:
+   rod(pt(-40+jj,-25.5,5.0),pt(-40+jj,-5.9,8.3),.32,'Steel',8)
+   rod(pt(-40+jj,-25.3,8.3),pt(-40+jj,-6.1,8.3),.26,'Steel',8)
+  atbox(-40,-16,8.57,(20.8,.55,14.8),'White')
+  for station in [-47.32,-32.68]:
+   for off in range(-25,-5,2):atbox(station,off,9.5,(.09,1.48,.09),'Steel')
+   rod(pt(station,-25,10.2),pt(station,-5.65,10.2),.054,'Steel')
+  for j,mat_name in enumerate(['Green','White','Red']):atbox(-45+j*5,-5.66,9.13,(.10,.91,4.93),mat_name)
+  # Wind bends consecutive cloth strips into a changing three-dimensional silhouette.
+  for flag in range(19):
+   d=L-282+flag*13.4;off=49.1
+   rod(pt(d,off,8.7),pt(d,off,16.3),.061,'Steel')
+   for seg in range(12):
+    def flagpoint(k,v):
+     t=k/12;return pt(d+3.65*t,off+.53*math.sin(t*8+flag*.9)*t,16.15-1.92*v-.35*t+.31*math.sin(t*7+flag)*t)
+    face([flagpoint(seg,0),flagpoint(seg+1,0),flagpoint(seg+1,1),flagpoint(seg,1)],['Green','White','Red'][seg//4])
  # Grandstands: rake, seat rows, people cards, roof trusses and exposed frame.
  stations=[L-270,L-160,L-50] if not night else [L-230,L-110,1500,1620,2120,4370]
  for station in stations:
@@ -253,10 +337,7 @@ def build(cid):
      if random.random()<.14:continue
      dd=d+j+random.uniform(-.15,.15);h=random.uniform(.9,1.1);person=pt(dd,off,y+.28)
      x,yy,z=person;cloth='Spectator'+str(random.randrange(4))
-     # Seated solid torsos, heads and bent thighs. No billboard crowd texture.
-     blob((x,yy+.36*h,z),(.20,.31*h,.16),cloth,6,3)
-     blob((x,yy+.76*h,z),(.115,.145,.115),'Skin',6,3)
-     atbox(dd,off-.14,y+.35,(.34,.18,.4),cloth)
+     spectator(person,h,yaw+math.pi/2+random.uniform(-.25,.25),cloth,random.randrange(3))
    # Folded sheet canopy with a pitched face, purlins and exposed triangular trusses.
    for rib in range(16):
     start=d-15.98+rib*2
@@ -305,13 +386,13 @@ def build(cid):
    if (d>L-460 or d<150) and abs(off)<90:continue
    if min((x-pt(v,side)[0])**2+(z-pt(v,side)[2])**2 for v in range(int(L)-420,int(L)+100,35) for side in [-38,40])<28**2:continue
    species=(int(d/170)+i%7)%4
-   h=random.uniform(10,24)*(1.18 if species==2 else 1);crown=h*[.31,.24,.13,.34][species]
-   rod(p,(x,y+h*.71,z),random.uniform(.16,.30),'Trunk',6)
+   h=random.uniform(8,24)*(1.12 if species==2 else 1);crown=h*[.39,.33,.19,.40][species]
+   lean=math.sin(i*5.7)*h*.073;rod(p,(x+lean,y+h*.71,z),random.uniform(.16,.30),'Trunk',6)
    # Oak, hornbeam, columnar poplar and spreading pine: distinct crown proportions.
    lobes=[4,3,3,4][species]
    for k in range(lobes):
     a=k*math.tau/lobes+i*2.39996;spread=crown*(.28 if species==2 else .65)
-    cx=x+math.cos(a)*spread;cz=z+math.sin(a)*spread
+    cx=x+lean+math.cos(a)*spread;cz=z+math.sin(a)*spread
     cy=y+h*([.66,.72,.55,.78][species]+k*[.035,.04,.14,.025][species])
     rod((x,y+h*.38,z),(cx,cy,cz),.075,'Trunk')
     blob((cx,cy,cz),(crown*random.uniform(.65,1.12),h*[.24,.28,.28,.14][species],crown*random.uniform(.65,1.05)),'Canopy'+str(species),8,4,i+k)
@@ -322,12 +403,35 @@ def build(cid):
    d=random.random()*L;off=random.choice([-1,1])*random.uniform(39,105);x,y,z=pt(d,off);y=ground(x,z)-2
    if min((x-q[0])**2+(z-q[1])**2 for q in coarse)<36**2:continue
    if (d>L-470 or d<170) and abs(off)<92:continue
-   h=random.uniform(1.4,5.5);species=i%4
+   h=random.uniform(2.4,8.5);species=i%4
    for k in range(2):blob((x+k*1.8,y+h*.65,z+math.sin(i)*2),(h*.65,h*.7,h*.6),'Canopy'+str(species),8,4,i+k)
  else:
   for d in range(0,int(L),45):
    for side in [-1,1]:
     rod(pt(d,side*10.5),pt(d,side*10.5,13),.08,'Steel');rod(pt(d,side*10.5,12.8),pt(d,side*7.5,12.8),.06,'Steel');atbox(d,side*7.5,12.7,(2.6,.15,.7),'Ice')
+  # Curbside date palms break up the lamp rhythm and give the boulevard a
+  # street-level silhouette beneath the resort skyline.
+  for d in range(2550,4300,26):
+   for side in [-1,1]:
+    off=side*(25+4*math.sin(d));x,g,z=pt(d,off);h=7.8+2.7*math.sin(d*1.37)
+    tip=(x+.65,g+h,z+.38);rod((x,g,z),tip,.19,'Trunk',7)
+    for j in range(8):
+     a=j*math.tau/8+d;width=.37;reach=3.1+.55*math.sin(d+j)
+     def blade(t,w):
+      return (tip[0]+reach*t*math.cos(a)-w*math.sin(a),tip[1]+1.1*math.sin(t*math.pi)-1.05*t*t,tip[2]+reach*t*math.sin(a)+w*math.cos(a))
+     for k in range(5):
+      t=k/5;u=(k+1)/5
+      face([blade(t,-width*math.sin(t*math.pi)),blade(u,-width*math.sin(u*math.pi)),blade(u,width*math.sin(u*math.pi)),blade(t,width*math.sin(t*math.pi))],'Green')
+  # A distant basin rim frames the low-rise city. Use broad folds, with
+  # independent lower foothills and upper ridges to preserve depth at night.
+  for layer in range(2):
+   radius=3000+layer*700
+   def ridge(k,base):
+    a=k*math.tau/128
+    r=radius+95*math.sin(5*a+layer)+64*math.sin(11*a)
+    h=85+layer*85+63*math.sin(3*a+layer)+47*math.cos(7*a)+22*math.sin(19*a+.9*layer)
+    return (r*math.cos(a),-8 if base else h,r*math.sin(a))
+   for j in range(128):face([ridge(j,True),ridge(j+1,True),ridge(j+1,False),ridge(j,False)],'DistantRidge')
   origin=data['origin'];lat0=origin[1]*math.pi/180
   def project(lon,lat):return ((lon-origin[0])*111320*math.cos(lat0),-(lat-origin[1])*111320)
   def hotel(lon,lat,w,h,dep,name):
