@@ -14,6 +14,7 @@ if(process.argv.includes('--start-game')&&!process.env.MCP_SERVER_URL){
 const root=resolve('dist/mcp-host');
 function serve(sandbox:boolean){return createServer(async(req,res)=>{
   const url=new URL(req.url??'/',sandbox?sandboxOrigin:hostOrigin);
+  if(url.pathname==='/favicon.ico'){res.writeHead(204);res.end();return;}
   if(!sandbox&&url.pathname==='/config'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({endpoint:process.env.MCP_SERVER_URL??`${origin}/mcp`,sandboxOrigin}));return;}
   if(sandbox){
     let csp:{connectDomains?:unknown}={};try{csp=JSON.parse(url.searchParams.get('csp')??'{}');}catch{}

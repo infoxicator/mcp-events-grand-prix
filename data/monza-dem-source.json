@@ -1,0 +1,472 @@
+{
+  "url": "https://api.opentopodata.org/v1/mapzen?locations=45.616207,9.280788|45.617101,9.280915|45.617994,9.281052|45.618886,9.281209|45.619780,9.281334|45.620675,9.281442|45.621570,9.281543|45.622466,9.281647|45.623362,9.281748|45.624256,9.281864|45.624838,9.282449|45.625707,9.282124|45.626602,9.282134|45.627497,9.282242|45.628347,9.282643|45.629052,9.283429|45.629555,9.284487|45.629850,9.285697|45.629955,9.286972|45.630034,9.288251|45.630095,9.289532|45.630145,9.290815|45.630566,9.291763|45.630791,9.293003|45.631086,9.294216|45.631354,9.295442|45.630960,9.296491|45.630072,9.296655|45.629179,9.296800|45.628338,9.296644|45.627902,9.295522|45.627470,9.294395|45.627034,9.293273|45.626556,9.292187|45.625979,9.291204|45.625392,9.290231|45.624788,9.289280|45.624195,9.288316|45.623603,9.287349|45.623014,9.286380|45.622259,9.285920|45.621445,9.285507|45.620690,9.284939|45.619798,9.284792|45.618905,9.284649|45.618012,9.284515|45.617118,9.284385|45.616224,9.284257|45.615330,9.284130|45.614436,9.284001|45.613543,9.283868|45.612650,9.283730|45.611929,9.283099|45.612037,9.281878|45.612709,9.281058|45.613576,9.280750|45.614474,9.280716|45.615372,9.280700",
+  "response": {
+    "results": [
+      {
+        "dataset": "mapzen",
+        "elevation": 182.0,
+        "location": {
+          "lat": 45.616207,
+          "lng": 9.280788
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 183.0,
+        "location": {
+          "lat": 45.617101,
+          "lng": 9.280915
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 184.0,
+        "location": {
+          "lat": 45.617994,
+          "lng": 9.281052
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 189.0,
+        "location": {
+          "lat": 45.618886,
+          "lng": 9.281209
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 187.0,
+        "location": {
+          "lat": 45.61978,
+          "lng": 9.281334
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 186.0,
+        "location": {
+          "lat": 45.620675,
+          "lng": 9.281442
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 186.0,
+        "location": {
+          "lat": 45.62157,
+          "lng": 9.281543
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 188.0,
+        "location": {
+          "lat": 45.622466,
+          "lng": 9.281647
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 185.0,
+        "location": {
+          "lat": 45.623362,
+          "lng": 9.281748
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 189.0,
+        "location": {
+          "lat": 45.624256,
+          "lng": 9.281864
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 189.0,
+        "location": {
+          "lat": 45.624838,
+          "lng": 9.282449
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 192.0,
+        "location": {
+          "lat": 45.625707,
+          "lng": 9.282124
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 194.0,
+        "location": {
+          "lat": 45.626602,
+          "lng": 9.282134
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 194.0,
+        "location": {
+          "lat": 45.627497,
+          "lng": 9.282242
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 194.0,
+        "location": {
+          "lat": 45.628347,
+          "lng": 9.282643
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 189.0,
+        "location": {
+          "lat": 45.629052,
+          "lng": 9.283429
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 195.0,
+        "location": {
+          "lat": 45.629555,
+          "lng": 9.284487
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 195.0,
+        "location": {
+          "lat": 45.62985,
+          "lng": 9.285697
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 193.0,
+        "location": {
+          "lat": 45.629955,
+          "lng": 9.286972
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 196.0,
+        "location": {
+          "lat": 45.630034,
+          "lng": 9.288251
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 194.0,
+        "location": {
+          "lat": 45.630095,
+          "lng": 9.289532
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 195.0,
+        "location": {
+          "lat": 45.630145,
+          "lng": 9.290815
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 195.0,
+        "location": {
+          "lat": 45.630566,
+          "lng": 9.291763
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 192.0,
+        "location": {
+          "lat": 45.630791,
+          "lng": 9.293003
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 193.0,
+        "location": {
+          "lat": 45.631086,
+          "lng": 9.294216
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 197.0,
+        "location": {
+          "lat": 45.631354,
+          "lng": 9.295442
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 192.0,
+        "location": {
+          "lat": 45.63096,
+          "lng": 9.296491
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 197.0,
+        "location": {
+          "lat": 45.630072,
+          "lng": 9.296655
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 196.0,
+        "location": {
+          "lat": 45.629179,
+          "lng": 9.2968
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 192.0,
+        "location": {
+          "lat": 45.628338,
+          "lng": 9.296644
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 194.0,
+        "location": {
+          "lat": 45.627902,
+          "lng": 9.295522
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 194.0,
+        "location": {
+          "lat": 45.62747,
+          "lng": 9.294395
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 196.0,
+        "location": {
+          "lat": 45.627034,
+          "lng": 9.293273
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 194.0,
+        "location": {
+          "lat": 45.626556,
+          "lng": 9.292187
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 195.0,
+        "location": {
+          "lat": 45.625979,
+          "lng": 9.291204
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 197.0,
+        "location": {
+          "lat": 45.625392,
+          "lng": 9.290231
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 190.0,
+        "location": {
+          "lat": 45.624788,
+          "lng": 9.28928
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 196.0,
+        "location": {
+          "lat": 45.624195,
+          "lng": 9.288316
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 194.0,
+        "location": {
+          "lat": 45.623603,
+          "lng": 9.287349
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 190.0,
+        "location": {
+          "lat": 45.623014,
+          "lng": 9.28638
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 190.0,
+        "location": {
+          "lat": 45.622259,
+          "lng": 9.28592
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 190.0,
+        "location": {
+          "lat": 45.621445,
+          "lng": 9.285507
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 189.0,
+        "location": {
+          "lat": 45.62069,
+          "lng": 9.284939
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 185.0,
+        "location": {
+          "lat": 45.619798,
+          "lng": 9.284792
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 185.0,
+        "location": {
+          "lat": 45.618905,
+          "lng": 9.284649
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 182.0,
+        "location": {
+          "lat": 45.618012,
+          "lng": 9.284515
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 181.0,
+        "location": {
+          "lat": 45.617118,
+          "lng": 9.284385
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 183.0,
+        "location": {
+          "lat": 45.616224,
+          "lng": 9.284257
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 187.0,
+        "location": {
+          "lat": 45.61533,
+          "lng": 9.28413
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 183.0,
+        "location": {
+          "lat": 45.614436,
+          "lng": 9.284001
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 180.0,
+        "location": {
+          "lat": 45.613543,
+          "lng": 9.283868
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 181.0,
+        "location": {
+          "lat": 45.61265,
+          "lng": 9.28373
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 182.0,
+        "location": {
+          "lat": 45.611929,
+          "lng": 9.283099
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 181.0,
+        "location": {
+          "lat": 45.612037,
+          "lng": 9.281878
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 178.0,
+        "location": {
+          "lat": 45.612709,
+          "lng": 9.281058
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 179.0,
+        "location": {
+          "lat": 45.613576,
+          "lng": 9.28075
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 183.0,
+        "location": {
+          "lat": 45.614474,
+          "lng": 9.280716
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 182.0,
+        "location": {
+          "lat": 45.615372,
+          "lng": 9.2807
+        }
+      }
+    ],
+    "status": "OK"
+  }
+}

@@ -1,0 +1,512 @@
+{
+  "url": "https://api.opentopodata.org/v1/mapzen?locations=36.109904,-115.161202|36.110577,-115.160465|36.111169,-115.160905|36.110860,-115.161911|36.110443,-115.162843|36.110889,-115.163767|36.111737,-115.164094|36.112630,-115.164250|36.113530,-115.164368|36.114434,-115.164445|36.115340,-115.164477|36.116244,-115.164462|36.117146,-115.164398|36.118042,-115.164280|36.118930,-115.164106|36.119266,-115.163231|36.119186,-115.162109|36.119260,-115.161014|36.119938,-115.160304|36.120792,-115.160160|36.121380,-115.160673|36.122181,-115.160348|36.122340,-115.161416|36.122349,-115.162529|36.122363,-115.163641|36.122438,-115.164751|36.122765,-115.165767|36.123518,-115.166362|36.124357,-115.166770|36.125047,-115.167456|36.125391,-115.168477|36.125429,-115.169506|36.124615,-115.169969|36.123820,-115.170486|36.123032,-115.171019|36.122255,-115.171578|36.121433,-115.172027|36.120574,-115.172349|36.119708,-115.172646|36.118824,-115.172843|36.117931,-115.172956|36.117033,-115.172994|36.116135,-115.172982|36.115237,-115.172974|36.114338,-115.172980|36.113441,-115.173019|36.112543,-115.173068|36.111645,-115.173107|36.110747,-115.173134|36.109849,-115.173144|36.108946,-115.173213|36.108394,-115.172616|36.107963,-115.171678|36.107925,-115.170568|36.107929,-115.169455|36.107943,-115.168343|36.107949,-115.167231|36.107941,-115.166119|36.107945,-115.165007|36.108061,-115.163905|36.108374,-115.162885|36.109036,-115.162133|36.109716,-115.161406",
+  "response": {
+    "results": [
+      {
+        "dataset": "mapzen",
+        "elevation": 633.0,
+        "location": {
+          "lat": 36.109904,
+          "lng": -115.161202
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 632.0,
+        "location": {
+          "lat": 36.110577,
+          "lng": -115.160465
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 632.0,
+        "location": {
+          "lat": 36.111169,
+          "lng": -115.160905
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 633.0,
+        "location": {
+          "lat": 36.11086,
+          "lng": -115.161911
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 634.0,
+        "location": {
+          "lat": 36.110443,
+          "lng": -115.162843
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.110889,
+          "lng": -115.163767
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.111737,
+          "lng": -115.164094
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 634.0,
+        "location": {
+          "lat": 36.11263,
+          "lng": -115.16425
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.11353,
+          "lng": -115.164368
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.114434,
+          "lng": -115.164445
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.11534,
+          "lng": -115.164477
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.116244,
+          "lng": -115.164462
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.117146,
+          "lng": -115.164398
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.118042,
+          "lng": -115.16428
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.11893,
+          "lng": -115.164106
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 634.0,
+        "location": {
+          "lat": 36.119266,
+          "lng": -115.163231
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 634.0,
+        "location": {
+          "lat": 36.119186,
+          "lng": -115.162109
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 632.0,
+        "location": {
+          "lat": 36.11926,
+          "lng": -115.161014
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 631.0,
+        "location": {
+          "lat": 36.119938,
+          "lng": -115.160304
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 631.0,
+        "location": {
+          "lat": 36.120792,
+          "lng": -115.16016
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 631.0,
+        "location": {
+          "lat": 36.12138,
+          "lng": -115.160673
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 630.0,
+        "location": {
+          "lat": 36.122181,
+          "lng": -115.160348
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 631.0,
+        "location": {
+          "lat": 36.12234,
+          "lng": -115.161416
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 632.0,
+        "location": {
+          "lat": 36.122349,
+          "lng": -115.162529
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 633.0,
+        "location": {
+          "lat": 36.122363,
+          "lng": -115.163641
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.122438,
+          "lng": -115.164751
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.122765,
+          "lng": -115.165767
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 634.0,
+        "location": {
+          "lat": 36.123518,
+          "lng": -115.166362
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 633.0,
+        "location": {
+          "lat": 36.124357,
+          "lng": -115.16677
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 633.0,
+        "location": {
+          "lat": 36.125047,
+          "lng": -115.167456
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 634.0,
+        "location": {
+          "lat": 36.125391,
+          "lng": -115.168477
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 634.0,
+        "location": {
+          "lat": 36.125429,
+          "lng": -115.169506
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.124615,
+          "lng": -115.169969
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 636.0,
+        "location": {
+          "lat": 36.12382,
+          "lng": -115.170486
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 638.0,
+        "location": {
+          "lat": 36.123032,
+          "lng": -115.171019
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 639.0,
+        "location": {
+          "lat": 36.122255,
+          "lng": -115.171578
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 640.0,
+        "location": {
+          "lat": 36.121433,
+          "lng": -115.172027
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 641.0,
+        "location": {
+          "lat": 36.120574,
+          "lng": -115.172349
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 642.0,
+        "location": {
+          "lat": 36.119708,
+          "lng": -115.172646
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 642.0,
+        "location": {
+          "lat": 36.118824,
+          "lng": -115.172843
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 642.0,
+        "location": {
+          "lat": 36.117931,
+          "lng": -115.172956
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 643.0,
+        "location": {
+          "lat": 36.117033,
+          "lng": -115.172994
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 643.0,
+        "location": {
+          "lat": 36.116135,
+          "lng": -115.172982
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 644.0,
+        "location": {
+          "lat": 36.115237,
+          "lng": -115.172974
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 644.0,
+        "location": {
+          "lat": 36.114338,
+          "lng": -115.17298
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 644.0,
+        "location": {
+          "lat": 36.113441,
+          "lng": -115.173019
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 644.0,
+        "location": {
+          "lat": 36.112543,
+          "lng": -115.173068
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 644.0,
+        "location": {
+          "lat": 36.111645,
+          "lng": -115.173107
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 645.0,
+        "location": {
+          "lat": 36.110747,
+          "lng": -115.173134
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 645.0,
+        "location": {
+          "lat": 36.109849,
+          "lng": -115.173144
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 646.0,
+        "location": {
+          "lat": 36.108946,
+          "lng": -115.173213
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 646.0,
+        "location": {
+          "lat": 36.108394,
+          "lng": -115.172616
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 646.0,
+        "location": {
+          "lat": 36.107963,
+          "lng": -115.171678
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 645.0,
+        "location": {
+          "lat": 36.107925,
+          "lng": -115.170568
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 644.0,
+        "location": {
+          "lat": 36.107929,
+          "lng": -115.169455
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 644.0,
+        "location": {
+          "lat": 36.107943,
+          "lng": -115.168343
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 643.0,
+        "location": {
+          "lat": 36.107949,
+          "lng": -115.167231
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 641.0,
+        "location": {
+          "lat": 36.107941,
+          "lng": -115.166119
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 640.0,
+        "location": {
+          "lat": 36.107945,
+          "lng": -115.165007
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 639.0,
+        "location": {
+          "lat": 36.108061,
+          "lng": -115.163905
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 637.0,
+        "location": {
+          "lat": 36.108374,
+          "lng": -115.162885
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 635.0,
+        "location": {
+          "lat": 36.109036,
+          "lng": -115.162133
+        }
+      },
+      {
+        "dataset": "mapzen",
+        "elevation": 634.0,
+        "location": {
+          "lat": 36.109716,
+          "lng": -115.161406
+        }
+      }
+    ],
+    "status": "OK"
+  }
+}

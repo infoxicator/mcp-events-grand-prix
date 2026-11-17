@@ -248,3 +248,51 @@ All new evidence is under `artifacts/realism-v2/`: PNG captures, comparison PNGs
 **Honest remaining gaps:** the video has more carefully sculpted continuous body surfaces, denser fictional-equivalent sponsor placement, more convincing tyre shoulder detail and richer studio reflections. Our sidepods, inlet lips, suspension attachments, helmet and wing sections remain simplified. Some render typography is lighter than the reference. The scene uses a blurred planar reflection and contact shading rather than ray-traced AO/global illumination. Driver's-eye and T-cam are usable live camera views but do not include hands, visor optics or a full physical camera/suspension model. There is no exploded engine/gearbox view. These are improved real-time models, not a photogrammetric replica or a claim of matching every surface in the clip. The calibrated driving model and accelerated strategy wear remain as before.
 
 Local changes only. No provider keys were read or changed; no live inference, pushes, publishing or deployment occurred.
+
+## Cars rounds 2–3 and Blender circuits phase 2 — 2026-11-16/17
+
+Part A local commit: **f390a4a**. Part B is the local commit containing this section. No push, publication or deployment. No paid provider calls. Blender **5.2.2 LTS** (`d13f752e3b9c`), `-b --factory-startup`; car AO used actual Cycles CPU bakes. Normal local graphics access avoided the previously diagnosed sandbox Metal initialization crash; no procedural fallback was used.
+
+Car evidence: `artifacts/realism-v3/{before,round-2,round-3}` and `REVIEW.md`. Circuit evidence: `artifacts/circuits-v2/{before,round-1,round-2,round-3}` and `REVIEW.md`. Every circuit round has straight chase, signature onboard, aerial and pit/grandstand shots. Final side-by-side reference sheets and before/after sheets are in each `round-3/<circuit>/` directory. Sphere/Strip close-ups are saved there too. Photo/DEM attribution and accuracy limits are in `data/CIRCUITS-V2-SOURCES.md`.
+
+The exact Node prefix for the commands below was:
+
+```sh
+env PATH=/Users/ruben.casas@postman.com/.nvm/versions/node/v24.14.0/bin:$PATH
+```
+
+| Command after that prefix | Result |
+| --- | --- |
+| `npm run build` | PASS: main + Worker typechecks, web, self-contained MCP app, host/sandbox bundles |
+| `npm run typecheck` | PASS again after strengthening Worker model-readiness assertions |
+| `JEV_MOCK=1 npm test` | PASS: **50 tests / 8 files**; includes car LOD/dimensions, exact exported track path, continuous DEM seam/slope, embedded circuit resources and size limits, physics/brains/providers/rooms |
+| `JEV_MOCK=1 npm run test:e2e` | PASS: **9 tests**, 2.8 min. Complete Monza Jev/Jev and Jev/Luna races plus Vegas Jev/Luna; real WebSockets, radio changing intent, tyre stops, timed laps, results/replay, provider states, all car/studio views and circuit switching |
+| `JEV_MOCK=1 REVIEW_ROUND=round-3 npx playwright test e2e/circuit-review.spec.ts e2e/vegas.spec.ts e2e/mcp.spec.ts` | PASS on final assets: **5 targeted tests**, 1.3 min. Repeats relevant visual tests after final foliage/Sphere fixes; both strict-CSP MCP apps wait for actual car/circuit readiness, share one invited room with a browser spectator, exercise clipboard fallback and teardown; console errors **[]**, paid calls **0** |
+| `JEV_MOCK=1 WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jev-grand-prix-worker-test.log npm run test:worker` | PASS: **2 local workerd tests**, 13.4 s; both circuits load their models, move, issue intents/radio and serve the MCP resource/invitations |
+| `WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jev-grand-prix-wrangler.log npm run worker:check` | PASS: **--dry-run**, 1290.24 KiB Worker / 234.46 KiB gzip; assets/bindings resolved; no upload |
+| `JEV_MOCK=1 npm run test:handling` | PASS: existing fixed-step race/handling calibration completes, tyre stops and lap timings retained |
+| `JEV_MOCK=1 npm run test:performance` | PASS: Monza, **113.74 / 113.62 / 113.60 FPS** for Vector / Chaos / Broadcast |
+| `JEV_MOCK=1 RACE_CIRCUIT=las-vegas PORT=5578 npm run test:performance` | PASS: Vegas, **114.97 / 115.12 / 114.85 FPS** |
+| `PORT=5579 JEV_MOCK=1 npm run demo:smoke` | PASS: three independent windows, both teams connected, mock decisions, racing phase, HTTP health; cleaned up its own server/windows |
+
+Performance was measured in headed Chromium on **Apple M4 Pro / ANGLE Metal**, three independent 1100×850 contexts, 50 samples at 500 ms intervals after model loading and warmup. The test now requires a 60 FPS average. Lowest sampled **smoothed** readings were 102.76 FPS (Monza) and 106.20 FPS (Vegas); these are HUD EMA samples, not a guarantee that every individual frame or every MacBook meets that rate. Full data: `artifacts/circuits-v2/performance-{monza,las-vegas}.json` and `performance-summary.json`.
+
+Additional exact non-Node commands:
+
+```sh
+python3 scripts/blender/circuit_textures.py
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_circuits.py -- 1
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_circuits.py -- 2
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_circuits.py -- 3
+python3 scripts/circuit-review-comparisons.py round-1
+python3 scripts/circuit-review-comparisons.py round-2
+python3 scripts/circuit-review-comparisons.py round-3
+curl --fail --silent http://127.0.0.1:5477/health
+curl --fail --silent -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:5477/
+```
+
+Both running-server checks returned **HTTP 200**; health records `mode: mock`, `paidCalls: 0`, 120 Hz physics and 30 Hz snapshots. That existing local development server remains available on port **5477**. Final command output is saved under `artifacts/circuits-v2/logs/`.
+
+Failures found and fixed are retained in the review notes: overlapping ground AO bake and wrong blending; oversized car mesh; low camera obstructed by the old cockpit tub; terrain/road intersections; a missing Sphere shader brace and later inverted UV artwork; a city block intersecting the Sphere; worker-backed decoding incompatible with strict MCP CSP; a missing test-host favicon; generic `networkidle` waits unsuitable for decoder work. The MCP test explicitly permits only the existing 403 response from probing owner-only `/links` with a team token, then asserts no other console errors through browser invitation joining.
+
+The final circuits have **287,076 Monza / 131,980 Vegas triangles**, spatial chunks and distance-culled detail. Cars retain high/far LODs. MCP uses the same Blender geometry with gzip transport and a direct byte/image loader; host CSP was not relaxed. Current gameplay/provider behaviour remains unchanged. Mock tests do **not** establish live-provider latency, actual ChatGPT/Claude host resource limits, survey-grade elevation, full physical response to slopes, or photorealistic parity. Read the round-by-round critiques before judging fidelity.

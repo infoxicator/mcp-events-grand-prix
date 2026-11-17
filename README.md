@@ -252,3 +252,26 @@ PORT=5477 npm run demo:smoke -- --headed
 The original Pong working tree (including its invitation fixes) was copied without `.env.local`, `.git`, dependencies or generated artifacts. Its build and both browser scenarios passed before conversion. Local commit `ebb7eba` preserves that baseline, then M1–M5 evolve it. The source Pong folder was left untouched.
 
 Cloudflare configuration targets a new **`jev-grand-prix`** Worker with Durable Objects, static assets, room rate limits, mock-only public agents, checkpoints and expiry alarms. `npm run dev:worker` runs locally. No account id, provider secrets or previous Pong deployment URL is inherited. **Nothing was deployed, published or pushed.**
+
+## Blender realism revision: cars and both circuits
+
+The car review rounds 2–3 are recorded in `artifacts/realism-v3/REVIEW.md`; the three circuit rounds and their remaining differences from real photographs are in `artifacts/circuits-v2/REVIEW.md`. Before shots were retained before changing each model. These are original, optimized real-time assets, not photorealistic replicas.
+
+**Blender 5.2.2 LTS** builds every car and static circuit mesh. Car changes include subdivided body transitions, inset sidepod tunnels, cambered wing sections, suspension joints/brackets/ducts, rounded slicks, articulated steering gloves and actual Cycles CPU AO bakes. Driver-eye height is 0.70 m with a 68° camera; `?team=a&visor` enables the optional visor vignette. The existing T-cam and Colour/Clay/Wireframe showroom remain available.
+
+Both **Monza** and **Las Vegas** now load spatially chunked Blender GLBs: kerbs, runoff, walls/fencing, seated crowd cards, pit buildings, garages, gantries, marshal posts and signage. Monza adds layered woodland and a curved hospitality tower; Vegas retains the Sphere, Strip hotels, tower, observation wheel, fountains, floodlights and sparks. The skyline and building details are approximations. `/?spectate&camera=pits` gives the new pit/grandstand view; aerial and other camera query parameters now work consistently.
+
+```sh
+npm run model:build       # Blender cars + baked AO
+npm run circuit:build     # exact race path -> original texture atlases -> Blender circuits
+npm run build
+JEV_MOCK=1 npm run verify
+npm run test:performance
+RACE_CIRCUIT=las-vegas npm run test:performance
+```
+
+The model scripts require Blender at `/Applications/Blender.app/Contents/MacOS/Blender`; texture/review scripts require Python Pillow. Blender uses `-b --factory-startup`, with CPU Cycles for car AO. Normal local graphics access was necessary to avoid the restricted sandbox's Metal startup failure; no procedural circuit/car fallback is included.
+
+Browser views decode Draco GLBs and cull distant foliage/crowd/fence detail. MCP Apps load **identical Blender geometry** as gzip GLBs using direct byte decoding and data-URI textures, avoiding blob workers/WASM/fetch restrictions without changing the host CSP. The `.blend` sources, manifests and reproducible scripts are retained. Existing WebSocket rooms, Jev/Luna/engineer decisions, invitations, Worker setup and default mock mode are unchanged.
+
+Elevation uses smoothed, coarse Mapzen terrain samples—not surveyed road elevation. The rendered road, cars, cameras and sparks share that profile; elevation does not add new gravity forces to the physics simulation. Track and DEM attribution, photo references and accuracy limits are documented in [`data/CIRCUITS-V2-SOURCES.md`](data/CIRCUITS-V2-SOURCES.md). Reference photos are not distributed as game textures. All circuit texture atlases and fictional sponsor art are original.

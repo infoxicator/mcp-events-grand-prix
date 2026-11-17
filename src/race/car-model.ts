@@ -1,13 +1,12 @@
 import * as T from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {embeddedGLB} from './embedded-glb';
 import highURL from './assets/jgp26-high.glb?url&inline';
 import lowURL from './assets/jgp26-low.glb?url&inline';
 import aoURL from './assets/jgp26-ao.png?url&inline';
 export const CAR_DIMENSIONS={wheelbase:3.6,width:2,length:5.62,tyreRadius:.36,frontAxle:1.55,rearAxle:-2.05};
 export type Finish='colour'|'clay'|'wireframe';
-const loader=new GLTFLoader();
 let templates:Promise<T.Group[]>|undefined;
-function assets(){return templates??=Promise.all([highURL,lowURL].map(url=>loader.loadAsync(url).then(g=>g.scene)));}
+function assets(){return templates??=Promise.all([highURL,lowURL].map(url=>embeddedGLB(url).then(g=>g.scene)));}
 function twill(){
  const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const c=canvas.getContext('2d')!;
  // 2-over / 2-under diagonal twill, with curved fibre bundles rather than checker squares.
