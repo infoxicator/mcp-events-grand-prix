@@ -66,3 +66,29 @@ for branch in range(9):
   v=rng.randint(95,205);rx=rng.uniform(4,8);ry=rng.uniform(2.5,6)
   d.ellipse((x-rx,y-ry,x+rx,y+ry),fill=(v,int(v*.98),int(v*.72),255))
 save(im,'canopy')
+
+# Four fascia strips share one atlas. Blender places a different strip above each bay.
+im=Image.new('RGB',(768,256),'#252b30')
+d=ImageDraw.Draw(im)
+for row,(team,color) in enumerate([('VECTOR RACING','#aa2639'),('CHAOS MOTORSPORT','#14756d'),
+                                  ('RACE ENGINEERING','#586776'),('PIT OPERATIONS','#3d4a55')]):
+ top=row*64
+ d.rectangle((0,top,125,top+63),fill=color)
+ d.rectangle((0,top+58,767,top+62),fill=color)
+ d.text((62,top+29),str(row+1).zfill(2),anchor='mm',font=ImageFont.truetype(font,42),fill='#f4f2ed')
+ d.text((153,top+28),team,anchor='lm',font=ImageFont.truetype(font,34),fill='#f4f2ed')
+save(im,'garage-fascia')
+
+# Formwork texture for concrete at metres-to-centimetres scale. Two fields of
+# aggregate, rain traces and small air pockets break the flat barrier highlight.
+rng=random.Random(448)
+base=Image.new('L',(512,256))
+base.putdata([rng.randrange(150,180) for _ in range(512*256)])
+stain=Image.new('L',(32,16))
+stain.putdata([rng.randrange(112,190) for _ in range(32*16)])
+base=Image.blend(base,stain.resize(base.size,Image.Resampling.BICUBIC),.53)
+d=ImageDraw.Draw(base)
+for i in range(850):
+ x=rng.randrange(512);y=rng.randrange(256);rad=rng.choices([.6,1.1,1.8],weights=[8,3,1])[0]
+ d.ellipse((x-rad,y-rad,x+rad,y+rad),fill=rng.randint(112,148))
+base.convert('RGB').save(out/'formed-concrete.jpg',quality=78,optimize=True)

@@ -5,6 +5,8 @@ Reference: approved SF–26 clip; all marks are original fictional branding.
 import bpy, bmesh, math, json, os, sys, gzip
 from mathutils import Vector
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).parent))
+from cockpit import build_halo, build_driver
 ROOT=Path(__file__).resolve().parents[2]
 bpy.context.preferences.filepaths.save_version=0
 OUT=ROOT/'src/race/assets'; OUT.mkdir(exist_ok=True)
@@ -76,25 +78,32 @@ def loft(name,sections,m,parent=body,n=32,power=.85):
 def panel(name,outline,thickness,m,parent=body):
  # outline points in world XYZ; thickness along X for fins.
  v=[(x+side*thickness/2,y,z) for side in [-1,1] for x,y,z in outline];n=len(outline);f=[tuple(reversed(range(n))),tuple(range(n,2*n))]+[(i,(i+1)%n,(i+1)%n+n,i+n) for i in range(n)];return bevel(mesh(name,v,f,m,parent),.004,2)
-def wing(name,span,z,y,chord,m,parent=body,sweep=.15,lift=.05):
+def wing(name,span,z,y,chord,m,parent=body,sweep=.15,lift=.05,side=0,root_width=0):
  # Closed cambered aerofoil: cosine-spaced round leading edge, 0.6mm trailing edge.
- v=[];f=[];nx,n=48,24
+ v=[];f=[];nx,n=(24 if side else 38),18
  section=[]
- for side in [1,-1]:
+ for surface in [1,-1]:
   for j in range(n+1):
-   u=(1-math.cos(math.pi*(j if side==1 else n-j)/n))/2
-   thick=5*.105*(.2969*math.sqrt(u)-.126*u-.3516*u*u+.2843*u**3-.1036*u**4)*chord
-   section.append((u,chord*.045*math.sin(math.pi*u)+side*(thick+.0003)))
+   u=(1-math.cos(math.pi*(j if surface==1 else n-j)/n))/2
+   thick=5*.086*(.2969*math.sqrt(u)-.126*u-.3516*u*u+.2843*u**3-.1036*u**4)*chord
+   section.append((u,chord*.045*math.sin(math.pi*u)+surface*(thick+.0003)))
  ns=len(section)
  for i in range(nx+1):
-  x=(i/nx-.5)*span;t=abs(x)/(span/2)
-  for u,h in section:v.append((x,y+lift*t*t+h,z+(.5-u)*chord-sweep*t*t))
+  x=side*(root_width+(span/2-root_width)*i/nx) if side else (i/nx-.5)*span;t=abs(x)/(span/2)
+  # The flaps twist outboard, relieving load near the endplate.
+  front=name.startswith('Front')
+  arch=math.sin(math.pi*t)**2
+  local_chord=chord*(.68+.48*arch-.14*t*t if front and side else 1-.12*t*t)
+  incidence=(.16+.11*arch-.10*t) if front else .12*(1-.58*t*t)
+  for u,h in section:
+   v.append((x,y+lift*t*t+h+(u-.35)*incidence*local_chord,
+             z+(.5-u)*local_chord-sweep*t*t+(.030*arch if front else 0)))
  for i in range(nx):
   for j in range(ns):a=i*ns+j;b=i*ns+(j+1)%ns;f.append((a,b,b+ns,a+ns))
  f.extend([tuple(reversed(range(ns))),tuple(nx*ns+j for j in range(ns))])
  return bevel(mesh(name,v,f,m,parent),.0007,2)
 def text(label,pos,size,m=silver,rotation=(0,0,0),parent=body):
- cu=bpy.data.curves.new('Mark '+label,'FONT');cu.body=label;cu.font=brandfont;cu.align_x='CENTER';cu.align_y='CENTER';cu.size=size;cu.shear=.14 if label in ['44','23','NOVA','NEXUS'] else 0;cu.extrude=.00015;cu.offset=.0006 if len(label)==1 else 0;cu.resolution_u=3
+ cu=bpy.data.curves.new('Mark '+label,'FONT');cu.body=label;cu.font=brandfont;cu.align_x='CENTER';cu.align_y='CENTER';cu.size=size;cu.shear=.14 if label in ['44','23','NOVA','NEXUS'] else 0;cu.extrude=0;cu.fill_mode='FRONT';cu.offset=.0006 if len(label)==1 else 0;cu.resolution_u=3
  o=bpy.data.objects.new('Mark '+label,cu);bpy.context.collection.objects.link(o);o.location=pos;o.rotation_euler=rotation;o.data.materials.append(m);o.parent=parent;return o
 dish=mat('WheelDish','343a42',.29,.62);brake=mat('BrakeDisc','565859',.63,.45);sleeve=mat('Sleeve','60212b',.9)
 mirror=mat('Mirror','b8c4cc',.08,.9)
@@ -144,7 +153,7 @@ for s in [-1,1]:
  loft('Inner carbon cockpit wall',[[-.8,s*.22,.03,.36,.65],[-.4,s*.285,.025,.36,.65],[.13,s*.285,.025,.35,.61]],carbon)
  # Sidepod undercut is distinct, visibly hollow forward of the red shoulder.
  loft('Carbon undercut',[[-1.95,s*.28,.07,.18,.28],[-1.3,s*.43,.18,.13,.35],[-.5,s*.48,.24,.17,.41],[.22,s*.47,.22,.24,.48]],carbon)
- sidepods[s]=loft('Downwash sidepod',[[-2.03,s*.25,.035,.23,.3],[-1.55,s*.39,.13,.23,.38],[-1.0,s*.49,.23,.26,.48],[-.45,s*.53,.295,.30,.60],[.05,s*.55,.30,.38,.635],[.27,s*.55,.285,.42,.635],[.43,s*.55,.255,.47,.62],[.49,s*.55,.232,.49,.605]],paint,power=.84)
+ sidepods[s]=loft('Downwash sidepod',[[-2.03,s*.25,.035,.23,.3],[-1.55,s*.365,.118,.22,.365],[-1.0,s*.46,.218,.245,.47],[-.65,s*.515,.267,.289,.555],[-.35,s*.545,.294,.345,.61],[.05,s*.55,.30,.40,.635],[.27,s*.55,.285,.42,.635],[.43,s*.55,.255,.47,.62],[.49,s*.55,.232,.49,.605]],paint,power=.84)
  # Wide, shallow aperture with rolled lip.
  # A true letterbox tunnel, sharply rolled upper lip and recessed throat.
  pts=[]
@@ -159,20 +168,33 @@ for s in [-1,1]:
   for j in range(48):ff.append((k*48+j,k*48+(j+1)%48,(k+1)*48+(j+1)%48,(k+1)*48+j))
  mesh('Continuous rolled inlet lip',vv,ff,carbon)
  # White shoulder fairing blends the cockpit edge into the red downwash body.
- loft('Cockpit shoulder',[[-1.33,s*.25,.045,.39,.48],[-.95,s*.32,.13,.46,.58],[-.45,s*.385,.145,.60,.635],[.02,s*.405,.13,.615,.645],[.28,s*.39,.09,.59,.62],[.46,s*.34,.025,.55,.585]],white,power=.9)
+ loft('Cockpit shoulder',[[-1.33,s*.25,.045,.39,.48],[-.95,s*.32,.145,.409,.588],[-.45,s*.385,.157,.465,.644],[.02,s*.405,.15,.494,.649],[.28,s*.39,.09,.59,.62],[.46,s*.34,.025,.55,.585]],white,power=.9)
  box('Deep intake throat',(s*.55,.548,.345),(.42,.078,.005),black,r=.012)
  # Rolled tunnel already supplies the lip; no overlapping trim curve.
- for i in range(7):box('Cooling louvre',(s*.49,.55-i*.009,-.48-i*.07),(.19,.009,.022),black,r=.003)
+
  curve('Mirror stay',[(s*.3,.62,.29),(s*.48,.67,.37),(s*.65,.71,.36)],.011)
- box('Mirror shell',(s*.65,.71,.36),(.22,.063,.115),paint,r=.025);box('Mirror glass',(s*.65,.713,.299),(.175,.038,.004),mirror,r=.009)
+ loft('Mirror cowl',[[.298,s*.65,.096,.684,.731],[.308,s*.65,.108,.674,.742],[.36,s*.651,.105,.676,.744],[.409,s*.651,.085,.688,.730],[.427,s*.651,.062,.699,.717]],paint,n=24,power=.58)
+ box('Mirror glass',(s*.65,.710,.295),(.175,.038,.004),mirror,r=.009)
  # Sidepod fictional sponsors in the reference positions.
  rot=(0,s*math.pi/2,0)
  text('NOVA', (s*.852,.48,-.3),.14,silver,rot)
  ellipsoid('Solar emblem',(s*.812,.445,-.72),(.003,.062,.069),gold)
  text('VOLT', (s*.73,.42,-1.08),.065,silver,rot)
  text('AEROLINK',(s*.318,.46,.78),.05,silver,rot)
-# White airbox front, red engine cover, split white/red vertical fin.
-loft('Red engine cover',[[-2.2,0,.12,.19,.47],[-1.7,0,.25,.20,.57],[-1.25,0,.29,.26,.73],[-.86,0,.23,.44,1.04],[-.67,0,.15,.61,1.09]],paint)
+# Continuous engine-cover cross section: a broad lower shoulder tapers into
+# the fin without a second bulb sitting on top of the first one.
+cover_stations=interp([[-2.21,.104,.20,.48],[-2.10,.153,.20,.62],[-1.88,.210,.20,.704],
+                       [-1.67,.251,.21,.767],[-1.39,.292,.23,.849],[-1.15,.278,.29,.933],
+                       [-.96,.251,.38,1.004],[-.84,.222,.46,1.069],[-.67,.150,.61,1.09]])
+outline=[(0,0),(.58,.033),(.87,.125),(1,.28),(.92,.43),(.74,.55),(.55,.67),
+         (.37,.78),(.21,.88),(.105,.95),(.05,.988),(0,1)]
+profile=outline+[(-width,h) for width,h in reversed(outline[1:-1])]
+vv=[(width*x,low+(high-low)*y,z) for z,width,low,high in cover_stations for x,y in profile]
+count=len(profile)
+ff=[(row*count+i,row*count+(i+1)%count,(row+1)*count+(i+1)%count,(row+1)*count+i)
+    for row in range(len(cover_stations)-1) for i in range(count)]
+ff.extend([tuple(reversed(range(count))),tuple(range(len(vv)-count,len(vv)))])
+mesh('Red engine cover',vv,ff,paint)
 cover=bpy.data.objects['Red engine cover'];cover.data.materials.append(white)
 for poly in cover.data.polygons:
  centre=sum((cover.data.vertices[i].co for i in poly.vertices),Vector())/len(poly.vertices)
@@ -198,24 +220,32 @@ for side in [-1,1]:curve('Lower intake divider',[(side*.038,.80,-.523),(side*.04
 panel('Red shark fin',[(0,.47,-2.19),(0,.87,-2.19),(0,.97,-1.26),(0,.56,-1.26)],.018,paint)
 panel('White shark fin',[(0,.56,-1.27),(0,.97,-1.27),(0,1.015,-.88),(0,.73,-.88)],.02,white)
 for s in [-1,1]:
- text('44',(s*.014,.765,-1.78),.19,silver,(0,s*math.pi/2,0),numberA)
- text('23',(s*.014,.765,-1.78),.19,silver,(0,s*math.pi/2,0),numberB)
+ text('44',(s*.014,.785,-1.78),.30,silver,(0,s*math.pi/2,0),numberA)
+ text('23',(s*.014,.785,-1.78),.30,silver,(0,s*math.pi/2,0),numberB)
  ellipsoid('Blue airbox badge',(s*.207,.87,-.85),(.003,.065,.075),brandblue)
  text('nx',(s*.211,.87,-.85),.065,silver,(0,s*math.pi/2,0))
  text('ION',(s*.38,.61,-.2),.058,black,(0,s*math.pi/2,0))
 # Halo carbon arch, centre pillar, camera pod.
-arch=curve('Halo',[(-.32,.642,-.53),(-.326,.685,-.52),(-.37,.84,-.39),(-.34,.91,.1),(-.21,.91,.43),(0,.885,.58),(.21,.91,.43),(.34,.91,.1),(.37,.84,-.39),(.326,.685,-.52),(.32,.642,-.53)],.027)
-for i,p in enumerate(arch.data.splines[0].bezier_points):p.radius=1.65 if i in [0,10] else 1.10 if i in [1,9] else 1
-arch.data.resolution_u=16;arch.data.bevel_resolution=5
-pillar=curve('Halo central pillar',[(0,.603,.685),(0,.65,.67),(0,.74,.64),(0,.885,.58)],.027)
-for p,r in zip(pillar.data.splines[0].bezier_points,[1.65,1.05,1,1]):p.radius=r
-pillar.data.resolution_u=16;pillar.data.bevel_resolution=5
+build_halo(mesh, interp, carbon, metal, black, rod)
 box('T camera',(0,1.15,-.72),(.28,.042,.058),carbon,r=.012)
 rod('Camera pedestal',(0,1.09,-.72),(0,1.14,-.72),.022)
 # Main plane plus three cascading contoured flaps. All exposed carbon.
-for i in range(4):wing('Front wing element '+str(i),1.99-i*.035,2.73-i*.145,.115+i*.028,.27 if i==0 else .20,carbon,sweep=.17,lift=.065)
+aero=mat('AeroLaminate','11141a',.52,.05)
+front_elements=[]
+front_elements.append(wing('Front mainplane',1.956,2.715,.100,.33,aero,sweep=.116,lift=.025))
+for side in [-1,1]:
+ for index,(z,y,chord) in enumerate([(2.562,.133,.227),(2.425,.167,.224),(2.305,.202,.200)]):
+  front_elements.append(wing('Front flap '+str(index),1.956,z,y,chord,aero,
+                             sweep=.131+index*.012,lift=.037+index*.008,side=side,root_width=.068+index*.035))
+ # Slot-gap separators tie neighbouring flaps together at two span stations.
+ for distance in [.40,.76]:
+  for j in range(3):
+   z=2.56-j*.123-.12*distance*distance
+   panel('Flap slot bridge',[(side*distance,.101+j*.034,z+.035),(side*distance,.134+j*.034,z-.014),
+         (side*distance,.148+j*.034,z-.022),(side*distance,.132+j*.034,z+.041)],.006,aero)
 for s in [-1,1]:
- loft('Curved front endplate',[[2.18,s*.94,.014,.14,.27],[2.42,s*.985,.012,.12,.26],[2.77,s*.97,.012,.12,.24],[2.9,s*.91,.012,.13,.19]],carbon,n=16)
+ panel('Front wing end fence',[(s*.978,.112,2.815),(s*.978,.184,2.762),(s*.978,.248,2.39),
+       (s*.978,.272,2.155),(s*.978,.263,2.035),(s*.978,.192,2.046),(s*.978,.122,2.232)],.013,aero)
  curve('Nose mounting pylon',[(s*.09,.21,2.52),(s*.13,.16,2.5)],.014)
  text('AURORA',(s*.62,.255,2.46),.09,silver,(-math.pi/2,0,math.pi))
  text('VOLT',(s*.87,.21,2.73),.065,silver,(-math.pi/2,0,math.pi))
@@ -244,16 +274,20 @@ for v in shell.data.vertices:
  if v.co.z<-.3:v.co.z*=.94
 def helmet_band(name,lo,hi,material,start=-math.pi,end=math.pi):
  vs=[];fs=[];N=96
- for y in [lo,hi]:
+ rows=max(1,math.ceil((hi-lo)/.009))
+ for row in range(rows+1):
+  y=lo+(hi-lo)*row/rows
   r=math.sqrt(max(0,1-((y-.772)/.178)**2))
   for i in range(N+1):
    a=start+(end-start)*i/N
-   vs.append((.159*r*math.sin(a),y,-.315+.192*r*math.cos(a)))
- for i in range(N):fs.append((i,i+1,N+i+2,N+i+1))
+   vs.append((.1605*r*math.sin(a),y,-.315+.194*r*math.cos(a)))
+ for row in range(rows):
+  for i in range(N):
+   k=row*(N+1)+i;fs.append((k,k+1,k+N+2,k+N+1))
  return mesh(name,vs,fs,material,helmet)
-helmet_band('Curved visor glazing',.755,.821,visor,-1.42,1.42)
-helmet_band('Visor upper seal',.821,.826,black,-1.44,1.44)
-helmet_band('Visor lower seal',.749,.755,black,-1.44,1.44)
+helmet_band('Curved visor glazing',.744,.829,visor,-1.42,1.42)
+helmet_band('Visor upper seal',.829,.835,black,-1.44,1.44)
+helmet_band('Visor lower seal',.739,.744,black,-1.44,1.44)
 helmet_band('Lower shell binding',.650,.661,black)
 helmet_band('Crown red pinline',.858,.864,paint)
 helmet_band('Crown ivory pinline',.866,.870,silver)
@@ -273,6 +307,37 @@ for label,pos,size in [('NEXUS',(0,.966,-.344),.037),('44',(0,.949,-.407),.036),
  bpy.context.view_layer.objects.active=o;o.select_set(True);bpy.ops.object.convert(target='MESH');o=bpy.context.object
  sw=o.modifiers.new('Crown decal conformity','SHRINKWRAP');sw.target=shell;sw.wrap_method='NEAREST_SURFACEPOINT';sw.offset=.001
  bpy.ops.object.modifier_apply(modifier=sw.name)
+# Helmet graphics conform to the crown itself. Their sweeps converge at the
+# back and split around the vents; each stripe is one thin curved surface.
+for side in [-1,1]:
+ for low,wide,ink in [(.33,.105,helmetink),(.455,.030,silver),(.51,.090,paint)]:
+  vv=[];ff=[]
+  for step in range(35):
+   longitude=side*(.72+step/34*2.15)
+   fade=math.sin(math.pi*step/34)**.65
+   centre=low+.61*math.sin(math.pi*(step/34)*.89)
+   for edge in [-1,1]:
+    elevation=centre+edge*wide*fade
+    vv.append((.1595*math.cos(elevation)*math.sin(longitude),.772+.1795*math.sin(elevation),
+               -.315+.192*math.cos(elevation)*math.cos(longitude)))
+   if step:ff.append((2*step-2,2*step-1,2*step+1,2*step))
+  mesh('Swept helmet graphic',vv,ff,ink,helmet)
+# The moulded seat and horseshoe head restraint remain visible in an empty
+# showroom cockpit and shield the rear aperture around the suited driver.
+seatmat=mat('SeatFoam','26282a',.95)
+seatrows=interp([[-.715,.210,.617],[-.635,.236,.578],[-.493,.220,.412],
+                 [-.365,.202,.289],[-.18,.183,.266],[.05,.150,.31]],4)
+vv=[];ff=[]
+for j,(z,width,h) in enumerate(seatrows):
+ for k in range(19):
+  x=k/9-1
+  vv.append((width*x,h+.062*x*x,z))
+  if j and k:
+   a=j*19+k;ff.append((a-20,a-19,a,a-1))
+mesh('Moulded bucket seat',vv,ff,seatmat)
+for side in [-1,1]:
+ loft('Energy absorbing headrest',[[-.775,side*.146,.028,.597,.675],[-.67,side*.190,.057,.60,.697],
+      [-.48,side*.227,.044,.589,.693],[-.31,side*.245,.032,.602,.673],[-.215,side*.252,.017,.610,.649]],seatmat,n=18,power=.67)
 # Wheel accurate butterfly silhouette, front face towards driver (-Z).
 outline=[(-.19,.065,0),(-.15,.105,0),(.11,.105,0),(.18,.07,0),(.205,-.04,0),(.16,-.12,0),(.1,-.105,0),(-.1,-.105,0),(-.17,-.12,0),(-.205,-.035,0)]
 # Extrude silhouette along Z.
@@ -300,82 +365,8 @@ for x,y in [(.067,-.066),(0,-.073),(-.072,-.089)]:
   a=(i/8*1.5+.25)*math.pi
   rod('Rotary index tick',(x+.029*math.cos(a),y+.029*math.sin(a),-.024),(x+.032*math.cos(a),y+.032*math.sin(a),-.024),.00055,silver,steer,4)
 fabric=mat('GloveFabric','d6d3c9',.92);stitch=mat('GloveStitch','9c9c96',.96);suede=mat('GloveSuede','30343c',.98);glovepanel=mat('GlovePanel','9fa820',.95)
-# Sculpted grip pose. Hand and forearm pivots are exported separately for articulation.
-hands=group('Hands');hands.parent=steer
-for side in [-1,1]:
- hand=group('HandL' if side<0 else 'HandR');hand.parent=hands
- # One tailored shell from the sleeve opening to the metacarpals. The back
- # is broad and shallow, not a sphere; a narrow wrist joins the cuff smoothly.
- sections=interp([
-  [-.111,.208,.025,-.041,.019],[-.098,.208,.026,-.043,.020],
-  [-.078,.207,.023,-.044,.018],[-.060,.205,.025,-.044,.018],
-  [-.035,.204,.026,-.041,.020],[-.010,.206,.026,-.037,.021],
-  [.004,.208,.025,-.034,.020],[.013,.210,.024,-.027,.018],
-  [.018,.210,.020,-.023,.016]],4)
- vs=[];fs=[];N=24
- for y,x,w,z,depth in sections:
-  for k in range(N):
-   a=k*math.tau/N;c=math.cos(a);q=math.sin(a)
-   # Rounded rectangular section gives a flat fabric dorsum and palm pad.
-   vs.append((side*(x+math.copysign(abs(c)**.72,c)*w),y,z+math.copysign(abs(q)**.70,q)*depth))
- for j in range(len(sections)-1):
-  for k in range(N):a=j*N+k;b=j*N+(k+1)%N;fs.append((a,b,b+N,a+N))
- fs.extend([tuple(reversed(range(N))),tuple((len(sections)-1)*N+k for k in range(N))])
- palm=mesh('Tailored palm and wrist shell',vs,fs,fabric,hand)
- # A sewn stretch panel uses the SAME shell surface, offset by 0.35mm.
- # Its softly zig-zagged boundaries and narrow colour break read as textile,
- # not a giant padded oval stuck to the glove.
- pv=[];pf=[];rows=[row for row in sections if -.067<=row[0]<=-.004];cols=10
- for y,x,w,z,depth in rows:
-  for k in range(cols+1):
-   a=4.37+(k/cols)*.68+.05*math.sin(y*170)
-   xx=x+math.copysign(abs(math.cos(a))**.72,math.cos(a))*w
-   zz=z+math.copysign(abs(math.sin(a))**.70,math.sin(a))*depth-.00035
-   pv.append((side*xx,y,zz))
- for j in range(len(rows)-1):
-  for k in range(cols):a=j*(cols+1)+k;pf.append((a,a+1,a+cols+2,a+cols+1))
- mesh('Flush woven stretch panel',pv,pf,glovepanel,hand)
- for j in range(5):
-  # Independent, embedded knuckle pivots. Different lengths/curl avoid parallel tubes.
-  finger=group(('FingerL' if side<0 else 'FingerR')+str(j));finger.parent=hand
-  yy=.016-j*.018;root=Vector((side*.220,yy,-.041)) if j<4 else Vector((side*.189,-.037,-.039));finger.location=root
-  # Proximal phalanges join the broad back of the glove; the tips curl away
-  # from the driver around the OUTSIDE of the grip. No exposed noodle loops.
-  pts=[tuple(root),(side*(.239-j*.001),yy-.001,-.019),(side*(.218-j*.002),yy-.004,.024),(side*(.185+j*.003),yy-.008,.026)] if j<4 else [tuple(root),(side*.177,-.023,-.046),(side*.167,-.006,-.034),(side*.164,.004,-.015)]
-  radii=[.0105,.010,.0085,.0055] if j<4 else [.012,.0105,.009,.0055]
-  sections=interp([list(Vector(p)-root)+[r] for p,r in zip(pts,radii)],5)
-  vs=[];fs=[];N=12
-  for k,sec in enumerate(sections):
-   c=Vector(sec[:3]);t=Vector(sections[min(k+1,len(sections)-1)][:3])-Vector(sections[max(0,k-1)][:3]);t.normalize()
-   u=t.cross(Vector((0,1,0))).normalized();v=t.cross(u).normalized()
-   for i in range(N):
-    a=i*math.tau/N;vs.append(tuple(c+sec[3]*(math.cos(a)*u*.85+math.sin(a)*v)))
-  for k in range(len(sections)-1):
-   for i in range(N):a=k*N+i;b=k*N+(i+1)%N;fs.append((a,b,b+N,a+N))
-  fs.extend([tuple(reversed(range(N))),tuple((len(sections)-1)*N+i for i in range(N))])
-  mesh('Tapered articulated phalanges',vs,fs,fabric,finger)
- # Thin reinforcement follows the palm edge, leaving the fabric back exposed.
- # No oversized oval badge, inflated knuckle spheres or detached wrist ball.
- for j in range(4):
-  yy=.014-j*.018
-  seam=curve('Knuckle flex seam',[(side*.226,yy,-.045),(side*.234,yy-.003,-.037),(side*.239,yy-.004,-.023)],.00045,stitch,hand)
-  seam.data.resolution_u=3;seam.data.bevel_resolution=1
- for x in [.196,.224]:
-  c=curve('Flat dorsal stitch',[(side*x,-.042,-.062),(side*(x+.002),-.018,-.059),(side*(x+.003),.006,-.052)],.00035,stitch,hand)
-  c.data.resolution_u=3;c.data.bevel_resolution=1
- for j in range(2):
-  pts=[(side*(.208+.0255*math.copysign(abs(math.cos(a))**.72,math.cos(a))),-.099-j*.003,-.043+.0205*math.copysign(abs(math.sin(a))**.70,math.sin(a))) for a in [k*math.tau/32 for k in range(33)]]
-  c=curve('Cuff double seam',pts,.00045,stitch,hand);c.data.resolution_u=2;c.data.bevel_resolution=1
- patch=box('Flat cuff fastening',(side*.207,-.092,-.064),(.030,.010,.0015),suede,hand,r=.002)
- text('N',(side*.207,-.032,-.0625),.010,silver,(0,math.pi,0),hand)
- # Fine fabric compression folds at the wrist, not raised padded tubes.
- for j in range(2):
-  c=curve('Wrist compression seam',[(side*.187,-.064-j*.006,-.057),(side*.205,-.066-j*.006,-.062),(side*.226,-.062-j*.006,-.056)],.0004,stitch,hand)
-  c.data.resolution_u=3;c.data.bevel_resolution=1
- arm=group('ForearmL' if side<0 else 'ForearmR');arm.parent=body
- # Unit Y-axis tapered sleeve; runtime aims it from elbow to moving wrist.
- ellipsoid('Sleeve capsule',(0,.5,0),(.044,.55,.040),sleeve,arm,seg=24,rings=16)
- for j in range(3):curve('Elbow folds',[(-.032,.18+j*.055,0),(0,.20+j*.055,-.034),(.032,.18+j*.055,0)],.0018,fabric,arm)
+steer.scale=(.85,.9,1)
+build_driver(group, mesh, curve, interp, steer, body, (fabric, glovepanel, suede, stitch, sleeve))
 # Tyres with radial sidewall typography, dish covers and tiny fasteners.
 for front in [True,False]:
  for s in [-1,1]:
@@ -383,14 +374,17 @@ for front in [True,False]:
   # Upright, spaced ball joints and inboard pickup brackets (not one shared hub point).
   ux=x-s*.10
   rod('Upright',(ux,.22,z),(ux,.48,z),.029,metal,vertices=12)
-  for yy in [.235,.46]:
+  for level,yy in enumerate([.251,.419]):
    for dz in [-.33,.28]:
-    pick=(s*(.24 if front else .18),yy,z+dz);joint=(ux,yy,z)
-    rod('Carbon wishbone',pick,joint,.013)
+    # Taper the blades into the actual nose/gearbox at both chassis stations.
+    pick=(s*((.188 if dz<0 else .129) if front else (.09 if dz<0 else .15)),yy-(.026 if front and dz>0 and level else 0),z+dz)
+    joint=(ux,yy+(.016 if level else -.014),z)
+    blade=rod('Carbon wishbone',pick,joint,.015)
+    blade.scale.x=1.68;blade.scale.y=.66
     box('Pickup clevis',pick,(.052,.036,.07),metal,r=.007)
-    rod('Pickup bolt',(pick[0]-.03,yy,z+dz),(pick[0]+.03,yy,z+dz),.009,metal,vertices=6)
+    rod('Pickup bolt',(pick[0]-.03,pick[1],z+dz),(pick[0]+.03,pick[1],z+dz),.009,metal,vertices=6)
    ellipsoid('Upright spherical joint',(ux,yy,z),(.027,.022,.025),metal)
-  rod('Suspension pushrod',(s*.18,.56,z-.25),(ux,.25,z),.014)
+  rod('Suspension pushrod',(s*.138,.457 if front else .43,z+(-.29 if front else .29)),(ux,.25,z),.013)
   rod('Steering trackrod',(s*.18,.33,z+.22),(ux,.34,z+.08),.009)
   box('Brake duct scoop',(x-s*.17,.39,z+.16),(.085,.13,.13),carbon,r=.025)
   box('Brake duct opening',(x-s*.17,.40,z+.229),(.058,.087,.005),black,r=.015)
@@ -409,8 +403,10 @@ for front in [True,False]:
    lathe('Recessed black dish',[(xx,.231),(xx-side*.012,.224),(xx-side*.019,.212),(xx-side*.034,.19),(xx-side*.043,.12),(xx-side*.04,.04)],dish)
    lathe('Rim lip',[(xx,.231),(xx+side*.003,.232),(xx+side*.004,.226),(xx,.224)],dish)
    rod('Centre nut',(xx-side*.04,0,0),(xx+side*.015,0,0),.034,metal,pivot,6)
-   rod('Nut red ring',(xx+side*.015,0,0),(xx+side*.023,0,0),.025,red,pivot,24)
-   rod('Nut yellow centre',(xx+side*.024,0,0),(xx+side*.03,0,0),.013,yellow,pivot,20)
+   lathe('Locking collar',[(xx+side*.014,.030),(xx+side*.020,.027),(xx+side*.020,.020),(xx+side*.011,.018)],metal)
+   rod('Hollow axle',(xx+side*.016,0,0),(xx+side*.017,0,0),.020,black,pivot,20)
+   for clip in [-1,1]:
+    box('Centrelock spring tab',(xx+side*.021,.020*clip,.006),(.004,.006,.013),red,pivot,r=.001)
    lathe('Ventilated carbon brake rotor',[(xx-side*.07,.075),(xx-side*.07,.205),(xx-side*.083,.205),(xx-side*.083,.075)],brake)
    box('Brake caliper',(xx-side*.092,.155,0),(.045,.09,.13),metal,pivot,r=.012)
    for j in range(18):
@@ -418,7 +414,7 @@ for front in [True,False]:
    # Plane text local X runs around sidewall; normal faces +/-X.
    for label,centre in [('PZ-RACE',0),('ZERO SLICK',math.pi)]:
     for i,ch in enumerate(label):
-     a=centre+(i-(len(label)-1)/2)*.14
+     a=centre-side*(i-(len(label)-1)/2)*.14
      o=text(ch,(side*w*.517,.303*math.cos(a),.303*math.sin(a)),.047,silver,parent=pivot)
      # local right tangent, up radial, normal outward.
      from mathutils import Matrix
@@ -429,10 +425,12 @@ for front in [True,False]:
      a=start+j*.065;o=box('Sidewall segment',(side*w*.518,.306*math.cos(a),.306*math.sin(a)),(.001,.022,.010),silver,pivot);o.rotation_euler.x=a
    for j in range(8):
     a=j*math.tau/8;rod('Cover fastener',(xx,.216*math.cos(a),.216*math.sin(a)),(xx+side*.003,.216*math.cos(a),.216*math.sin(a)),.002,metal,pivot,6)
-text('44',(0,.43,1.68),.22,silver,(-math.pi/2-.12,0,math.pi),numberA)
-text('23',(0,.43,1.68),.22,silver,(-math.pi/2-.12,0,math.pi),numberB)
-text('NEXUS',(0,.575,1.0),.09,silver,(-math.pi/2-.16,0,math.pi))
-ellipsoid('Nose solar badge',(0,.335,2.14),(.064,.003,.065),gold)
+# Nose and front wing marks are projected on the final target meshes below.
+nose_labels=[]
+for label,z,size,parent in [('44',1.45,.34,numberA),('23',1.45,.34,numberB),
+                            ('NEXUS',.90,.123,decals),('VECTOR',1.78,.077,decals),
+                            ('SOLAR',2.04,.060,decals),('JGP',2.46,.067,decals)]:
+ nose_labels.append(text(label,(0,1,z),size,silver,(-math.pi/2,0,0),parent).name)
 # Convert curves, recompute outward normals, batch static parts per parent/material.
 bpy.ops.object.select_all(action='DESELECT')
 for o in list(bpy.context.scene.objects):
@@ -510,7 +508,7 @@ for poly in skin.data.polygons:
  poly.use_smooth=True
 # Surface decals use one projected sheet, never a collapsed ellipsoid with overlapping faces.
 for o in list(bpy.context.scene.objects):
- if o.name.startswith('Blue airbox badge'):bpy.data.objects.remove(o,do_unlink=True)
+ if o.name.startswith(('Blue airbox badge','Solar emblem')):bpy.data.objects.remove(o,do_unlink=True)
 for side in [-1,1]:
  vs=[];fs=[];N=48
  for ring in range(4):
@@ -522,11 +520,95 @@ for side in [-1,1]:
  for ring in range(3):
   for j in range(N):a=ring*N+j;b=ring*N+(j+1)%N;fs.append((a,b,b+N,a+N))
  mesh('Conformal blue badge',vs,fs,brandblue,decals)
+# The sidepod emblem sits on the final painted skin at every radius.
+for side in [-1,1]:
+ vs=[];fs=[];steps=32
+ for ring in range(1,5):
+  for j in range(steps):
+   angle=j*math.tau/steps
+   y=.428+.054*ring/4*math.cos(angle);z=-.72+.064*ring/4*math.sin(angle)
+   hit,co,no,_=skin.ray_cast(Vector((side*1.2,y,z)),Vector((-side,0,0)))
+   if not hit:raise RuntimeError('Sidepod emblem missed the paint')
+   vs.append(co+no*.0014)
+ fs.append(tuple(range(steps)))
+ for ring in range(3):
+  for j in range(steps):
+   a=ring*steps+j;b=ring*steps+(j+1)%steps;fs.append((a,b,b+steps,a+steps))
+ mesh('Conformal energy insignia',vs,fs,gold,decals)
 for o in list(bpy.context.scene.objects):
  if o.type=='MESH' and o.name.startswith('Mark nx'):
   side=1 if o.location.x>0 else -1;o.location=(side*.5,.90,-.90);o.parent=decals
   bpy.context.view_layer.objects.active=o;mod=o.modifiers.new('Conformal airbox lettering','SHRINKWRAP');mod.target=skin;mod.wrap_method='PROJECT';mod.use_project_z=True;mod.use_positive_direction=False;mod.use_negative_direction=True;mod.offset=.004;bpy.ops.object.modifier_apply(modifier=mod.name)
 
+# Paint is printed on curved panels. Casting each glyph vertex stops text
+# disappearing inside the taper or hovering over a slot between aero elements.
+def drape_from_above(obj, surfaces):
+ bm=bmesh.new();bm.from_mesh(obj.data)
+ bmesh.ops.triangulate(bm,faces=list(bm.faces))
+ bmesh.ops.subdivide_edges(bm,edges=list(bm.edges),cuts=1,use_grid_fill=True)
+ bm.to_mesh(obj.data);bm.free()
+ world=obj.matrix_world.copy();inverse=world.inverted()
+ for vertex in obj.data.vertices:
+  pos=world@vertex.co
+  hits=[hit for target in surfaces if (hit:=target.ray_cast(Vector((pos.x,1.6,pos.z)),Vector((0,-1,0))))[0]]
+  if hits:
+   _,point,_,_=max(hits,key=lambda hit:hit[1].y)
+   vertex.co=inverse@Vector((point.x,point.y+.0018,point.z))
+ obj.data.update()
+for label in nose_labels:drape_from_above(bpy.data.objects[label],[skin])
+nose_badge=[]
+for radius in [.15,.55,1]:
+ for j in range(32):
+  a=j*math.tau/32;x=radius*.075*math.cos(a);z=1.897+radius*.073*math.sin(a)
+  ok,co,_,_=skin.ray_cast(Vector((x,1.3,z)),Vector((0,-1,0)))
+  if not ok:raise RuntimeError('Nose insignia missed paint')
+  nose_badge.append((x,co.y+.0019,z))
+mesh('Nose energy insignia',nose_badge,[tuple(range(32))]+[(i+j,i+(j+1)%32,i+(j+1)%32+32,i+j+32) for i in [0,32] for j in range(32)],gold,decals)
+for parent in [numberA,numberB]:
+ for mark in parent.children:
+  if mark.location.z>0:continue
+  sign=1 if mark.location.x>0 else -1
+  inv=mark.matrix_world.inverted()
+  for vertex in mark.data.vertices:
+   pt=mark.matrix_world@vertex.co
+   hit,co,_,_=skin.ray_cast(Vector((sign*1.1,pt.y,pt.z)),Vector((-sign,0,0)))
+   if hit and sign*co.x>.009:vertex.co=inv@Vector((co.x+sign*.0015,pt.y,pt.z))
+
+for o in list(body.children):
+ if o.type=='MESH' and o.name.startswith(('Mark AURORA','Mark VOLT')) and o.location.z>2.0:
+  # Use a single flap face for each word; the slot remains physically clear.
+  o.rotation_euler=(-math.pi/2,0,0)
+  o.location.z=2.38 if o.name.startswith('Mark AURORA') else 2.62
+  bpy.context.view_layer.update()
+  drape_from_above(o,front_elements)
+# Flush louvres follow the downwash ramp. Their front binding casts a small
+# shadow along the opening while the black throat recedes into the paint.
+for side in [-1,1]:
+ for index in range(7):
+  slot=[];lip=[]
+  for j in range(13):
+   t=j/12;x=side*(.350+.18*t-.010*index)
+   z=-.50-.078*index-.060*t
+   half=.0105*math.sin(math.pi*t)**.66+.001
+   for target,edges in [(slot,[-half,half]),(lip,[half,half+.004])]:
+    for k,dz in enumerate(edges):
+     ok,co,_,_=skin.ray_cast(Vector((x,1.2,z+dz)),Vector((0,-1,0)))
+     if not ok:raise RuntimeError('Cooling outlet missed rear deck')
+     target.append((x,co.y+.002+(k*.002 if target is lip else 0),z+dz))
+  faces=[(2*j,2*j+1,2*j+3,2*j+2) for j in range(12)]
+  mesh('Cooling exit slot',slot,faces,black)
+  mesh('Stamped louvre lip',lip,faces,paint)
+# A laminated socket wraps around each halo lug and lies against the
+# manufactured deck at its base, following the local slope of the skin.
+for side in [-1,1]:
+ socket=[]
+ for ring,(width,depth,h) in enumerate([(.057,.071,.0016),(.054,.068,.005),(.039,.049,.020)]):
+  for j in range(40):
+   a=j*math.tau/40;x=side*(.320+width*math.cos(a));z=-.525+depth*math.sin(a)
+   ok,co,_,_=skin.ray_cast(Vector((x,1.3,z)),Vector((0,-1,0)))
+   socket.append((x,(co.y if ok else .60)+h,z))
+ mesh('Laminated halo socket',socket,[(r*40+j,r*40+(j+1)%40,(r+1)*40+(j+1)%40,(r+1)*40+j)
+      for r in range(2) for j in range(40)],carbon)
 # Replace flat, intersecting cockpit liner panels with one smooth inner oval tub.
 for o in list(bpy.context.scene.objects):
  if o.name.startswith(('Cockpit carbon liner','Inner carbon cockpit wall','Carbon pedal bulkhead')):bpy.data.objects.remove(o,do_unlink=True)
@@ -542,7 +624,7 @@ mesh('Smooth carbon cockpit liner',vv,ff,carbon)
 # Their geometry is exported by Blender and protected with the other decals.
 from mathutils import Matrix
 halo_mesh=bpy.data.objects.get('Halo')
-for label,pos,size,right in [('NEXUS',(0,.924,.57),.030,(-1,0,0)),('AEROLAB',(-.35,.946,.06),.024,(0,0,-1)),('VECTOR',(.35,.946,.06),.026,(0,0,1))]:
+for label,pos,size,right in [('NEXUS',(0,.924,.57),.030,(-1,0,0)),('AEROLAB',(-.324,.945,.105),.033,(0,0,-1)),('NEXUS',(.324,.945,.105),.037,(0,0,1)),('JGP',(-.270,.945,.305),.031,(0,0,-1)),('JGP',(.270,.945,.305),.031,(0,0,1))]:
  o=text(label,pos,size,silver,parent=decals)
  o.data.resolution_u=1  # Small markings need fewer curve subdivisions than body silhouettes.
  normal=Vector((0,1,0));r=Vector(right);up=normal.cross(r)
@@ -571,7 +653,7 @@ for parent in list(groups.values()):
 # Preserve curved painted skins and tyre shoulders; simplify small mechanical parts only.
 for o in bpy.context.scene.objects:
  if o.type=='MESH' and o.parent not in [floor,decals] and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','Rubber','GloveFabric','Sleeve','HelmetPaint','HelmetInk'] for m in o.data.materials):
-  d=o.modifiers.new('Optimised smooth production topology','DECIMATE');d.ratio=.52
+  d=o.modifiers.new('Optimised smooth production topology','DECIMATE');d.ratio=.46
   bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=d.name)
 # Bake actual Cycles CPU occlusion into a shared packed UV atlas.
 bpy.context.scene.render.engine='CYCLES';bpy.context.scene.cycles.device='CPU';bpy.context.scene.cycles.samples=32
@@ -601,7 +683,7 @@ n=groundmat.node_tree.nodes.new('ShaderNodeTexImage');n.image=contact;groundmat.
 bpy.ops.object.bake(type='AO',use_clear=True)
 contact.filepath_raw=str(OUT/'jgp26-contact.png');contact.file_format='PNG';contact.save();bpy.data.objects.remove(ground,do_unlink=True)
 # Store reproducible editable source and two self-contained LODs.
-bpy.ops.wm.save_as_mainfile(filepath=str(ROOT/'scripts/blender/jgp26.blend'))
+
 def export(name):
  bpy.ops.export_scene.gltf(filepath=str(OUT/name),export_format='GLB',export_yup=False,export_apply=True,export_cameras=False,export_lights=False)
 export('jgp26-high.glb')
@@ -615,4 +697,11 @@ sys.path.insert(0,str(Path(__file__).parent))
 from pack_glb import pack
 for level in ['high','low']:pack(OUT/f'jgp26-{level}.glb',OUT/f'jgp26-{level}.glb.gz')
 (OUT/'daylight.hdr.gz').write_bytes(gzip.compress((OUT/'daylight.hdr').read_bytes(),mtime=0))
+# Keep the editable high-detail car in its own lit Blender studio; only the
+# deforming racing assets above are sent to the realtime renderer.
+for obj in list(bpy.context.scene.objects):
+ for mod in list(obj.modifiers):
+  if mod.name=='Distance LOD':obj.modifiers.remove(mod)
+from studio import save_studio
+save_studio(ROOT/'scripts/blender/jgp26.blend')
 print('CAR_EXPORT_COMPLETE',tri)

@@ -44,3 +44,22 @@ it('leaves the airbox and sidepod mouths physically open in the exported painted
   expect(Number.isFinite(nearest)).toBe(true);expect(nearest).toBeLessThan(deep);
  }
 });
+
+it('keeps the aerofoil stacks and the moving DRS flap on both sides at each LOD',async()=>{
+ const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+ const {Raycaster,Vector3}=await import('three');
+ for(const level of ['high','low']){
+  const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
+  const {scene}=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+  scene.updateMatrixWorld(true);
+  for(const [part,z] of [['Chassis',2.70],['Chassis',2.53],['Chassis',2.40],['Chassis',2.27],['Chassis',-2.40],['DRS',-2.52]] as const){
+   const heights=[-.58,.58].map(x=>{
+    const ray=new Raycaster(new Vector3(x,1.1,z),new Vector3(0,-1,0));
+    const hit=ray.intersectObject(scene.getObjectByName(part)!,true)[0];
+    expect(hit,`${level} ${part} wing missing at x=${x}, z=${z}`).toBeTruthy();
+    return hit.point.y;
+   });
+   expect(Math.abs(heights[0]-heights[1])).toBeLessThan(.008);
+  }
+ }
+});

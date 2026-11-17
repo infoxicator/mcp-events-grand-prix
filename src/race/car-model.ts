@@ -39,33 +39,68 @@ export function createCar(team:'a'|'b'){
  const loaded=assets().then(models=>{if(dead)return;models.forEach((template,index)=>{
   const model=template.clone(true);const materials=new Map<T.Material,T.Material>();
   model.traverse(o=>{if(o instanceof T.Mesh){o.geometry=o.geometry.clone();const make=(original:T.MeshStandardMaterial)=>{const wheelRubber=original.name==='Rubber'&&!!o.parent?.name.match(/^(Front|Rear)[LR]$/);let m=wheelRubber?undefined:materials.get(original);if(!m){const p=new T.MeshPhysicalMaterial({color:original.color,roughness:original.roughness,metalness:original.metalness,map:original.map,transparent:original.transparent,opacity:original.opacity});p.name=original.name;
-   if(p.name==='Livery'){p.color.set(team==='a'?'#bd071b':'#08a59b');p.roughness=.38;p.metalness=.16;p.clearcoat=.28;p.clearcoatRoughness=.22;p.specularIntensity=.85;p.roughnessMap=grainMap;p.bumpMap=grainMap;p.bumpScale=.000018;}
-   if(p.name==='Ivory'){p.roughness=.36;p.clearcoat=.22;p.clearcoatRoughness=.23;}
+   if(p.name==='Livery'){p.color.set(team==='a'?'#bd071b':'#08a59b');p.roughness=.38;p.metalness=.16;p.clearcoat=.55;p.clearcoatRoughness=.19;p.specularIntensity=.85;p.roughnessMap=grainMap;p.bumpMap=grainMap;p.bumpScale=.000018;}
+   if(p.name==='Ivory'){p.roughness=.36;p.clearcoat=.42;p.clearcoatRoughness=.20;}
    if(p.name==='Ivory'&&team==='b'){p.color.set('#adbfc5');p.metalness=.65;p.roughness=.38;}
    if(p.name==='WheelDish'){p.color.set('#343c47');p.roughness=.29;p.metalness=.68;p.envMapIntensity=1.25;p.clearcoat=.1;}
    if(p.name==='BrakeDisc'){p.roughness=.65;p.metalness=.45;}
-   if(p.name==='Sleeve'){p.color.set(team==='a'?'#692331':'#15494b');p.roughness=.95;p.sheen=.4;}
+   if(p.name==='Sleeve'){p.bumpMap=fabricMap;p.bumpScale=.00024;p.color.set(team==='a'?'#712935':'#175451');p.roughness=.95;p.sheen=.4;}
+   if(p.name==='AeroLaminate'){p.color.set('#15171b');p.bumpMap=carbonMap;p.bumpScale=.00014;p.roughness=.53;p.metalness=.04;p.specularIntensity=.42;p.envMapIntensity=.55;}
    if(p.name==='Carbon'){p.color.set('#101318');p.bumpMap=carbonMap;p.bumpScale=.00022;p.roughnessMap=carbonMap;p.roughness=.32;p.metalness=.10;p.clearcoat=.1;p.specularIntensity=.65;p.envMapIntensity=.55;}
    if(p.name==='Mirror'){
     mirrors.push(p);o.geometry.computeBoundingBox();const bounds=o.geometry.boundingBox!,pos=o.geometry.getAttribute('position'),uv=new Float32Array(pos.count*2),mid=(bounds.min.x+bounds.max.x)/2;
     for(let i=0;i<pos.count;i++){const cx=pos.getX(i)<mid?bounds.min.x+.0875:bounds.max.x-.0875;uv[i*2]=.5+(pos.getX(i)-cx)/.175;uv[i*2+1]=(pos.getY(i)-bounds.min.y)/.038;}o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
    }
    if(p.name==='GloveSuede'){p.roughness=.98;p.sheen=.6;p.sheenColor.set('#858a90');p.sheenRoughness=.95;p.bumpMap=grainMap;p.bumpScale=.00012;}
-   if(p.name==='GlovePanel'){p.color.set(team==='a'?'#969f21':'#999b94');p.roughness=.97;p.bumpMap=fabricMap;p.bumpScale=.00028;p.sheen=.15;}
-   if(p.name==='GloveFabric'){p.color.set(team==='a'?'#d7df32':'#d6d3c9');p.roughness=.94;p.bumpMap=fabricMap;p.bumpScale=.00016;p.sheen=.25;p.sheenColor.set('#cac9b8');p.sheenRoughness=.9;}
+   if(p.name==='GlovePanel'){p.color.set(team==='a'?'#842733':'#136760');p.roughness=.97;p.bumpMap=fabricMap;p.bumpScale=.00028;p.sheen=.15;}
+   if(p.name==='GloveFabric'){p.color.set(team==='a'?'#d6c28c':'#c7d0c8');p.roughness=.94;p.bumpMap=fabricMap;p.bumpScale=.00016;p.sheen=.25;p.sheenColor.set('#cac9b8');p.sheenRoughness=.9;}
+   if(['GloveFabric','GloveSuede','GlovePanel','Sleeve'].includes(p.name)){
+    // Work in fabric space to keep the weave independent of the packed AO atlas.
+    // Attenuate subpixel threads in wider shots to avoid shimmer on moving hands.
+    p.onBeforeCompile=shader=>{
+     shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 clothPoint;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nclothPoint=position;');
+     shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 clothPoint;')
+      .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+       vec2 weaveCoord=vec2(dot(clothPoint,vec3(.84,.37,-.34)),dot(clothPoint,vec3(-.31,.52,.79)))*610.;
+       float resolve=1.-smoothstep(.17,.8,max(fwidth(weaveCoord.x),fwidth(weaveCoord.y)));
+       float weft=cos(6.28318*weaveCoord.x+1.2*sin(3.14159*weaveCoord.y))*cos(3.14159*weaveCoord.y);
+       diffuseColor.rgb*=.96+.085*weft*resolve;
+       roughnessFactor=clamp(roughnessFactor+.030*weft*resolve,.65,1.);
+      `);
+    };
+    p.customProgramCacheKey=()=> 'woven-racewear';
+   }
    if(p.name==='HelmetPaint'){p.color.set(team==='a'?'#e9ed24':'#e5edf0');p.roughness=.30;p.clearcoat=.5;p.clearcoatRoughness=.19;}
    if(p.name==='HelmetVisor'){p.roughness=.13;p.metalness=.65;p.clearcoat=.8;p.envMapIntensity=1.2;}
    if(p.name==='Rubber'){p.color.set('#17181a');p.roughness=.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
    if(p.name==='Rubber'&&o.parent?.name.match(/^(Front|Rear)[LR]$/)){
     const u={spin:{value:0},load:{value:.008},side:o.parent.name.endsWith('L')?-1:1,front:o.parent.name.startsWith('Front')};tyreUniforms.push(u);
-    p.onBeforeCompile=shader=>{shader.uniforms.tyreSpin=u.spin;shader.uniforms.tyreLoad=u.load;shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform float tyreSpin;uniform float tyreLoad;').replace('#include <begin_vertex>',`#include <begin_vertex>
+    p.onBeforeCompile=shader=>{// Sidewall mould lines and circumferential tread scrub are anchored to
+     // tyre space, so their finish rotates with the wheel and survives LOD changes.
+     shader.vertexShader=shader.vertexShader.replace('#include <common>',
+      '#include <common>\nvarying vec3 tyrePoint;').replace('#include <begin_vertex>',
+      '#include <begin_vertex>\ntyrePoint=position;');
+     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
+      '#include <common>\nvarying vec3 tyrePoint;').replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+       float r=length(tyrePoint.yz);
+       float shoulder=smoothstep(.331,.359,r);
+       float angle=atan(tyrePoint.z,tyrePoint.y);
+       float scrub=.5+.5*sin(tyrePoint.x*970.0+2.8*sin(angle*7.0)+1.4*cos(angle*13.0+tyrePoint.x*25.0));
+       float resolved=1.-smoothstep(.001,.006,fwidth(tyrePoint.x));
+       float mould=abs(fract(r*148.0)-.5);
+       float ring=(1.-smoothstep(.04,.05+fwidth(r)*150.,mould))*(1.-shoulder)*smoothstep(.236,.253,r);
+       roughnessFactor=clamp(roughnessFactor-.11*shoulder+.08*(scrub-.5)*resolved,.60,.97);
+       diffuseColor.rgb*=1.+.10*ring+shoulder*(.09+.13*(scrub-.5)*resolved);
+      `);
+     shader.uniforms.tyreSpin=u.spin;shader.uniforms.tyreLoad=u.load;shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform float tyreSpin;uniform float tyreLoad;').replace('#include <begin_vertex>',`#include <begin_vertex>
      float cs=cos(tyreSpin),sn=sin(tyreSpin);float worldY=position.y*cs-position.z*sn;
      float radial=length(position.yz);float contactWeight=(1.-smoothstep(-.36,-.28,worldY))*smoothstep(.23,.32,radial);
      float lift=max(0.,-.36+tyreLoad-worldY);transformed.y+=lift*cs;transformed.z-=lift*sn;
      transformed.x+=sign(position.x)*tyreLoad*.4*contactWeight;
-    `);};p.customProgramCacheKey=()=> 'loaded-slick-v1';
+    `);};p.customProgramCacheKey=()=> 'loaded-slick-v2';
    }
-   p.aoMap=['Mirror','MarkWhite'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='GloveFabric'?.50:p.name==='WheelDish'?.28:.65;p.side=T.DoubleSide;m=p;if(!wheelRubber)materials.set(original,m);
+   p.aoMap=['Mirror','MarkWhite'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='GloveFabric'?.68:p.name==='WheelDish'?.28:.65;p.side=T.DoubleSide;m=p;if(!wheelRubber)materials.set(original,m);
   }return m;};o.material=Array.isArray(o.material)?o.material.map(m=>make(m as T.MeshStandardMaterial)):make(o.material as T.MeshStandardMaterial);o.castShadow=!(Array.isArray(o.material)?o.material:[o.material]).every(m=>bakedDetailShadow.has(m.name));o.receiveShadow=true;originals.set(o,o.material);}});
   for(const name of team==='a'?['NumberB','HelmetNumberB']:['NumberA','HelmetNumberA']){const unused=model.getObjectByName(name);if(unused)unused.visible=false;}
   fingerRigs.set(model,([-1,1] as const).flatMap(side=>Array.from({length:5},(_,digit)=>({node:model.getObjectByName(`Finger${side<0?'L':'R'}${digit}`)!,side,digit})).filter(binding=>!!binding.node)));

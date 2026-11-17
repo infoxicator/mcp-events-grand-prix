@@ -5,7 +5,7 @@ export function poseForearms(model:T.Object3D,steering:T.Object3D,visible=true){
  for(const side of [-1,1]){
   const arm=model.getObjectByName(side<0?'ForearmL':'ForearmR');if(!arm)continue;
   arm.visible=visible;elbow.set(side*.25,.31,-.23);
-  wrist.set(side*.208,-.082,-.045).applyQuaternion(steering.quaternion).add(steering.position);
+  wrist.set(side*(.216-.205*(1-.85)),-.071,-.117).applyQuaternion(steering.quaternion).add(steering.position);
   direction.copy(wrist).sub(elbow);arm.position.copy(elbow);arm.scale.set(1,direction.length(),1);arm.quaternion.setFromUnitVectors(axis,direction.normalize());
  }
 }
