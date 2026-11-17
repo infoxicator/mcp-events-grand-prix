@@ -22,8 +22,8 @@ paint=mat('Livery','cb091c',.4,.08);white=mat('Ivory','f4f3ef',.38,.03);carbon=m
 groups={}
 def group(name):
  o=bpy.data.objects.new(name,None);bpy.context.collection.objects.link(o);groups[name]=o;return o
-body=group('Chassis');decals=group('ConformalDecals');decals.parent=body;steer=group('Steering');steer.location=(0,.51,.16);flap=group('DRS');flap.location=(0,.87,-2.42)
-helmet=group('Helmet');numberA=group('NumberA');numberB=group('NumberB');wheelgroups=[]
+body=group('Chassis');decals=group('ConformalDecals');decals.parent=body;steer=group('Steering');steer.location=(0,.57,.16);flap=group('DRS');flap.location=(0,.87,-2.42)
+helmet=group('Helmet');helmet.location=(0,.025,.15);numberA=group('NumberA');numberB=group('NumberB');wheelgroups=[]
 def mesh(name,vs,fs,m,parent=body):
  me=bpy.data.meshes.new(name);me.from_pydata(vs,[],fs);me.update();o=bpy.data.objects.new(name,me);bpy.context.collection.objects.link(o);o.data.materials.append(m);o.parent=parent
  for p in me.polygons:p.use_smooth=True
@@ -230,10 +230,49 @@ for s in [-1,1]:
 box('DRS hydraulic pod',(0,.885,-2.3),(.065,.075,.19),carbon,r=.025);rod('DRS ram',(0,.88,-2.32),(0,.89,-2.46),.009,metal)
 rod('Titanium exhaust',(0,.41,-2.25),(0,.41,-2.67),.052,metal,vertices=32);rod('Exhaust opening',(0,.41,-2.665),(0,.41,-2.675),.044,black,vertices=32)
 box('Rain light',(0,.2,-2.72),(.085,.06,.015),red,r=.009)
-# Driver can be hidden in driver's-eye camera.
-ellipsoid('Suit shoulders',(0,.48,-.32),(.23,.13,.2),black,helmet)
-ellipsoid('Helmet shell',(0,.76,-.34),(.145,.155,.16),white,helmet)
-ellipsoid('Visor',(0,.78,-.201),(.13,.045,.025),black,helmet)
+# Seated driver, modelled in metres. The camera sees the crown from behind;
+# the helmet is a shaped shell with an actual curved visor, not a white ball.
+helmetpaint=mat('HelmetPaint','e9ed24',.31,.07)
+helmetink=mat('HelmetInk','18212e',.4)
+visor=mat('HelmetVisor','172029',.13,.65)
+ellipsoid('Suit shoulders',(0,.49,-.35),(.235,.135,.20),sleeve,helmet)
+ellipsoid('Neck balaclava',(0,.61,-.32),(.085,.085,.09),black,helmet)
+shell=ellipsoid('Helmet shell',(0,.772,-.315),(.158,.178,.19),helmetpaint,helmet,seg=64,rings=32)
+# Slightly flattened rear/chin and fuller brow, smoothly continuous shell.
+for v in shell.data.vertices:
+ if v.co.y<-.45:v.co.z+=.16*(-v.co.y-.45)
+ if v.co.z<-.3:v.co.z*=.94
+def helmet_band(name,lo,hi,material,start=-math.pi,end=math.pi):
+ vs=[];fs=[];N=96
+ for y in [lo,hi]:
+  r=math.sqrt(max(0,1-((y-.772)/.178)**2))
+  for i in range(N+1):
+   a=start+(end-start)*i/N
+   vs.append((.159*r*math.sin(a),y,-.315+.192*r*math.cos(a)))
+ for i in range(N):fs.append((i,i+1,N+i+2,N+i+1))
+ return mesh(name,vs,fs,material,helmet)
+helmet_band('Curved visor glazing',.755,.821,visor,-1.42,1.42)
+helmet_band('Visor upper seal',.821,.826,black,-1.44,1.44)
+helmet_band('Visor lower seal',.749,.755,black,-1.44,1.44)
+helmet_band('Lower shell binding',.650,.661,black)
+helmet_band('Crown red pinline',.858,.864,paint)
+helmet_band('Crown ivory pinline',.866,.870,silver)
+for side in [-1,1]:
+ rod('Visor hinge',(side*.152,.79,-.295),(side*.160,.79,-.295),.014,metal,helmet,16)
+ rod('Hinge centre',(side*.160,.79,-.295),(side*.162,.79,-.295),.006,black,helmet,12)
+ for i in range(3):box('Chin ventilation',(side*(.021+i*.017),.695,-.138),(.010,.007,.002),black,helmet,r=.002)
+ # Rear-quarter painted streaks and recessed crown intake slots.
+ curve('Helmet rear graphic',[(side*.10,.87,-.40),(side*.137,.80,-.414),(side*.106,.69,-.43)],.006,helmetink,helmet)
+ vent=ellipsoid('Crown intake',(side*.065,.932,-.33),(.009,.004,.022),black,helmet,seg=24,rings=12)
+# Crown marks are shrinkwrapped onto the compound curve, facing the T-camera.
+for label,pos,size in [('NEXUS',(0,.966,-.344),.037),('44',(0,.949,-.407),.036),('23',(0,.949,-.407),.036)]:
+ parent=helmet
+ if label in ['44','23']:
+  parent=group('HelmetNumberA' if label=='44' else 'HelmetNumberB');parent.parent=helmet
+ o=text(label,pos,size,helmetink,(-math.pi/2,math.pi,0),parent)
+ bpy.context.view_layer.objects.active=o;o.select_set(True);bpy.ops.object.convert(target='MESH');o=bpy.context.object
+ sw=o.modifiers.new('Crown decal conformity','SHRINKWRAP');sw.target=shell;sw.wrap_method='NEAREST_SURFACEPOINT';sw.offset=.001
+ bpy.ops.object.modifier_apply(modifier=sw.name)
 # Wheel accurate butterfly silhouette, front face towards driver (-Z).
 outline=[(-.19,.065,0),(-.15,.105,0),(.11,.105,0),(.18,.07,0),(.205,-.04,0),(.16,-.12,0),(.1,-.105,0),(-.1,-.105,0),(-.17,-.12,0),(-.205,-.035,0)]
 # Extrude silhouette along Z.
@@ -260,40 +299,55 @@ for x,y in [(.067,-.066),(0,-.073),(-.072,-.089)]:
  for i in range(9):
   a=(i/8*1.5+.25)*math.pi
   rod('Rotary index tick',(x+.029*math.cos(a),y+.029*math.sin(a),-.024),(x+.032*math.cos(a),y+.032*math.sin(a),-.024),.00055,silver,steer,4)
-fabric=mat('GloveFabric','777d83',.92);stitch=mat('GloveStitch','a6a39b',.96);suede=mat('GloveSuede','3d4247',.98)
+fabric=mat('GloveFabric','d6d3c9',.92);stitch=mat('GloveStitch','9c9c96',.96);suede=mat('GloveSuede','30343c',.98)
 # Sculpted grip pose. Hand and forearm pivots are exported separately for articulation.
 hands=group('Hands');hands.parent=steer
 for side in [-1,1]:
  hand=group('HandL' if side<0 else 'HandR');hand.parent=hands
- ellipsoid('Gloved palm',(side*.197,-.025,-.051),(.034,.055,.028),fabric,hand)
- ellipsoid('Soft wrist cuff',(side*.208,-.082,-.057),(.033,.026,.029),fabric,hand)
+ ellipsoid('Gloved palm',(side*.204,-.018,-.038),(.036,.052,.030),fabric,hand)
+ ellipsoid('Soft wrist cuff',(side*.208,-.082,-.045),(.035,.030,.031),fabric,hand)
  for j in range(5):
   # Independent, embedded knuckle pivots. Different lengths/curl avoid parallel tubes.
   finger=group(('FingerL' if side<0 else 'FingerR')+str(j));finger.parent=hand
-  yy=.017-j*.020;root=Vector((side*.216,yy,-.055)) if j<4 else Vector((side*.207,-.060,-.061));finger.location=root
-  reach=[.064,.070,.065,.052][j] if j<4 else 0
-  pts=[tuple(root),(side*(.216-reach*.55),yy+.003-j*.001,-.076),(side*(.216-reach),yy-.003-j*.001,-.047),(side*(.221-reach),yy-.008,-.012+j*.002)] if j<4 else [tuple(root),(side*.164,-.045,-.081),(side*.144,-.018,-.057)]
-  digit=curve('Articulated fabric digit',[tuple(Vector(v)-root) for v in pts],(.0090-j*.00050) if j<4 else .0105,fabric,finger)
-  for point,radius in zip(digit.data.splines[0].bezier_points,[1,1.04,.90,.76] if j<4 else [1,1,.8]):point.radius=radius
-
-  # Raised seam follows each articulated digit, including its curl.
-  seampts=[tuple(Vector(v)-root+Vector((side*.003,0,-.007))) for v in pts]
-  seam=curve('Finger outer seam',seampts,.00048,stitch,finger);seam.data.resolution_u=6;seam.data.bevel_resolution=1
+  yy=.025-j*.021;root=Vector((side*.211,yy,-.038)) if j<4 else Vector((side*.196,-.046,-.045));finger.location=root
+  # Proximal phalanges join the broad back of the glove; the tips curl away
+  # from the driver around the OUTSIDE of the grip. No exposed noodle loops.
+  pts=[tuple(root),(side*(.229-j*.001),yy-.001,-.010),(side*(.213-j*.002),yy-.004,.028),(side*(.178+j*.003),yy-.008,.033)] if j<4 else [tuple(root),(side*.175,-.028,-.060),(side*.160,-.004,-.049),(side*.157,.014,-.025)]
+  radii=[.013,.0135,.011,.007] if j<4 else [.017,.015,.012,.008]
+  sections=interp([list(Vector(p)-root)+[r] for p,r in zip(pts,radii)],5)
+  vs=[];fs=[];N=12
+  for k,sec in enumerate(sections):
+   c=Vector(sec[:3]);t=Vector(sections[min(k+1,len(sections)-1)][:3])-Vector(sections[max(0,k-1)][:3]);t.normalize()
+   u=t.cross(Vector((0,1,0))).normalized();v=t.cross(u).normalized()
+   for i in range(N):
+    a=i*math.tau/N;vs.append(tuple(c+sec[3]*(math.cos(a)*u*.85+math.sin(a)*v)))
+  for k in range(len(sections)-1):
+   for i in range(N):a=k*N+i;b=k*N+(i+1)%N;fs.append((a,b,b+N,a+N))
+  fs.extend([tuple(reversed(range(N))),tuple((len(sections)-1)*N+i for i in range(N))])
+  mesh('Tapered articulated phalanges',vs,fs,fabric,finger)
+  # Short seam on the outer knuckle, rather than a wire across the fingertip.
+  seampts=[tuple(Vector(p)-root+Vector((side*.009,0,0))) for p in pts[:3]]
+  seam=curve('Finger outer seam',seampts,.00045,stitch,finger);seam.data.resolution_u=3;seam.data.bevel_resolution=1
  # Cuff binding and a suede reinforcement patch conform to the back of the hand.
- patch=ellipsoid('Suede knuckle reinforcement',(side*.202,-.026,-.078),(.022,.029,.0022),suede,hand,seg=20,rings=10)
+ patch=ellipsoid('Suede knuckle reinforcement',(side*.199,-.018,-.068),(.022,.030,.0025),suede,hand,seg=20,rings=10)
+ for j in range(4):
+  yy=.024-j*.021
+  ellipsoid('Embedded knuckle',(side*.224,yy,-.040),(.017,.012,.022),fabric,hand,seg=16,rings=10)
+  crease=curve('Knuckle flex seam',[(side*.219,yy-.008,-.062),(side*.229,yy-.009,-.059),(side*.237,yy-.006,-.051)],.0006,stitch,hand)
+  crease.data.resolution_u=3;crease.data.bevel_resolution=1
  for j in range(10):
   yy=-.053+j*.005
-  rod('Lock stitch',(side*.219,yy,-.078),(side*.219,yy+.002,-.078),.00042,stitch,hand,4)
+  rod('Lock stitch',(side*.224,yy,-.066),(side*.224,yy+.002,-.066),.00042,stitch,hand,4)
  for j in range(2):
-  pts=[(side*(.208+.030*math.cos(a)),-.09-j*.003,-.057+.026*math.sin(a)) for a in [k*math.tau/32 for k in range(33)]]
+  pts=[(side*(.208+.033*math.cos(a)),-.09-j*.003,-.045+.029*math.sin(a)) for a in [k*math.tau/32 for k in range(33)]]
   c=curve('Cuff double seam',pts,.00065,stitch,hand);c.data.resolution_u=2;c.data.bevel_resolution=1
- text('N',(side*.205,-.026,-.081),.017,silver,(0,math.pi,0),hand)
- for j in range(3):curve('Stitched knuckle dart',[(side*(.19+j*.009),.012,-.078),(side*(.20+j*.009),-.042,-.077)],.00045,silver,hand)
- for j in range(4):
-  curve('Cuff fabric fold',[(side*.181,-.071-j*.004,-.060),(side*.209,-.075-j*.004,-.087),(side*.23,-.075-j*.004,-.063)],.0012,fabric,hand)
+ text('N',(side*.205,-.016,-.071),.019,silver,(0,math.pi,0),hand)
+ for j in range(3):curve('Stitched knuckle dart',[(side*(.19+j*.010),.015,-.061),(side*(.192+j*.010),.026,-.057)],.0005,stitch,hand)
+ for j in range(3):
+  curve('Cuff fabric fold',[(side*.184,-.072-j*.005,-.054),(side*.208,-.076-j*.005,-.075),(side*.234,-.072-j*.005,-.052)],.0012,fabric,hand)
  arm=group('ForearmL' if side<0 else 'ForearmR');arm.parent=body
  # Unit Y-axis tapered sleeve; runtime aims it from elbow to moving wrist.
- ellipsoid('Sleeve capsule',(0,.5,0),(.037,.53,.036),sleeve,arm,seg=24,rings=16)
+ ellipsoid('Sleeve capsule',(0,.5,0),(.044,.55,.040),sleeve,arm,seg=24,rings=16)
  for j in range(3):curve('Elbow folds',[(-.032,.18+j*.055,0),(0,.20+j*.055,-.034),(.032,.18+j*.055,0)],.0018,fabric,arm)
 # Tyres with radial sidewall typography, dish covers and tiny fasteners.
 for front in [True,False]:
@@ -457,6 +511,17 @@ for ring in range(len(linerProfile)-1):
  for i in range(CN):a=ring*CN+i;b=ring*CN+(i+1)%CN;ff.append((a,b,b+CN,a+CN))
 mesh('Smooth carbon cockpit liner',vv,ff,carbon)
 # Swept, radius-controlled halo roots penetrate the deck; no union/remesh ripples.
+# Small original white marks follow the actual halo skin, as on a broadcast car.
+# Their geometry is exported by Blender and protected with the other decals.
+from mathutils import Matrix
+halo_mesh=bpy.data.objects.get('Halo')
+for label,pos,size,right in [('NEXUS',(0,.924,.57),.030,(-1,0,0)),('AEROLAB',(-.35,.946,.06),.024,(0,0,-1)),('VECTOR',(.35,.946,.06),.026,(0,0,1))]:
+ o=text(label,pos,size,silver,parent=decals)
+ o.data.resolution_u=1  # Small markings need fewer curve subdivisions than body silhouettes.
+ normal=Vector((0,1,0));r=Vector(right);up=normal.cross(r)
+ o.rotation_euler=Matrix((r,up,normal)).transposed().to_euler()
+ bpy.ops.object.select_all(action='DESELECT');o.select_set(True);bpy.context.view_layer.objects.active=o;bpy.ops.object.convert(target='MESH');o=bpy.context.object
+ sw=o.modifiers.new('Halo mark conformity','SHRINKWRAP');sw.target=halo_mesh;sw.wrap_method='NEAREST_SURFACEPOINT';sw.offset=.0008;bpy.ops.object.modifier_apply(modifier=sw.name)
 # Reproject all fictional sidepod lettering onto the final united skin.
 for o in list(decals.children):
  if o.type=='MESH' and o.name.startswith(('Mark NOVA','Mark VOLT')):
@@ -481,10 +546,11 @@ for o in [v for hand in hands.children for v in hand.children]:
   bpy.context.view_layer.objects.active=o
   rem=o.modifiers.new('Continuous glove fabric','REMESH');rem.mode='VOXEL';rem.voxel_size=.0034;rem.use_smooth_shade=True;bpy.ops.object.modifier_apply(modifier=rem.name)
   sm=o.modifiers.new('Relax textile surface','SMOOTH');sm.factor=.8;sm.iterations=5;bpy.ops.object.modifier_apply(modifier=sm.name)
+  d=o.modifiers.new('Even glove surface budget','DECIMATE');d.ratio=.70;bpy.ops.object.modifier_apply(modifier=d.name)
   for poly in o.data.polygons:poly.use_smooth=True
 # Preserve curved painted skins and tyre shoulders; simplify small mechanical parts only.
 for o in bpy.context.scene.objects:
- if o.type=='MESH' and o.parent not in [floor,decals] and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','Rubber','GloveFabric','Sleeve'] for m in o.data.materials):
+ if o.type=='MESH' and o.parent not in [floor,decals] and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','Rubber','GloveFabric','Sleeve','HelmetPaint','HelmetInk'] for m in o.data.materials):
   d=o.modifiers.new('Optimised smooth production topology','DECIMATE');d.ratio=.52
   bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=d.name)
 # Bake actual Cycles CPU occlusion into a shared packed UV atlas.

@@ -1,0 +1,32 @@
+
+ RUN  v4.1.12 /Users/ruben.casas@postman.com/.t3/scratch/2026-11-13-build-jev-grand-prix-an-e75bd481/jev-grand-prix
+
+ ❯ __test__/onboard-camera.test.ts (3 tests | 1 failed) 60ms
+     × keeps both gloves visible outside the cockpit liner at centre and steering lock 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  __test__/onboard-camera.test.ts > onboard sightlines through the exported Blender car > keeps both gloves visible outside the cockpit liner at centre and steering lock
+AssertionError: HandL occluded at 0 by Chassis_Carbon: expected undefined to be 'HandL' // Object.is equality
+
+- Expected:
+"HandL"
+
++ Received:
+undefined
+
+ ❯ __test__/onboard-camera.test.ts:57:81
+     55|     });
+     56|     let node:T.Object3D|null=hits[0]?.object??null;while(node&&node.na…
+     57|     expect(node?.name,`${name} occluded at ${lock} by ${hits[0]?.objec…
+       |                                                                                 ^
+     58|    }
+     59|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  09:26:36
+   Duration  180ms (transform 21ms, setup 0ms, import 47ms, tests 60ms, environment 0ms)

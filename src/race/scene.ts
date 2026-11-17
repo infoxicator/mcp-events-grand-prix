@@ -12,6 +12,7 @@ import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {createCar,type Finish} from './car-model';
 import {createShowroom} from './showroom';
+import {onboardLens} from './onboard-camera';
 
 export type CameraMode='broadcast'|'cockpit-a'|'cockpit-b'|'helicopter'|'flythrough'|'detail'|'sphere'|'strip'|'showroom'|'tcam-a'|'tcam-b'|'chase'|'pits';
 export interface RenderCar{distance:number;offset:number;speed:number;steering?:number;pit?:string;heading?:number;acceleration?:number;lateralG?:number;compound?:string;drs?:boolean;gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
@@ -48,12 +49,17 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   sun.position.set(p.x-80,p.y+120,p.z-50);sun.target.position.copy(p);
   if(mode==='showroom'){
    studio.scene.add(cars.a.root);cars.a.root.position.set(0,0,0);cars.a.root.rotation.set(0,0,0);cars.a.update({...race.cars.a,steering:0,drs:false},true,true);
-   const angle=params.get('angle')??'front';const pos=angle==='halo'?new T.Vector3(-1.0,1.08,-1.1):angle==='airbox'?new T.Vector3(-.6,1.2,.65):angle==='sidepod'?new T.Vector3(-1.8,.85,1.9):angle==='rear'?new T.Vector3(-2.7,3.4,-6.6):angle==='side'?new T.Vector3(-8.6,1.2,0):angle==='steering'?new T.Vector3(-.06,.77,-.34):angle==='wheel'?new T.Vector3(-2.2,.85,2.75):new T.Vector3(-5.3,2.8,5.3);
-   if(turntable&&!params.has('angle'))pos.applyAxisAngle(new T.Vector3(0,1,0),elapsed*.10);camera.position.copy(pos);camera.lookAt(angle==='halo'?new T.Vector3(-.25,.70,-.48):angle==='airbox'?new T.Vector3(0,.94,-.6):angle==='sidepod'?new T.Vector3(-.55,.54,.35):angle==='steering'?new T.Vector3(0,.51,.16):angle==='wheel'?new T.Vector3(-.83,.36,1.55):new T.Vector3(0,.42,0));camera.fov=angle==='steering'?50:angle==='wheel'?32:36;cameraLabel=`JGP–26 / STUDIO / ${finish.toUpperCase()}`;
+   const angle=params.get('angle')??'front';const pos=angle==='halo'?new T.Vector3(-1.0,1.08,-1.1):angle==='airbox'?new T.Vector3(-.6,1.2,.65):angle==='sidepod'?new T.Vector3(-1.8,.85,1.9):angle==='rear'?new T.Vector3(-2.7,3.4,-6.6):angle==='side'?new T.Vector3(-8.6,1.2,0):angle==='steering'?new T.Vector3(-.06,.83,-.34):angle==='wheel'?new T.Vector3(-2.2,.85,2.75):new T.Vector3(-5.3,2.8,5.3);
+   if(turntable&&!params.has('angle'))pos.applyAxisAngle(new T.Vector3(0,1,0),elapsed*.10);camera.position.copy(pos);camera.lookAt(angle==='halo'?new T.Vector3(-.25,.70,-.48):angle==='airbox'?new T.Vector3(0,.94,-.6):angle==='sidepod'?new T.Vector3(-.55,.54,.35):angle==='steering'?new T.Vector3(0,.57,.16):angle==='wheel'?new T.Vector3(-.83,.36,1.55):new T.Vector3(0,.42,0));camera.fov=angle==='steering'?50:angle==='wheel'?32:36;cameraLabel=`JGP–26 / STUDIO / ${finish.toUpperCase()}`;
   }else if(mode.startsWith('cockpit')||mode.startsWith('tcam')){
-   const id=mode.endsWith('-a')?'a':'b',v=race.cars[id],q=carPosition(v),dir=tangentAt(v.distance),yaw=Math.atan2(dir.x,dir.z)+(v.heading??0);
-   const tc=mode.startsWith('tcam'),height=tc?1.20:.70,back=tc?.70:.55;const shake=Math.min(v.speed/85,1)*.0016;
-   camera.position.set(q.x-Math.sin(yaw)*back+Math.cos(elapsed*73)*shake,q.y+height+Math.sin(elapsed*91)*shake,q.z-Math.cos(yaw)*back);target.set(q.x+Math.sin(yaw)*12,circuit.heightAt(v.distance+12)+(tc?.55:.15),q.z+Math.cos(yaw)*12);camera.lookAt(target);camera.rotateZ(Math.sin(elapsed*43)*shake*.18);camera.fov=tc?65:68;cameraLabel=`${tc?'T-CAM':'ONBOARD'} / ${id==='a'?'VECTOR':'CHAOS'}`;
+   const id=mode.endsWith('-a')?'a':'b',v=race.cars[id];
+   const tc=mode.startsWith('tcam'),{height,back,pitch,fov,offset}=onboardLens(tc);const shake=Math.min(v.speed/85,1)*.0012;
+   // Both are attached to the chassis: forward-mounted TV lens clears the airbox;
+   // the lower eye camera keeps the wheel, mirrors and centre halo pillar in frame.
+   const mount=cars[id].root;mount.updateMatrixWorld(true);
+   camera.position.copy(mount.localToWorld(new T.Vector3(offset+Math.cos(elapsed*73)*shake,height+Math.sin(elapsed*91)*shake,-back)));
+   target.copy(mount.localToWorld(new T.Vector3(0,height-Math.tan(pitch*Math.PI/180)*12,12-back)));
+   camera.lookAt(target);camera.rotateZ(Math.sin(elapsed*43)*shake*.18);camera.fov=fov;cameraLabel=`${tc?'T-CAM':'ONBOARD'} / ${id==='a'?'VECTOR':'CHAOS'}`;
   }else if(mode==='sphere'&&vegas){const sp=vegas.spherePosition;camera.position.set(sp.x+190,88,sp.z+200);camera.lookAt(sp.x,42,sp.z);camera.fov=52;cameraLabel='SPHERE / NIGHT SESSION';
   }else if(mode==='strip'&&vegas){const q=track.project(-115.1718,36.1088),target=track.project(-115.1731,36.1157);camera.position.set(q.x,170,q.z);camera.lookAt(target.x,35,target.z);camera.fov=62;cameraLabel='THE STRIP / NIGHT AERIAL';
   }else if(mode==='pits'){

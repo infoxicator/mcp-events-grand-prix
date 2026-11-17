@@ -1,11 +1,14 @@
 import * as T from 'three';
-import {fingerCurl} from './grip';
+import {fingerCurl,poseForearms} from './grip';
 import {embeddedGLB} from './embedded-glb';
 import highURL from './assets/jgp26-high.glb.gz?url&inline';
 import lowURL from './assets/jgp26-low.glb.gz?url&inline';
 import aoURL from './assets/jgp26-ao.png?url&inline';
 export const CAR_DIMENSIONS={wheelbase:3.6,width:2,length:5.62,tyreRadius:.36,frontAxle:1.55,rearAxle:-2.05};
 export type Finish='colour'|'clay'|'wireframe';
+// These millimetre-scale details already receive the Blender AO bake. They do
+// not need a separate shadow draw in every window; major driver/car forms do.
+const bakedDetailShadow=new Set(['MarkWhite','GloveStitch','GloveSuede','HelmetInk','HelmetVisor','Screen','Mirror','Titanium','ButtonRed','ButtonGreen','ButtonBlue','ButtonYellow','BrandBlue','BrandGold']);
 let templates:Promise<T.Group[]>|undefined;
 function assets(){return templates??=Promise.all([highURL,lowURL].map(url=>embeddedGLB(url,true).then(g=>g.scene)));}
 function grain(){
@@ -48,7 +51,9 @@ export function createCar(team:'a'|'b'){
     for(let i=0;i<pos.count;i++){const cx=pos.getX(i)<mid?bounds.min.x+.0875:bounds.max.x-.0875;uv[i*2]=.5+(pos.getX(i)-cx)/.175;uv[i*2+1]=(pos.getY(i)-bounds.min.y)/.038;}o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
    }
    if(p.name==='GloveSuede'){p.roughness=.98;p.sheen=.6;p.sheenColor.set('#858a90');p.sheenRoughness=.95;p.bumpMap=grainMap;p.bumpScale=.00012;}
-   if(p.name==='GloveFabric'){p.color.set('#73767a');p.roughness=.95;p.bumpMap=fabricMap;p.bumpScale=.00013;p.sheen=.5;p.sheenColor.set('#bcb9b1');p.sheenRoughness=.9;}
+   if(p.name==='GloveFabric'){p.color.set(team==='a'?'#d7df32':'#d6d3c9');p.roughness=.94;p.bumpMap=fabricMap;p.bumpScale=.00016;p.sheen=.5;p.sheenColor.set('#e4e1d8');p.sheenRoughness=.9;}
+   if(p.name==='HelmetPaint'){p.color.set(team==='a'?'#e9ed24':'#e5edf0');p.roughness=.30;p.clearcoat=.5;p.clearcoatRoughness=.19;}
+   if(p.name==='HelmetVisor'){p.roughness=.13;p.metalness=.65;p.clearcoat=.8;p.envMapIntensity=1.2;}
    if(p.name==='Rubber'){p.color.set('#17181a');p.roughness=.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
    if(p.name==='Rubber'&&o.parent?.name.match(/^(Front|Rear)[LR]$/)){
     const u={spin:{value:0},load:{value:.008},side:o.parent.name.endsWith('L')?-1:1,front:o.parent.name.startsWith('Front')};tyreUniforms.push(u);
@@ -60,8 +65,8 @@ export function createCar(team:'a'|'b'){
     `);};p.customProgramCacheKey=()=> 'loaded-slick-v1';
    }
    p.aoMap=['Mirror','MarkWhite'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='GloveFabric'?.25:p.name==='WheelDish'?.28:.65;p.side=T.DoubleSide;m=p;if(!wheelRubber)materials.set(original,m);
-  }return m;};o.material=Array.isArray(o.material)?o.material.map(m=>make(m as T.MeshStandardMaterial)):make(o.material as T.MeshStandardMaterial);o.castShadow=true;o.receiveShadow=true;originals.set(o,o.material);}});
-  const unused=model.getObjectByName(team==='a'?'NumberB':'NumberA');if(unused)unused.visible=false;
+  }return m;};o.material=Array.isArray(o.material)?o.material.map(m=>make(m as T.MeshStandardMaterial)):make(o.material as T.MeshStandardMaterial);o.castShadow=!(Array.isArray(o.material)?o.material:[o.material]).every(m=>bakedDetailShadow.has(m.name));o.receiveShadow=true;originals.set(o,o.material);}});
+  for(const name of team==='a'?['NumberB','HelmetNumberB']:['NumberA','HelmetNumberA']){const unused=model.getObjectByName(name);if(unused)unused.visible=false;}
   fingerRigs.set(model,([-1,1] as const).flatMap(side=>Array.from({length:5},(_,digit)=>({node:model.getObjectByName(`Finger${side<0?'L':'R'}${digit}`)!,side,digit})).filter(binding=>!!binding.node)));
   rigs.push(model);lod.addLevel(model,index===0?0:32);const meshes:T.Mesh[]=[];model.traverse(o=>{if(o instanceof T.Mesh)meshes.push(o);});for(const m of meshes){const lines=new T.LineSegments(new T.WireframeGeometry(m.geometry),lineMaterial);lines.renderOrder=1;lines.visible=false;m.add(lines);wireLines.push(lines);}
   const steering=model.getObjectByName('Steering');
@@ -69,7 +74,7 @@ export function createCar(team:'a'|'b'){
    const row:T.MeshBasicMaterial[]=[];for(let i=0;i<12;i++){const lm=new T.MeshBasicMaterial({color:'#14211a',toneMapped:false});const led=new T.Mesh(new T.SphereGeometry(.0028,8,4),lm);led.position.set((i-5.5)*.010,.078,-.025);steering.add(led);originals.set(led,lm);row.push(lm);}lights.push(row);
   }
  });ready=true;setFinish(finish);}).catch(e=>{error=String(e);console.error('Car asset failed',e);});
- let lastDash=-1;const elbow=new T.Vector3(),wrist=new T.Vector3(),axis=new T.Vector3(0,1,0),direction=new T.Vector3();
+ let lastDash=-1;
  return {root,chassis,loaded,get ready(){return ready;},get error(){return error;},setFinish,setMirror(texture:T.Texture|null){for(const m of mirrors){if(m.map!==texture){m.map=texture;m.emissiveMap=texture;m.emissive.set(texture?'#ffffff':'#000000');m.emissiveIntensity=.7;m.roughness=texture?1:.08;m.metalness=texture?0:.9;m.needsUpdate=true;}}},
  update(c:CarTelemetry,onboard=false,studio=false){
   for(const u of tyreUniforms){u.spin.value=studio?0:c.distance/.36;u.load.value=T.MathUtils.clamp(.007+(studio?0:c.speed*c.speed*.0000012+(u.front?1:-1)*-(c.acceleration??0)*.00022+u.side*(c.lateralG??0)*.0012),.003,.024);}
@@ -80,7 +85,7 @@ export function createCar(team:'a'|'b'){
    }
    const h=model.getObjectByName('Helmet');if(h)h.visible=!onboard;
    const s=model.getObjectByName('Steering');if(s){s.rotation.z=-(c.steering??0)*3.6;
-    for(const side of [-1,1]){const arm=model.getObjectByName(side<0?'ForearmL':'ForearmR');if(arm){arm.visible=!studio;elbow.set(side*.29,.29,-.25);wrist.set(side*.208,-.082,-.057).applyQuaternion(s.quaternion).add(s.position);direction.copy(wrist).sub(elbow);arm.position.copy(elbow);arm.scale.set(1,direction.length(),1);arm.quaternion.setFromUnitVectors(axis,direction.normalize());}}
+    poseForearms(model,s,!studio);
    }
    const d=model.getObjectByName('DRS');if(d)d.rotation.x=c.drs?-.43:0;
   }
