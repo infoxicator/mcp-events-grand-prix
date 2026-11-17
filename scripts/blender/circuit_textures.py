@@ -56,8 +56,13 @@ for i in range(2):
  x=256+i*512;d.rounded_rectangle((x-230,150,x+230,360),radius=20,fill=(10,13,28),outline=(210,53,112),width=3)
  for text,y,size,col in [('WELCOME TO',190,25,(224,98,158)),('LAS VEGAS',255,57,(248,230,195)),('JEV GRAND PRIX',320,28,(90,219,209))]:d.text((x,y),text,anchor='mm',font=ImageFont.truetype(font,size),fill=col)
 save(im,'sphere-art')
-# Opaque leaf clusters for solid 3D crowns (no billboard or alpha cutout).
-random.seed(731);im=Image.new('RGB',(512,256),(51,57,42));d=ImageDraw.Draw(im)
-for i in range(24000):
- x=random.randrange(512);y=random.randrange(256);r=random.choice([1,1,2,3,5]);v=random.randint(45,180);d.ellipse((x-r,y-r*.5,x+r,y+r*.5),fill=(v,int(v*.98),int(v*.81)))
+# Perforated original leaf sprays with a branching centre, layered on bent 3D fans.
+rng=random.Random(731);im=Image.new('RGBA',(256,256));d=ImageDraw.Draw(im)
+for branch in range(9):
+ a=branch*math.tau/9+.14;length=rng.uniform(65,115);ex=128+math.cos(a)*length;ey=128+math.sin(a)*length
+ d.line((128,128,ex,ey),fill=(78,73,52,255),width=2)
+ for leaf in range(64):
+  t=rng.uniform(.15,1);x=128+(ex-128)*t+rng.gauss(0,12);y=128+(ey-128)*t+rng.gauss(0,12)
+  v=rng.randint(95,205);rx=rng.uniform(4,8);ry=rng.uniform(2.5,6)
+  d.ellipse((x-rx,y-ry,x+rx,y+ry),fill=(v,int(v*.98),int(v*.72),255))
 save(im,'canopy')

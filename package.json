@@ -29,7 +29,7 @@
     "test:handling": "node --import tsx scripts/handling-check.ts && node --import tsx scripts/calibrate.ts",
     "demo:vegas": "RACE_CIRCUIT=las-vegas RACE_SPEED=1 node scripts/demo.mjs",
     "model:build": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_car.py",
-    "circuit:build": "node --import tsx scripts/export-circuit.ts && python3 scripts/blender/circuit_textures.py && /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_circuits.py -- 6"
+    "circuit:build": "node --import tsx scripts/export-circuit.ts && python3 scripts/blender/circuit_textures.py && /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_circuits.py -- 7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261113.1",

@@ -204,8 +204,12 @@ for s in [-1,1]:
  text('nx',(s*.211,.87,-.85),.065,silver,(0,s*math.pi/2,0))
  text('ION',(s*.38,.61,-.2),.058,black,(0,s*math.pi/2,0))
 # Halo carbon arch, centre pillar, camera pod.
-curve('Halo',[(-.32,.67,-.53),(-.37,.84,-.39),(-.34,.91,.1),(-.21,.91,.43),(0,.885,.58),(.21,.91,.43),(.34,.91,.1),(.37,.84,-.39),(.32,.67,-.53)],.031)
-curve('Halo central pillar',[(0,.62,.68),(0,.74,.64),(0,.885,.58)],.029)
+arch=curve('Halo',[(-.32,.642,-.53),(-.326,.685,-.52),(-.37,.84,-.39),(-.34,.91,.1),(-.21,.91,.43),(0,.885,.58),(.21,.91,.43),(.34,.91,.1),(.37,.84,-.39),(.326,.685,-.52),(.32,.642,-.53)],.027)
+for i,p in enumerate(arch.data.splines[0].bezier_points):p.radius=1.65 if i in [0,10] else 1.10 if i in [1,9] else 1
+arch.data.resolution_u=16;arch.data.bevel_resolution=5
+pillar=curve('Halo central pillar',[(0,.603,.685),(0,.65,.67),(0,.74,.64),(0,.885,.58)],.027)
+for p,r in zip(pillar.data.splines[0].bezier_points,[1.65,1.05,1,1]):p.radius=r
+pillar.data.resolution_u=16;pillar.data.bevel_resolution=5
 box('T camera',(0,1.15,-.72),(.28,.042,.058),carbon,r=.012)
 rod('Camera pedestal',(0,1.09,-.72),(0,1.14,-.72),.022)
 # Main plane plus three cascading contoured flaps. All exposed carbon.
@@ -240,14 +244,23 @@ text('NEXUS', (0,.09,-.024),.029,silver,(0,math.pi,0),steer)
 buttons=[(-.165,.073,blue,'R'),(-.116,.055,green,'N'),(-.125,.009,yellow,'+'),(-.12,-.041,red,'−'),(.116,.036,red,'P'),(.17,.052,yellow,'A'),(.126,-.016,blue,'+'),(.12,-.064,silver,'−')]
 for x,y,m,label in buttons:
  x=-x
- rod('Button collar',(x,y,-.023),(x,y,-.032),.013,metal,steer,20);rod('Button cap',(x,y,-.032),(x,y,-.038),.010,m,steer,20);text(label,(x,y,-.039),.012,black,(0,math.pi,0),steer)
+ rod('Button collar',(x,y,-.023),(x,y,-.032),.013,metal,steer,20);rod('Button cap',(x,y,-.032),(x,y,-.038),.010,m,steer,20);text(label,(x,y,-.039),.012,silver if m==blue else black,(0,math.pi,0),steer)
 for x,y,m in [(-.067,-.066,green),(0,-.073,yellow),(.072,-.089,blue)]:
  x=-x
  rod('Rotary coloured ring',(x,y,-.02),(x,y,-.034),.025,m,steer,32);rod('Rotary dial',(x,y,-.035),(x,y,-.058),.021,black,steer,32)
  for i in range(20):
   a=i*math.tau/20;rod('Knurl',(x+.021*math.cos(a),y+.021*math.sin(a),-.036),(x+.021*math.cos(a),y+.021*math.sin(a),-.056),.0016,black,steer,5)
  box('Dial pointer',(x-.004,y+.009,-.059),(.003,.014,.001),silver,steer)
-fabric=mat('GloveFabric','777d83',.92)
+for side in [-1,1]:
+ paddle=panel('Shift paddle',[(side*.105,-.072,.052),(side*.15,-.056,.060),(side*.17,.035,.055),(side*.125,.052,.048)],.007,carbon,steer)
+ rod('Paddle hinge',(side*.095,-.035,.034),(side*.095,.025,.034),.006,metal,steer,12)
+ rod('Paddle linkage',(side*.095,0,.034),(side*.13,0,.055),.004,metal,steer,8)
+ text('−' if side>0 else '+',(side*.145,.018,.063),.018,silver,parent=steer)
+for x,y in [(.067,-.066),(0,-.073),(-.072,-.089)]:
+ for i in range(9):
+  a=(i/8*1.5+.25)*math.pi
+  rod('Rotary index tick',(x+.029*math.cos(a),y+.029*math.sin(a),-.024),(x+.032*math.cos(a),y+.032*math.sin(a),-.024),.00055,silver,steer,4)
+fabric=mat('GloveFabric','777d83',.92);stitch=mat('GloveStitch','a6a39b',.96);suede=mat('GloveSuede','3d4247',.98)
 # Sculpted grip pose. Hand and forearm pivots are exported separately for articulation.
 hands=group('Hands');hands.parent=steer
 for side in [-1,1]:
@@ -263,6 +276,18 @@ for side in [-1,1]:
   digit=curve('Articulated fabric digit',[tuple(Vector(v)-root) for v in pts],(.0090-j*.00050) if j<4 else .0105,fabric,finger)
   for point,radius in zip(digit.data.splines[0].bezier_points,[1,1.04,.90,.76] if j<4 else [1,1,.8]):point.radius=radius
 
+  # Raised seam follows each articulated digit, including its curl.
+  seampts=[tuple(Vector(v)-root+Vector((side*.003,0,-.007))) for v in pts]
+  seam=curve('Finger outer seam',seampts,.00048,stitch,finger);seam.data.resolution_u=6;seam.data.bevel_resolution=1
+ # Cuff binding and a suede reinforcement patch conform to the back of the hand.
+ patch=ellipsoid('Suede knuckle reinforcement',(side*.202,-.026,-.078),(.022,.029,.0022),suede,hand,seg=20,rings=10)
+ for j in range(10):
+  yy=-.053+j*.005
+  rod('Lock stitch',(side*.219,yy,-.078),(side*.219,yy+.002,-.078),.00042,stitch,hand,4)
+ for j in range(2):
+  pts=[(side*(.208+.030*math.cos(a)),-.09-j*.003,-.057+.026*math.sin(a)) for a in [k*math.tau/32 for k in range(33)]]
+  c=curve('Cuff double seam',pts,.00065,stitch,hand);c.data.resolution_u=2;c.data.bevel_resolution=1
+ text('N',(side*.205,-.026,-.081),.017,silver,(0,math.pi,0),hand)
  for j in range(3):curve('Stitched knuckle dart',[(side*(.19+j*.009),.012,-.078),(side*(.20+j*.009),-.042,-.077)],.00045,silver,hand)
  for j in range(4):
   curve('Cuff fabric fold',[(side*.181,-.071-j*.004,-.060),(side*.209,-.075-j*.004,-.087),(side*.23,-.075-j*.004,-.063)],.0012,fabric,hand)
@@ -384,8 +409,24 @@ cutter=mesh('Airbox throat cutter',cutvs,[tuple(reversed(range(AN))),tuple(range
 bm=bmesh.new();bm.from_mesh(cutter.data);bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(cutter.data);bm.free()
 bpy.context.view_layer.objects.active=skin;mod=skin.modifiers.new('Open divided airbox','BOOLEAN');mod.operation='DIFFERENCE';mod.solver='EXACT';mod.object=cutter;bpy.ops.object.modifier_apply(modifier=mod.name);bpy.data.objects.remove(cutter,do_unlink=True)
 for poly in skin.data.polygons:poly.use_smooth=True
+# A single exact elliptical machining pass removes the ragged voxel-union rim.
+# Carbon cut faces and a 5mm fillet make a continuous, even coaming, not a trim overlay.
+CN=192;outline=[(.281*math.cos(i*math.tau/CN),-.21+.523*math.sin(i*math.tau/CN)) for i in range(CN)]
+cutter=mesh('Cockpit aperture tool',[(x,y,z) for y in [.29,.79] for x,z in outline],[tuple(reversed(range(CN))),tuple(range(CN,2*CN))]+[(i,(i+1)%CN,(i+1)%CN+CN,i+CN) for i in range(CN)],carbon,parent=None)
+bm=bmesh.new();bm.from_mesh(cutter.data);bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces));bm.to_mesh(cutter.data);bm.free()
+cutter.data.materials.clear()
+for material in [paint,white,carbon]:cutter.data.materials.append(material)
+for poly in cutter.data.polygons:poly.material_index=2
+bpy.context.view_layer.objects.active=skin;mod=skin.modifiers.new('Even open cockpit coaming','BOOLEAN');mod.operation='DIFFERENCE';mod.solver='EXACT';mod.object=cutter;bpy.ops.object.modifier_apply(modifier=mod.name);bpy.data.objects.remove(cutter,do_unlink=True)
+for poly in skin.data.polygons:poly.use_smooth=True
 # Tiny real aperture edge radii, retaining the single connected body and paint regions.
 mod=skin.modifiers.new('Manufactured aperture edge radius','BEVEL');mod.width=.0018;mod.segments=2;mod.limit_method='ANGLE';mod.angle_limit=.65;bpy.ops.object.modifier_apply(modifier=mod.name)
+# Carbon cut faces lie behind the continuous rolled inner liner, not a centroid-painted trim.
+for poly in skin.data.polygons:
+ co=sum((skin.data.vertices[i].co for i in poly.vertices),Vector())/len(poly.vertices)
+ q=(co.x/.281)**2+((co.z+.21)/.523)**2
+ if .94<q<1.06 and .53<co.y<.67 and abs(poly.normal.y)<.70:poly.material_index=2
+ poly.use_smooth=True
 # Surface decals use one projected sheet, never a collapsed ellipsoid with overlapping faces.
 for o in list(bpy.context.scene.objects):
  if o.name.startswith('Blue airbox badge'):bpy.data.objects.remove(o,do_unlink=True)
@@ -405,10 +446,22 @@ for o in list(bpy.context.scene.objects):
   side=1 if o.location.x>0 else -1;o.location=(side*.5,.90,-.90);o.parent=decals
   bpy.context.view_layer.objects.active=o;mod=o.modifiers.new('Conformal airbox lettering','SHRINKWRAP');mod.target=skin;mod.wrap_method='PROJECT';mod.use_project_z=True;mod.use_positive_direction=False;mod.use_negative_direction=True;mod.offset=.004;bpy.ops.object.modifier_apply(modifier=mod.name)
 
-# Leave physical carbon halo mounts with soft roots into the deck.
-for side in [-1,1]:
- ellipsoid('Halo root fairing',(side*.32,.665,-.53),(.052,.05,.065),carbon)
-ellipsoid('Halo front root',(0,.625,.675),(.044,.032,.068),carbon)
+# Replace flat, intersecting cockpit liner panels with one smooth inner oval tub.
+for o in list(bpy.context.scene.objects):
+ if o.name.startswith(('Cockpit carbon liner','Inner carbon cockpit wall','Carbon pedal bulkhead')):bpy.data.objects.remove(o,do_unlink=True)
+vv=[];ff=[]
+linerProfile=[(.32,.25,.49),(.55,.275,.516),(.638,.278,.520),(.650,.279,.521),(.655,.282,.524),(.652,.285,.527),(.645,.286,.528)]
+for ring,(y,w,l) in enumerate(linerProfile):
+ for i in range(CN):a=i*math.tau/CN;vv.append((w*math.cos(a),y+(.012*math.sin(a) if ring>=2 else 0),-.21+l*math.sin(a)))
+for ring in range(len(linerProfile)-1):
+ for i in range(CN):a=ring*CN+i;b=ring*CN+(i+1)%CN;ff.append((a,b,b+CN,a+CN))
+mesh('Smooth carbon cockpit liner',vv,ff,carbon)
+# Swept, radius-controlled halo roots penetrate the deck; no union/remesh ripples.
+# Reproject all fictional sidepod lettering onto the final united skin.
+for o in list(decals.children):
+ if o.type=='MESH' and o.name.startswith(('Mark NOVA','Mark VOLT')):
+  bpy.context.view_layer.objects.active=o;mod=o.modifiers.new('Final body lettering projection','SHRINKWRAP');mod.target=skin;mod.wrap_method='PROJECT';mod.use_project_z=True;mod.use_positive_direction=False;mod.use_negative_direction=True;mod.offset=.004
+  bpy.ops.object.modifier_apply(modifier=mod.name)
 for parent in list(groups.values()):
  buckets={}
  for o in list(parent.children):
@@ -426,13 +479,13 @@ for parent in list(groups.values()):
 for o in [v for hand in hands.children for v in hand.children]:
  if o.type=='MESH' and o.data.materials[0].name=='GloveFabric':
   bpy.context.view_layer.objects.active=o
-  rem=o.modifiers.new('Continuous glove fabric','REMESH');rem.mode='VOXEL';rem.voxel_size=.0025;rem.use_smooth_shade=True;bpy.ops.object.modifier_apply(modifier=rem.name)
+  rem=o.modifiers.new('Continuous glove fabric','REMESH');rem.mode='VOXEL';rem.voxel_size=.0034;rem.use_smooth_shade=True;bpy.ops.object.modifier_apply(modifier=rem.name)
   sm=o.modifiers.new('Relax textile surface','SMOOTH');sm.factor=.8;sm.iterations=5;bpy.ops.object.modifier_apply(modifier=sm.name)
   for poly in o.data.polygons:poly.use_smooth=True
 # Preserve curved painted skins and tyre shoulders; simplify small mechanical parts only.
 for o in bpy.context.scene.objects:
- if o.type=='MESH' and o.parent!=floor and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','Rubber','GloveFabric','Sleeve'] for m in o.data.materials):
-  d=o.modifiers.new('Optimised smooth production topology','DECIMATE');d.ratio=.57
+ if o.type=='MESH' and o.parent not in [floor,decals] and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','Rubber','GloveFabric','Sleeve'] for m in o.data.materials):
+  d=o.modifiers.new('Optimised smooth production topology','DECIMATE');d.ratio=.52
   bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=d.name)
 # Bake actual Cycles CPU occlusion into a shared packed UV atlas.
 bpy.context.scene.render.engine='CYCLES';bpy.context.scene.cycles.device='CPU';bpy.context.scene.cycles.samples=32

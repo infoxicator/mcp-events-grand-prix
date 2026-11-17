@@ -1,0 +1,44 @@
+{
+  "monza": {
+    "meanFPS": [
+      84.07,
+      84.55,
+      85.66
+    ],
+    "minimumSmoothedFPS": [
+      67.21,
+      67.96,
+      69.46
+    ],
+    "samples": 50,
+    "viewport": {
+      "width": 1100,
+      "height": 850
+    },
+    "gpu": [
+      "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))"
+    ],
+    "paidCalls": 0
+  },
+  "vegas": {
+    "meanFPS": [
+      91.64,
+      91.5,
+      91.39
+    ],
+    "minimumSmoothedFPS": [
+      75.93,
+      76.0,
+      77.66
+    ],
+    "samples": 50,
+    "viewport": {
+      "width": 1100,
+      "height": 850
+    },
+    "gpu": [
+      "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))"
+    ],
+    "paidCalls": 0
+  }
+}

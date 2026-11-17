@@ -19,11 +19,17 @@ function twill(){
  for(let y=0;y<128;y++)for(let x=0;x<128;x++){const a=Math.floor(x/8),b=Math.floor(y/8),over=((a-b)%4+4)%4<2;const v=over?x%8:y%8;const n=205+22*Math.sin(v/8*Math.PI)+2*Math.cos((over?y:x)*Math.PI);c.fillStyle=`rgb(${n},${n},${n})`;c.fillRect(x,y,1,1);}
  const t=new T.CanvasTexture(canvas);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(9,9);t.anisotropy=8;return t;
 }
+function knit(){
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=64;const c=canvas.getContext('2d')!;
+ // Small alternating textile loops, distinct from the rigid carbon twill.
+ for(let y=0;y<64;y++)for(let x=0;x<64;x++){const row=Math.floor(y/8),u=(x+(row%2)*4)%8,v=y%8;const thread=Math.exp(-Math.pow((u-4-Math.sin(v/8*Math.PI)*2)/1.4,2));const n=150+85*thread+8*Math.sin(v*Math.PI);c.fillStyle=`rgb(${n},${n},${n})`;c.fillRect(x,y,1,1);}
+ const t=new T.CanvasTexture(canvas);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(96,96);t.anisotropy=8;return t;
+}
 export interface CarTelemetry{distance:number;speed:number;steering?:number;drs?:boolean;compound?:string;acceleration?:number;lateralG?:number;pit?:string;gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
 export function createCar(team:'a'|'b'){
  const root=new T.Group(),chassis=new T.Group(),lod=new T.LOD();root.add(chassis);chassis.add(lod);
  const originals=new Map<T.Mesh,T.Material|T.Material[]>(),clay=new T.MeshStandardMaterial({color:'#deded9',roughness:.83,side:T.DoubleSide}),wire=new T.MeshBasicMaterial({color:'#15222b',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}),lineMaterial=new T.LineBasicMaterial({color:'#9ab8ca',transparent:true,opacity:.7,depthWrite:false}),wireLines:T.LineSegments[]=[];
- const carbonMap=twill(),grainMap=grain(),tyreUniforms:{spin:{value:number};load:{value:number};side:number;front:boolean}[]=[],aoMap=new T.TextureLoader().load(aoURL);aoMap.flipY=false;let ready=false,dead=false,finish:Finish='colour',error:string|null=null;
+ const carbonMap=twill(),grainMap=grain(),fabricMap=knit(),tyreUniforms:{spin:{value:number};load:{value:number};side:number;front:boolean}[]=[],aoMap=new T.TextureLoader().load(aoURL);aoMap.flipY=false;let ready=false,dead=false,finish:Finish='colour',error:string|null=null;
  const fingerRigs=new WeakMap<T.Group,{node:T.Object3D;side:-1|1;digit:number}[]>();
  const mirrors:T.MeshPhysicalMaterial[]=[];const rigs:T.Group[]=[],dashTextures:T.CanvasTexture[]=[],dashContexts:CanvasRenderingContext2D[]=[],lights:T.MeshBasicMaterial[][]=[];
  function setFinish(next:Finish){finish=next;wireLines.forEach(o=>o.visible=next==='wireframe');for(const [mesh,original] of originals)mesh.material=next==='colour'?original:next==='clay'?clay:wire;}
@@ -41,7 +47,8 @@ export function createCar(team:'a'|'b'){
     mirrors.push(p);o.geometry.computeBoundingBox();const bounds=o.geometry.boundingBox!,pos=o.geometry.getAttribute('position'),uv=new Float32Array(pos.count*2),mid=(bounds.min.x+bounds.max.x)/2;
     for(let i=0;i<pos.count;i++){const cx=pos.getX(i)<mid?bounds.min.x+.0875:bounds.max.x-.0875;uv[i*2]=.5+(pos.getX(i)-cx)/.175;uv[i*2+1]=(pos.getY(i)-bounds.min.y)/.038;}o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
    }
-   if(p.name==='GloveFabric'){p.color.set('#73767a');p.roughness=.95;p.bumpMap=carbonMap;p.bumpScale=.00007;p.sheen=.3;p.sheenColor.set('#bcb9b1');p.sheenRoughness=.9;}
+   if(p.name==='GloveSuede'){p.roughness=.98;p.sheen=.6;p.sheenColor.set('#858a90');p.sheenRoughness=.95;p.bumpMap=grainMap;p.bumpScale=.00012;}
+   if(p.name==='GloveFabric'){p.color.set('#73767a');p.roughness=.95;p.bumpMap=fabricMap;p.bumpScale=.00013;p.sheen=.5;p.sheenColor.set('#bcb9b1');p.sheenRoughness=.9;}
    if(p.name==='Rubber'){p.color.set('#17181a');p.roughness=.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
    if(p.name==='Rubber'&&o.parent?.name.match(/^(Front|Rear)[LR]$/)){
     const u={spin:{value:0},load:{value:.008},side:o.parent.name.endsWith('L')?-1:1,front:o.parent.name.startsWith('Front')};tyreUniforms.push(u);
@@ -81,5 +88,5 @@ export function createCar(team:'a'|'b'){
   const stamp=Math.floor(performance.now()/100);if(stamp!==lastDash){lastDash=stamp;dashContexts.forEach((ctx,i)=>{ctx.fillStyle='#07100e';ctx.fillRect(0,0,512,256);ctx.strokeStyle='#536a61';ctx.lineWidth=2;ctx.strokeRect(7,7,498,242);ctx.fillStyle='#d5ffdb';ctx.font='bold 145px monospace';ctx.textAlign='left';ctx.fillText(String(c.gear??'N'),25,167);ctx.font='bold 65px monospace';ctx.fillText(String(Math.round(c.speed*3.6)).padStart(3,'0'),210,100);ctx.font='22px monospace';ctx.fillStyle='#8cac9c';ctx.fillText('KM/H',340,134);ctx.fillStyle=c.drs?'#79ff73':'#91a69d';ctx.fillText(c.drs?'DRS OPEN':'DRS CLOSED',210,177);ctx.font='24px monospace';ctx.fillText(`ERS ${Math.round(c.ers??90)}%`,25,226);const delta=c.lastLap&&c.bestLap?c.lastLap-c.bestLap:0;ctx.fillText(`Δ ${delta>=0?'+':''}${delta.toFixed(3)}`,272,226);if(studio){ctx.fillStyle='#020403';ctx.fillRect(0,0,512,256);}dashTextures[i].needsUpdate=true;});
    const rpm=studio?0:c.rpm??(c.speed?10500:0),n=Math.round(T.MathUtils.clamp((rpm-7500)/4500,0,1)*12);lights.forEach(row=>row.forEach((m,i)=>m.color.set(i<n?(i<4?'#36d45b':i<8?'#f33035':'#508aff'):'#112019')));
   }
- },dispose(){dead=true;for(const [mesh,original] of originals)mesh.material=original;wireLines.forEach(o=>o.geometry.dispose());lineMaterial.dispose();clay.dispose();wire.dispose();carbonMap.dispose();grainMap.dispose();aoMap.dispose();dashTextures.forEach(t=>t.dispose());}};
+ },dispose(){dead=true;for(const [mesh,original] of originals)mesh.material=original;wireLines.forEach(o=>o.geometry.dispose());lineMaterial.dispose();clay.dispose();wire.dispose();carbonMap.dispose();grainMap.dispose();fabricMap.dispose();aoMap.dispose();dashTextures.forEach(t=>t.dispose());}};
 }

@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-17T05:21:28.989Z",
+  "date": "2026-11-17T07:34:10.391Z",
   "gpu": [
     "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))"
   ],
@@ -12,1902 +12,1902 @@
   "samples": [
     [
       {
-        "frame": 4914,
-        "calls": 924,
-        "triangles": 815138,
-        "points": 0,
-        "lines": 256,
-        "sparks": 15,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 84.86264289270409
-      },
-      {
-        "frame": 4838,
-        "calls": 893,
-        "triangles": 630069,
-        "points": 0,
-        "lines": 128,
-        "sparks": 15,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 83.94041572109407
-      },
-      {
-        "frame": 4893,
-        "calls": 554,
-        "triangles": 655040,
-        "points": 0,
-        "lines": 128,
-        "sparks": 15,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 88.96767188652426
-      }
-    ],
-    [
-      {
-        "frame": 5581,
-        "calls": 557,
-        "triangles": 690542,
-        "points": 0,
-        "lines": 128,
-        "sparks": 8,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 92.40660084212647
-      },
-      {
-        "frame": 5505,
-        "calls": 820,
-        "triangles": 622075,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 95.22205788072074
-      },
-      {
-        "frame": 5553,
-        "calls": 459,
-        "triangles": 549310,
-        "points": 0,
-        "lines": 128,
-        "sparks": 13,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 94.79205334653078
-      }
-    ],
-    [
-      {
-        "frame": 6311,
-        "calls": 458,
-        "triangles": 661198,
+        "frame": 4534,
+        "calls": 729,
+        "triangles": 710898,
         "points": 0,
         "lines": 128,
         "sparks": 12,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 98.12475937777049
+        "fps": 78.89700588636703
       },
       {
-        "frame": 6220,
-        "calls": 728,
-        "triangles": 606501,
+        "frame": 4504,
+        "calls": 976,
+        "triangles": 622142,
+        "points": 0,
+        "lines": 128,
+        "sparks": 15,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 76.76294502053811
+      },
+      {
+        "frame": 4473,
+        "calls": 551,
+        "triangles": 603376,
         "points": 0,
         "lines": 128,
         "sparks": 14,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 97.70188057993957
-      },
+        "fps": 77.82692201024084
+      }
+    ],
+    [
       {
-        "frame": 6276,
-        "calls": 414,
-        "triangles": 590346,
+        "frame": 5126,
+        "calls": 613,
+        "triangles": 690392,
         "points": 0,
         "lines": 128,
         "sparks": 12,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 99.65564419485524
-      }
-    ],
-    [
-      {
-        "frame": 7070,
-        "calls": 374,
-        "triangles": 640544,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 104.79399816409351
+        "fps": 85.26128309874885
       },
       {
-        "frame": 6979,
-        "calls": 595,
-        "triangles": 577287,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 103.65168995955177
-      },
-      {
-        "frame": 7026,
-        "calls": 336,
-        "triangles": 623670,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 104.44091176384539
-      }
-    ],
-    [
-      {
-        "frame": 7891,
-        "calls": 322,
-        "triangles": 576844,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 105.08831704170328
-      },
-      {
-        "frame": 7800,
-        "calls": 498,
-        "triangles": 565019,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 106.52271049222423
-      },
-      {
-        "frame": 7839,
-        "calls": 306,
-        "triangles": 603200,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 105.54073973411765
-      }
-    ],
-    [
-      {
-        "frame": 8741,
-        "calls": 579,
-        "triangles": 728506,
+        "frame": 5096,
+        "calls": 1088,
+        "triangles": 656058,
         "points": 0,
         "lines": 256,
-        "sparks": 0,
+        "sparks": 11,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 113.53587160899572
+        "fps": 83.57800051357808
       },
       {
-        "frame": 8665,
-        "calls": 438,
-        "triangles": 481255,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 114.34472962286377
-      },
-      {
-        "frame": 8694,
-        "calls": 301,
-        "triangles": 547168,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 112.23899960869187
-      }
-    ],
-    [
-      {
-        "frame": 9623,
-        "calls": 343,
-        "triangles": 536648,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 110.61767214470993
-      },
-      {
-        "frame": 9532,
-        "calls": 409,
-        "triangles": 474181,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 109.61374996017737
-      },
-      {
-        "frame": 9552,
-        "calls": 335,
-        "triangles": 562346,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 109.2472181866095
-      }
-    ],
-    [
-      {
-        "frame": 10442,
-        "calls": 706,
-        "triangles": 684730,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 107.4462616451439
-      },
-      {
-        "frame": 10366,
-        "calls": 401,
-        "triangles": 432569,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 109.20495065267602
-      },
-      {
-        "frame": 10377,
-        "calls": 645,
-        "triangles": 674050,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 110.28354638617677
-      }
-    ],
-    [
-      {
-        "frame": 11170,
-        "calls": 480,
-        "triangles": 629998,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 103.8236585492459
-      },
-      {
-        "frame": 11094,
-        "calls": 595,
-        "triangles": 708962,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 101.1691032084978
-      },
-      {
-        "frame": 11097,
-        "calls": 445,
-        "triangles": 649752,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.48826755968534
-      }
-    ],
-    [
-      {
-        "frame": 11931,
-        "calls": 546,
-        "triangles": 736446,
-        "points": 0,
-        "lines": 256,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 98.8680833303966
-      },
-      {
-        "frame": 11855,
-        "calls": 671,
-        "triangles": 437752,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 99.66378278475212
-      },
-      {
-        "frame": 11850,
-        "calls": 654,
-        "triangles": 424228,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 100.06782837562741
-      }
-    ],
-    [
-      {
-        "frame": 12643,
-        "calls": 603,
-        "triangles": 589732,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 97.11235747367182
-      },
-      {
-        "frame": 12568,
-        "calls": 585,
-        "triangles": 579753,
-        "points": 0,
-        "lines": 256,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 98.67764388877828
-      },
-      {
-        "frame": 12540,
-        "calls": 763,
-        "triangles": 750070,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 98.91725661027662
-      }
-    ],
-    [
-      {
-        "frame": 13402,
-        "calls": 717,
-        "triangles": 576006,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 106.6159834811673
-      },
-      {
-        "frame": 13326,
-        "calls": 299,
-        "triangles": 350228,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 106.86987697925846
-      },
-      {
-        "frame": 13290,
-        "calls": 418,
-        "triangles": 239320,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 104.94343257219057
-      }
-    ],
-    [
-      {
-        "frame": 14147,
-        "calls": 672,
-        "triangles": 555692,
-        "points": 0,
-        "lines": 128,
-        "sparks": 1,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 92.94740456338013
-      },
-      {
-        "frame": 14056,
-        "calls": 742,
-        "triangles": 492527,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 94.40340517683546
-      },
-      {
-        "frame": 14028,
-        "calls": 430,
-        "triangles": 186222,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 95.93138776376
-      }
-    ],
-    [
-      {
-        "frame": 14845,
-        "calls": 547,
-        "triangles": 522872,
-        "points": 0,
-        "lines": 128,
-        "sparks": 5,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 100.02692296875463
-      },
-      {
-        "frame": 14769,
-        "calls": 811,
-        "triangles": 457525,
-        "points": 0,
-        "lines": 128,
-        "sparks": 5,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 101.39711161215062
-      },
-      {
-        "frame": 14733,
-        "calls": 646,
-        "triangles": 567160,
-        "points": 0,
-        "lines": 128,
-        "sparks": 4,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 99.53564946116815
-      }
-    ],
-    [
-      {
-        "frame": 15591,
-        "calls": 349,
-        "triangles": 487414,
-        "points": 0,
-        "lines": 128,
-        "sparks": 13,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 100.35804060320659
-      },
-      {
-        "frame": 15515,
-        "calls": 750,
-        "triangles": 449659,
-        "points": 0,
-        "lines": 128,
-        "sparks": 13,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 100.88279987689532
-      },
-      {
-        "frame": 15456,
-        "calls": 687,
-        "triangles": 578296,
-        "points": 0,
-        "lines": 128,
-        "sparks": 16,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.27408887592637
-      }
-    ],
-    [
-      {
-        "frame": 16382,
-        "calls": 295,
-        "triangles": 480840,
-        "points": 0,
-        "lines": 128,
-        "sparks": 10,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 101.99718415071516
-      },
-      {
-        "frame": 16306,
-        "calls": 600,
-        "triangles": 411669,
+        "frame": 5043,
+        "calls": 571,
+        "triangles": 603720,
         "points": 0,
         "lines": 128,
         "sparks": 15,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 98.4962306230116
+        "fps": 84.35603718467766
+      }
+    ],
+    [
+      {
+        "frame": 5765,
+        "calls": 495,
+        "triangles": 659548,
+        "points": 0,
+        "lines": 128,
+        "sparks": 14,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.55065242441472
       },
       {
-        "frame": 16239,
-        "calls": 574,
-        "triangles": 566332,
+        "frame": 5735,
+        "calls": 799,
+        "triangles": 601494,
+        "points": 0,
+        "lines": 128,
+        "sparks": 18,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.77597415027365
+      },
+      {
+        "frame": 5691,
+        "calls": 399,
+        "triangles": 168172,
+        "points": 0,
+        "lines": 128,
+        "sparks": 14,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.9973580820826
+      }
+    ],
+    [
+      {
+        "frame": 6418,
+        "calls": 721,
+        "triangles": 739099,
+        "points": 0,
+        "lines": 256,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 93.01289109968114
+      },
+      {
+        "frame": 6387,
+        "calls": 655,
+        "triangles": 569386,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.09052130374563
+      },
+      {
+        "frame": 6336,
+        "calls": 373,
+        "triangles": 662422,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 91.89439215506648
+      }
+    ],
+    [
+      {
+        "frame": 7133,
+        "calls": 353,
+        "triangles": 574996,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.90149979893437
+      },
+      {
+        "frame": 7118,
+        "calls": 547,
+        "triangles": 559680,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 98.11088002327095
+      },
+      {
+        "frame": 7044,
+        "calls": 448,
+        "triangles": 255644,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.25480692488917
+      }
+    ],
+    [
+      {
+        "frame": 7876,
+        "calls": 318,
+        "triangles": 517034,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 105.72195194303112
+      },
+      {
+        "frame": 7846,
+        "calls": 486,
+        "triangles": 476268,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 104.51505785936267
+      },
+      {
+        "frame": 7779,
+        "calls": 295,
+        "triangles": 242108,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 102.61424180860371
+      }
+    ],
+    [
+      {
+        "frame": 8591,
+        "calls": 378,
+        "triangles": 534898,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.25963303835856
+      },
+      {
+        "frame": 8561,
+        "calls": 452,
+        "triangles": 468796,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.9938778054141
+      },
+      {
+        "frame": 8472,
+        "calls": 381,
+        "triangles": 571246,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 95.58190930927687
+      }
+    ],
+    [
+      {
+        "frame": 9350,
+        "calls": 763,
+        "triangles": 615652,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 102.88294704943809
+      },
+      {
+        "frame": 9319,
+        "calls": 446,
+        "triangles": 427098,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 103.75747061287446
+      },
+      {
+        "frame": 9222,
+        "calls": 317,
+        "triangles": 209188,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 103.61103265974901
+      }
+    ],
+    [
+      {
+        "frame": 9987,
+        "calls": 541,
+        "triangles": 626203,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.54828671736901
+      },
+      {
+        "frame": 9972,
+        "calls": 849,
+        "triangles": 842646,
+        "points": 0,
+        "lines": 256,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.45750645695402
+      },
+      {
+        "frame": 9867,
+        "calls": 933,
+        "triangles": 779873,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.08811379500256
+      }
+    ],
+    [
+      {
+        "frame": 10641,
+        "calls": 292,
+        "triangles": 511326,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 91.2080454034197
+      },
+      {
+        "frame": 10611,
+        "calls": 728,
+        "triangles": 431556,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.83823109149434
+      },
+      {
+        "frame": 10500,
+        "calls": 442,
+        "triangles": 295079,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.24484822577769
+      }
+    ],
+    [
+      {
+        "frame": 11354,
+        "calls": 663,
+        "triangles": 579902,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.02674452093488
+      },
+      {
+        "frame": 11339,
+        "calls": 438,
+        "triangles": 421366,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 99.66785835801932
+      },
+      {
+        "frame": 11220,
+        "calls": 478,
+        "triangles": 399035,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.18960194748198
+      }
+    ],
+    [
+      {
+        "frame": 12037,
+        "calls": 783,
+        "triangles": 574708,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.35944344288836
+      },
+      {
+        "frame": 12006,
+        "calls": 332,
+        "triangles": 347608,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.33053538766936
+      },
+      {
+        "frame": 11880,
+        "calls": 478,
+        "triangles": 386599,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.60982281646534
+      }
+    ],
+    [
+      {
+        "frame": 12691,
+        "calls": 732,
+        "triangles": 553366,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.03867258232668
+      },
+      {
+        "frame": 12661,
+        "calls": 821,
+        "triangles": 488700,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.29067759492835
+      },
+      {
+        "frame": 12528,
+        "calls": 376,
+        "triangles": 325870,
+        "points": 0,
+        "lines": 128,
+        "sparks": 1,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.07752258912124
+      }
+    ],
+    [
+      {
+        "frame": 13313,
+        "calls": 605,
+        "triangles": 522222,
+        "points": 0,
+        "lines": 128,
+        "sparks": 5,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.7999713900546
+      },
+      {
+        "frame": 13283,
+        "calls": 895,
+        "triangles": 453102,
+        "points": 0,
+        "lines": 128,
+        "sparks": 5,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.9620895329519
+      },
+      {
+        "frame": 13158,
+        "calls": 326,
+        "triangles": 164366,
+        "points": 0,
+        "lines": 128,
+        "sparks": 5,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.24403740982602
+      }
+    ],
+    [
+      {
+        "frame": 13983,
+        "calls": 388,
+        "triangles": 485802,
+        "points": 0,
+        "lines": 128,
+        "sparks": 14,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.51584197635067
+      },
+      {
+        "frame": 13968,
+        "calls": 820,
+        "triangles": 444932,
+        "points": 0,
+        "lines": 128,
+        "sparks": 13,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.15308819719264
+      },
+      {
+        "frame": 13821,
+        "calls": 360,
+        "triangles": 167322,
+        "points": 0,
+        "lines": 128,
+        "sparks": 15,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 95.3075128322536
+      }
+    ],
+    [
+      {
+        "frame": 14714,
+        "calls": 618,
+        "triangles": 629061,
+        "points": 0,
+        "lines": 256,
+        "sparks": 18,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 95.41752341716128
+      },
+      {
+        "frame": 14683,
+        "calls": 666,
+        "triangles": 404410,
+        "points": 0,
+        "lines": 128,
+        "sparks": 21,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 98.17288159722759
+      },
+      {
+        "frame": 14529,
+        "calls": 344,
+        "triangles": 161818,
+        "points": 0,
+        "lines": 128,
+        "sparks": 20,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.42734223365065
+      }
+    ],
+    [
+      {
+        "frame": 15535,
+        "calls": 323,
+        "triangles": 475750,
         "points": 0,
         "lines": 128,
         "sparks": 12,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 100.60774402188527
+        "fps": 106.84091760381448
+      },
+      {
+        "frame": 15457,
+        "calls": 469,
+        "triangles": 377784,
+        "points": 0,
+        "lines": 128,
+        "sparks": 12,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 108.5815551673185
+      },
+      {
+        "frame": 15342,
+        "calls": 334,
+        "triangles": 159542,
+        "points": 0,
+        "lines": 128,
+        "sparks": 11,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 106.31208127253682
       }
     ],
     [
       {
-        "frame": 17216,
-        "calls": 287,
-        "triangles": 477872,
+        "frame": 16278,
+        "calls": 596,
+        "triangles": 531234,
+        "points": 0,
+        "lines": 128,
+        "sparks": 16,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 106.0564442231039
+      },
+      {
+        "frame": 16263,
+        "calls": 435,
+        "triangles": 366996,
         "points": 0,
         "lines": 128,
         "sparks": 17,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 111.23841112543631
+        "fps": 105.41937457958102
       },
       {
-        "frame": 17140,
-        "calls": 416,
-        "triangles": 382863,
+        "frame": 16092,
+        "calls": 448,
+        "triangles": 233495,
+        "points": 0,
+        "lines": 128,
+        "sparks": 16,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 106.81055439427986
+      }
+    ],
+    [
+      {
+        "frame": 16930,
+        "calls": 1052,
+        "triangles": 608720,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.99707745748222
+      },
+      {
+        "frame": 16900,
+        "calls": 428,
+        "triangles": 368920,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.14837537906956
+      },
+      {
+        "frame": 16722,
+        "calls": 467,
+        "triangles": 234311,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.82440203649996
+      }
+    ],
+    [
+      {
+        "frame": 17555,
+        "calls": 949,
+        "triangles": 591128,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.71413013015605
+      },
+      {
+        "frame": 17540,
+        "calls": 1054,
+        "triangles": 465198,
+        "points": 0,
+        "lines": 256,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.84086952098671
+      },
+      {
+        "frame": 17355,
+        "calls": 471,
+        "triangles": 236445,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 83.82851171868529
+      }
+    ],
+    [
+      {
+        "frame": 18146,
+        "calls": 804,
+        "triangles": 559148,
+        "points": 0,
+        "lines": 128,
+        "sparks": 5,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 83.95896424260575
+      },
+      {
+        "frame": 18116,
+        "calls": 1156,
+        "triangles": 502624,
+        "points": 0,
+        "lines": 128,
+        "sparks": 5,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 85.6057068516804
+      },
+      {
+        "frame": 17940,
+        "calls": 345,
+        "triangles": 161718,
+        "points": 0,
+        "lines": 128,
+        "sparks": 5,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 84.76703558671267
+      }
+    ],
+    [
+      {
+        "frame": 18755,
+        "calls": 785,
+        "triangles": 608726,
+        "points": 0,
+        "lines": 128,
+        "sparks": 11,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 82.68798999962979
+      },
+      {
+        "frame": 18725,
+        "calls": 1042,
+        "triangles": 538348,
         "points": 0,
         "lines": 128,
         "sparks": 12,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 109.39798347108787
+        "fps": 83.96877385135323
       },
       {
-        "frame": 17127,
-        "calls": 2492,
-        "triangles": 1173922,
+        "frame": 18543,
+        "calls": 339,
+        "triangles": 161904,
+        "points": 0,
+        "lines": 128,
+        "sparks": 11,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 83.57615923507585
+      }
+    ],
+    [
+      {
+        "frame": 19365,
+        "calls": 1087,
+        "triangles": 722403,
+        "points": 0,
+        "lines": 256,
+        "sparks": 16,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 81.92603923024869
+      },
+      {
+        "frame": 19349,
+        "calls": 2578,
+        "triangles": 931182,
         "points": 0,
         "lines": 896,
+        "sparks": 16,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 80.49950192538122
+      },
+      {
+        "frame": 19146,
+        "calls": 326,
+        "triangles": 158340,
+        "points": 0,
+        "lines": 128,
         "sparks": 14,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 110.86522647793112
+        "fps": 81.74841007153184
       }
     ],
     [
       {
-        "frame": 18113,
-        "calls": 549,
-        "triangles": 533278,
+        "frame": 19971,
+        "calls": 766,
+        "triangles": 616790,
         "points": 0,
         "lines": 128,
         "sparks": 20,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 114.41386325260598
+        "fps": 86.80242767342517
       },
       {
-        "frame": 18022,
-        "calls": 380,
-        "triangles": 375259,
+        "frame": 19956,
+        "calls": 909,
+        "triangles": 513998,
         "points": 0,
         "lines": 128,
         "sparks": 18,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 113.94575700223119
+        "fps": 87.43505776678805
       },
       {
-        "frame": 17952,
-        "calls": 256,
-        "triangles": 150258,
+        "frame": 19746,
+        "calls": 311,
+        "triangles": 159792,
         "points": 0,
         "lines": 128,
-        "sparks": 19,
+        "sparks": 21,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 114.64234536418158
+        "fps": 88.26947889911057
       }
     ],
     [
       {
-        "frame": 18902,
-        "calls": 972,
-        "triangles": 609372,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 106.58247527203254
-      },
-      {
-        "frame": 18826,
-        "calls": 381,
-        "triangles": 374345,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 107.53288512731945
-      },
-      {
-        "frame": 18747,
-        "calls": 389,
-        "triangles": 570380,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 108.02171970648295
-      }
-    ],
-    [
-      {
-        "frame": 19587,
-        "calls": 880,
-        "triangles": 593420,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 91.32591021480204
-      },
-      {
-        "frame": 19511,
-        "calls": 848,
-        "triangles": 457539,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 92.97562177858069
-      },
-      {
-        "frame": 19425,
-        "calls": 525,
-        "triangles": 217458,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 92.79828107721805
-      }
-    ],
-    [
-      {
-        "frame": 20209,
-        "calls": 741,
-        "triangles": 560626,
-        "points": 0,
-        "lines": 128,
-        "sparks": 4,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 89.04961501147874
-      },
-      {
-        "frame": 20118,
-        "calls": 1068,
-        "triangles": 508575,
-        "points": 0,
-        "lines": 128,
-        "sparks": 4,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 88.82546939261692
-      },
-      {
-        "frame": 20025,
-        "calls": 514,
-        "triangles": 216750,
-        "points": 0,
-        "lines": 128,
-        "sparks": 4,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 87.85954899684481
-      }
-    ],
-    [
-      {
-        "frame": 20848,
-        "calls": 720,
-        "triangles": 609388,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 87.80535146283316
-      },
-      {
-        "frame": 20773,
-        "calls": 1089,
-        "triangles": 567033,
+        "frame": 20596,
+        "calls": 974,
+        "triangles": 699933,
         "points": 0,
         "lines": 256,
-        "sparks": 9,
+        "sparks": 13,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 88.45318498070847
+        "fps": 85.44064666083548
       },
       {
-        "frame": 20673,
-        "calls": 555,
-        "triangles": 271156,
+        "frame": 20565,
+        "calls": 887,
+        "triangles": 511472,
         "points": 0,
         "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 86.07126083362692
-      }
-    ],
-    [
-      {
-        "frame": 21501,
-        "calls": 998,
-        "triangles": 725972,
-        "points": 0,
-        "lines": 256,
         "sparks": 14,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 94.73459145697275
+        "fps": 83.2291166250387
       },
       {
-        "frame": 21473,
-        "calls": 832,
-        "triangles": 512467,
+        "frame": 20364,
+        "calls": 332,
+        "triangles": 215234,
+        "points": 0,
+        "lines": 128,
+        "sparks": 13,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.08865744212633
+      }
+    ],
+    [
+      {
+        "frame": 21190,
+        "calls": 882,
+        "triangles": 695451,
+        "points": 0,
+        "lines": 256,
+        "sparks": 18,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 83.41030591363983
+      },
+      {
+        "frame": 21174,
+        "calls": 875,
+        "triangles": 511268,
+        "points": 0,
+        "lines": 128,
+        "sparks": 17,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 82.46734927537489
+      },
+      {
+        "frame": 20952,
+        "calls": 336,
+        "triangles": 222610,
         "points": 0,
         "lines": 128,
         "sparks": 18,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 93.69424703961091
+        "fps": 82.81097352584474
+      }
+    ],
+    [
+      {
+        "frame": 21875,
+        "calls": 804,
+        "triangles": 676219,
+        "points": 0,
+        "lines": 256,
+        "sparks": 18,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.70214014552774
       },
       {
-        "frame": 21366,
-        "calls": 606,
-        "triangles": 285220,
+        "frame": 21844,
+        "calls": 833,
+        "triangles": 505558,
+        "points": 0,
+        "lines": 128,
+        "sparks": 18,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.29463375204651
+      },
+      {
+        "frame": 21615,
+        "calls": 348,
+        "triangles": 227154,
         "points": 0,
         "lines": 128,
         "sparks": 16,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 90.978551904462
+        "fps": 86.2306462914388
       }
     ],
     [
       {
-        "frame": 22201,
-        "calls": 711,
-        "triangles": 618178,
-        "points": 0,
-        "lines": 128,
-        "sparks": 20,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 95.20212659892073
-      },
-      {
-        "frame": 22125,
-        "calls": 836,
-        "triangles": 518803,
-        "points": 0,
-        "lines": 128,
-        "sparks": 19,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 92.64031898600997
-      },
-      {
-        "frame": 21996,
-        "calls": 570,
-        "triangles": 223706,
-        "points": 0,
-        "lines": 128,
-        "sparks": 20,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 91.94575782986466
-      }
-    ],
-    [
-      {
-        "frame": 22886,
-        "calls": 675,
-        "triangles": 612600,
-        "points": 0,
-        "lines": 128,
-        "sparks": 19,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 92.89361254913415
-      },
-      {
-        "frame": 22810,
-        "calls": 817,
-        "triangles": 516283,
-        "points": 0,
-        "lines": 128,
-        "sparks": 16,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 91.2971765157659
-      },
-      {
-        "frame": 22674,
-        "calls": 457,
-        "triangles": 196350,
-        "points": 0,
-        "lines": 128,
-        "sparks": 19,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 92.24888420614178
-      }
-    ],
-    [
-      {
-        "frame": 23601,
-        "calls": 593,
-        "triangles": 598588,
+        "frame": 22542,
+        "calls": 434,
+        "triangles": 502390,
         "points": 0,
         "lines": 128,
         "sparks": 23,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 95.98030809511943
+        "fps": 97.8808666796782
       },
       {
-        "frame": 23510,
-        "calls": 808,
-        "triangles": 516131,
+        "frame": 22512,
+        "calls": 884,
+        "triangles": 514026,
         "points": 0,
-        "lines": 128,
-        "sparks": 24,
+        "lines": 256,
+        "sparks": 22,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 94.66101038941018
+        "fps": 95.97455262340209
       },
       {
-        "frame": 23382,
-        "calls": 393,
-        "triangles": 237804,
+        "frame": 22275,
+        "calls": 338,
+        "triangles": 169140,
         "points": 0,
         "lines": 128,
-        "sparks": 23,
+        "sparks": 17,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 94.59400341160897
+        "fps": 96.82143511539769
       }
     ],
     [
       {
-        "frame": 24299,
-        "calls": 473,
-        "triangles": 522180,
-        "points": 0,
-        "lines": 128,
-        "sparks": 18,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 96.94275293340176
-      },
-      {
-        "frame": 24256,
-        "calls": 770,
-        "triangles": 511687,
+        "frame": 23272,
+        "calls": 367,
+        "triangles": 479718,
         "points": 0,
         "lines": 128,
         "sparks": 25,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 96.26008907810635
+        "fps": 100.7161485989414
       },
       {
-        "frame": 24120,
-        "calls": 356,
-        "triangles": 232266,
+        "frame": 23242,
+        "calls": 611,
+        "triangles": 408222,
         "points": 0,
         "lines": 128,
-        "sparks": 19,
+        "sparks": 17,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 97.34314294546556
+        "fps": 102.52957240747332
+      },
+      {
+        "frame": 23013,
+        "calls": 351,
+        "triangles": 162330,
+        "points": 0,
+        "lines": 128,
+        "sparks": 25,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.99015748713165
       }
     ],
     [
       {
-        "frame": 25060,
-        "calls": 668,
-        "triangles": 664858,
+        "frame": 24033,
+        "calls": 332,
+        "triangles": 475890,
         "points": 0,
-        "lines": 256,
-        "sparks": 24,
+        "lines": 128,
+        "sparks": 12,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 104.19106424659518
+        "fps": 101.88733839166726
       },
       {
-        "frame": 24984,
-        "calls": 688,
-        "triangles": 496471,
+        "frame": 24003,
+        "calls": 528,
+        "triangles": 386244,
         "points": 0,
         "lines": 128,
-        "sparks": 20,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.54481921465702
-      },
-      {
-        "frame": 24825,
-        "calls": 306,
-        "triangles": 172060,
-        "points": 0,
-        "lines": 128,
-        "sparks": 23,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.54056937454062
-      }
-    ],
-    [
-      {
-        "frame": 25866,
-        "calls": 334,
-        "triangles": 482410,
-        "points": 0,
-        "lines": 128,
-        "sparks": 22,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 108.20578008900038
-      },
-      {
-        "frame": 25790,
-        "calls": 562,
-        "triangles": 417953,
-        "points": 0,
-        "lines": 128,
-        "sparks": 23,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 108.10423004560766
-      },
-      {
-        "frame": 25623,
-        "calls": 272,
-        "triangles": 155632,
-        "points": 0,
-        "lines": 128,
-        "sparks": 22,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 106.60145761168118
-      }
-    ],
-    [
-      {
-        "frame": 26703,
-        "calls": 560,
-        "triangles": 590438,
-        "points": 0,
-        "lines": 256,
         "sparks": 10,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 107.87434929301861
+        "fps": 103.26823855291728
       },
       {
-        "frame": 26612,
-        "calls": 650,
-        "triangles": 483713,
+        "frame": 23766,
+        "calls": 341,
+        "triangles": 156808,
+        "points": 0,
+        "lines": 128,
+        "sparks": 8,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.14537384334417
+      }
+    ],
+    [
+      {
+        "frame": 24807,
+        "calls": 671,
+        "triangles": 548332,
+        "points": 0,
+        "lines": 128,
+        "sparks": 10,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 103.84258462051041
+      },
+      {
+        "frame": 24776,
+        "calls": 468,
+        "triangles": 373766,
+        "points": 0,
+        "lines": 128,
+        "sparks": 11,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 105.8484452793771
+      },
+      {
+        "frame": 24531,
+        "calls": 464,
+        "triangles": 243557,
+        "points": 0,
+        "lines": 128,
+        "sparks": 10,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 104.38100274942482
+      }
+    ],
+    [
+      {
+        "frame": 25504,
+        "calls": 511,
+        "triangles": 618362,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 101.23550221179762
+      },
+      {
+        "frame": 25489,
+        "calls": 446,
+        "triangles": 371488,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 100.89620668953485
+      },
+      {
+        "frame": 25221,
+        "calls": 468,
+        "triangles": 636178,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 99.60467335538357
+      }
+    ],
+    [
+      {
+        "frame": 26174,
+        "calls": 656,
+        "triangles": 631354,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.14629141306513
+      },
+      {
+        "frame": 26144,
+        "calls": 822,
+        "triangles": 535344,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.16727773042894
+      },
+      {
+        "frame": 25884,
+        "calls": 625,
+        "triangles": 658112,
+        "points": 0,
+        "lines": 128,
+        "sparks": 0,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.06984772189271
+      }
+    ],
+    [
+      {
+        "frame": 26781,
+        "calls": 637,
+        "triangles": 627504,
+        "points": 0,
+        "lines": 128,
+        "sparks": 3,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.39946908425347
+      },
+      {
+        "frame": 26751,
+        "calls": 791,
+        "triangles": 612304,
+        "points": 0,
+        "lines": 256,
+        "sparks": 4,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.46626011192595
+      },
+      {
+        "frame": 26484,
+        "calls": 578,
+        "triangles": 647312,
+        "points": 0,
+        "lines": 128,
+        "sparks": 3,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.51541034817261
+      }
+    ],
+    [
+      {
+        "frame": 27436,
+        "calls": 847,
+        "triangles": 781333,
+        "points": 0,
+        "lines": 256,
+        "sparks": 8,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 91.00033413792073
+      },
+      {
+        "frame": 27405,
+        "calls": 769,
+        "triangles": 522330,
+        "points": 0,
+        "lines": 128,
+        "sparks": 7,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.7638354254992
+      },
+      {
+        "frame": 27117,
+        "calls": 514,
+        "triangles": 637430,
+        "points": 0,
+        "lines": 128,
+        "sparks": 6,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 90.64152745659766
+      }
+    ],
+    [
+      {
+        "frame": 28090,
+        "calls": 467,
+        "triangles": 604228,
+        "points": 0,
+        "lines": 128,
+        "sparks": 14,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.90606019810605
+      },
+      {
+        "frame": 28060,
+        "calls": 737,
+        "triangles": 521534,
+        "points": 0,
+        "lines": 128,
+        "sparks": 14,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.65037238043598
+      },
+      {
+        "frame": 27765,
+        "calls": 449,
+        "triangles": 628754,
+        "points": 0,
+        "lines": 128,
+        "sparks": 14,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 87.4161975076017
+      }
+    ],
+    [
+      {
+        "frame": 28742,
+        "calls": 533,
+        "triangles": 606120,
+        "points": 0,
+        "lines": 128,
+        "sparks": 10,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.85776382933449
+      },
+      {
+        "frame": 28727,
+        "calls": 656,
+        "triangles": 511874,
+        "points": 0,
+        "lines": 128,
+        "sparks": 9,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.79297617871755
+      },
+      {
+        "frame": 28425,
+        "calls": 420,
+        "triangles": 624884,
+        "points": 0,
+        "lines": 128,
+        "sparks": 10,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.69752342303389
+      }
+    ],
+    [
+      {
+        "frame": 29425,
+        "calls": 521,
+        "triangles": 605260,
+        "points": 0,
+        "lines": 128,
+        "sparks": 11,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.93365707328678
+      },
+      {
+        "frame": 29395,
+        "calls": 710,
+        "triangles": 526222,
+        "points": 0,
+        "lines": 256,
+        "sparks": 13,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 95.40641849475176
+      },
+      {
+        "frame": 29085,
+        "calls": 427,
+        "triangles": 624980,
+        "points": 0,
+        "lines": 128,
+        "sparks": 9,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 96.25983503480333
+      }
+    ],
+    [
+      {
+        "frame": 30095,
+        "calls": 541,
+        "triangles": 841384,
+        "points": 0,
+        "lines": 128,
+        "sparks": 10,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 93.0078698365725
+      },
+      {
+        "frame": 30080,
+        "calls": 705,
+        "triangles": 903262,
         "points": 0,
         "lines": 256,
         "sparks": 14,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 107.75210114153467
+        "fps": 93.03681400097993
       },
       {
-        "frame": 26451,
-        "calls": 255,
-        "triangles": 152450,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 105.87885315857527
-      }
-    ],
-    [
-      {
-        "frame": 27597,
-        "calls": 581,
-        "triangles": 545866,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 116.61176178295455
-      },
-      {
-        "frame": 27522,
-        "calls": 589,
-        "triangles": 473613,
-        "points": 0,
-        "lines": 256,
-        "sparks": 11,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 116.47150481394645
-      },
-      {
-        "frame": 27336,
-        "calls": 300,
-        "triangles": 166900,
-        "points": 0,
-        "lines": 128,
-        "sparks": 11,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 116.36127716387053
-      }
-    ],
-    [
-      {
-        "frame": 28416,
-        "calls": 472,
-        "triangles": 620590,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 111.06683384871957
-      },
-      {
-        "frame": 28341,
-        "calls": 569,
-        "triangles": 419873,
-        "points": 0,
-        "lines": 256,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 109.24675783548442
-      },
-      {
-        "frame": 28161,
-        "calls": 407,
-        "triangles": 236740,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 111.21487775838035
-      }
-    ],
-    [
-      {
-        "frame": 29238,
-        "calls": 613,
-        "triangles": 636072,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 101.93711099051706
-      },
-      {
-        "frame": 29162,
-        "calls": 758,
-        "triangles": 541175,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 103.67410659530275
-      },
-      {
-        "frame": 28959,
-        "calls": 421,
-        "triangles": 247704,
-        "points": 0,
-        "lines": 128,
-        "sparks": 0,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 104.49143328805195
-      }
-    ],
-    [
-      {
-        "frame": 30011,
-        "calls": 594,
-        "triangles": 629686,
-        "points": 0,
-        "lines": 128,
-        "sparks": 2,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 107.67834503112351
-      },
-      {
-        "frame": 29936,
-        "calls": 737,
-        "triangles": 616485,
-        "points": 0,
-        "lines": 256,
-        "sparks": 3,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 107.00059390113898
-      },
-      {
-        "frame": 29724,
-        "calls": 303,
-        "triangles": 169542,
-        "points": 0,
-        "lines": 128,
-        "sparks": 2,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 107.56349978374467
-      }
-    ],
-    [
-      {
-        "frame": 30818,
-        "calls": 519,
-        "triangles": 618388,
-        "points": 0,
-        "lines": 128,
-        "sparks": 6,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 104.81917433411391
-      },
-      {
-        "frame": 30727,
+        "frame": 29763,
         "calls": 704,
-        "triangles": 527657,
+        "triangles": 329482,
         "points": 0,
         "lines": 128,
-        "sparks": 9,
+        "sparks": 14,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 106.51099688036904
+        "fps": 91.26213569446293
+      }
+    ],
+    [
+      {
+        "frame": 30732,
+        "calls": 587,
+        "triangles": 497967,
+        "points": 0,
+        "lines": 128,
+        "sparks": 5,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.42938213876724
       },
       {
-        "frame": 30522,
-        "calls": 323,
-        "triangles": 265108,
+        "frame": 30701,
+        "calls": 613,
+        "triangles": 634236,
         "points": 0,
         "lines": 128,
         "sparks": 6,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 104.71262353829763
-      }
-    ],
-    [
-      {
-        "frame": 31609,
-        "calls": 435,
-        "triangles": 608320,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.62395358988942
+        "fps": 91.13040125258607
       },
       {
-        "frame": 31533,
-        "calls": 685,
-        "triangles": 527127,
-        "points": 0,
-        "lines": 128,
-        "sparks": 10,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.82425698175425
-      },
-      {
-        "frame": 31320,
-        "calls": 329,
-        "triangles": 281950,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 101.80927260349826
-      }
-    ],
-    [
-      {
-        "frame": 32428,
-        "calls": 491,
-        "triangles": 607320,
+        "frame": 30378,
+        "calls": 492,
+        "triangles": 343780,
         "points": 0,
         "lines": 128,
         "sparks": 8,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 110.026969724064
-      },
-      {
-        "frame": 32352,
-        "calls": 607,
-        "triangles": 517347,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 110.73227105964834
-      },
-      {
-        "frame": 32115,
-        "calls": 332,
-        "triangles": 282694,
-        "points": 0,
-        "lines": 128,
-        "sparks": 11,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 110.83131477732744
+        "fps": 92.60358911682248
       }
     ],
     [
       {
-        "frame": 33232,
-        "calls": 484,
-        "triangles": 607172,
-        "points": 0,
-        "lines": 128,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 107.7577203852267
-      },
-      {
-        "frame": 33156,
-        "calls": 528,
-        "triangles": 505245,
-        "points": 0,
-        "lines": 128,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 108.60350856636053
-      },
-      {
-        "frame": 32925,
-        "calls": 436,
-        "triangles": 356150,
-        "points": 0,
-        "lines": 128,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 109.32509293640199
-      }
-    ],
-    [
-      {
-        "frame": 34005,
-        "calls": 493,
-        "triangles": 844931,
-        "points": 0,
-        "lines": 128,
-        "sparks": 11,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.74609200864529
-      },
-      {
-        "frame": 33962,
-        "calls": 507,
-        "triangles": 845904,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.4754804508036
-      },
-      {
-        "frame": 33723,
-        "calls": 610,
-        "triangles": 1115140,
-        "points": 0,
-        "lines": 128,
-        "sparks": 9,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 104.54489741951886
-      }
-    ],
-    [
-      {
-        "frame": 34766,
-        "calls": 530,
-        "triangles": 503234,
-        "points": 0,
-        "lines": 128,
-        "sparks": 8,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 102.32119243036415
-      },
-      {
-        "frame": 34675,
-        "calls": 572,
-        "triangles": 636202,
-        "points": 0,
-        "lines": 128,
-        "sparks": 6,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 103.05076064917866
-      },
-      {
-        "frame": 34428,
-        "calls": 522,
-        "triangles": 651614,
-        "points": 0,
-        "lines": 128,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 100.51447846737378
-      }
-    ],
-    [
-      {
-        "frame": 35512,
-        "calls": 723,
-        "triangles": 542472,
+        "frame": 31386,
+        "calls": 783,
+        "triangles": 537143,
         "points": 0,
         "lines": 128,
         "sparks": 1,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 99.57056899408602
+        "fps": 91.840408257442
       },
       {
-        "frame": 35421,
-        "calls": 452,
-        "triangles": 509662,
+        "frame": 31356,
+        "calls": 489,
+        "triangles": 507694,
         "points": 0,
         "lines": 128,
         "sparks": 1,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 100.48863975161804
+        "fps": 92.59808368616659
       },
       {
-        "frame": 35166,
-        "calls": 439,
-        "triangles": 535994,
+        "frame": 31041,
+        "calls": 547,
+        "triangles": 353038,
         "points": 0,
         "lines": 128,
         "sparks": 1,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 102.40594378408287
+        "fps": 92.8946432296565
       }
     ],
     [
       {
-        "frame": 36240,
-        "calls": 736,
-        "triangles": 639058,
+        "frame": 31978,
+        "calls": 795,
+        "triangles": 633937,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 99.56168310396373
+        "fps": 83.99578878423874
       },
       {
-        "frame": 36149,
-        "calls": 816,
-        "triangles": 667110,
+        "frame": 31948,
+        "calls": 1222,
+        "triangles": 883190,
         "points": 0,
-        "lines": 128,
+        "lines": 256,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 99.83379361168409
+        "fps": 84.04622386413446
       },
       {
-        "frame": 35886,
-        "calls": 764,
-        "triangles": 688152,
+        "frame": 31626,
+        "calls": 496,
+        "triangles": 286664,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 98.72005587546204
+        "fps": 85.25223579248241
       }
     ],
     [
       {
-        "frame": 36864,
-        "calls": 746,
-        "triangles": 650468,
+        "frame": 32542,
+        "calls": 991,
+        "triangles": 794515,
         "points": 0,
-        "lines": 128,
+        "lines": 256,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 84.70895877775867
+        "fps": 75.92774584084717
       },
       {
-        "frame": 36773,
-        "calls": 965,
-        "triangles": 620220,
+        "frame": 32511,
+        "calls": 1041,
+        "triangles": 617840,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 83.59477236129968
+        "fps": 75.99559583310585
       },
       {
-        "frame": 36504,
-        "calls": 663,
-        "triangles": 584354,
+        "frame": 32184,
+        "calls": 585,
+        "triangles": 293736,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 86.46993414713475
+        "fps": 77.6628702127283
       }
     ],
     [
       {
-        "frame": 37486,
-        "calls": 747,
-        "triangles": 653798,
+        "frame": 33133,
+        "calls": 805,
+        "triangles": 648657,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 91.32287888294896
+        "fps": 84.98125057365185
       },
       {
-        "frame": 37395,
-        "calls": 734,
-        "triangles": 734765,
+        "frame": 33118,
+        "calls": 777,
+        "triangles": 726920,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 91.31482167622136
+        "fps": 84.24903119725505
       },
       {
-        "frame": 37119,
-        "calls": 592,
-        "triangles": 726305,
+        "frame": 32769,
+        "calls": 494,
+        "triangles": 686962,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 88.8537659905937
+        "fps": 86.23153022575833
       }
     ],
     [
       {
-        "frame": 38153,
-        "calls": 647,
-        "triangles": 603497,
+        "frame": 33803,
+        "calls": 650,
+        "triangles": 547398,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 96.92445974322185
+        "fps": 89.56726159493888
       },
       {
-        "frame": 38077,
-        "calls": 663,
-        "triangles": 566552,
+        "frame": 33725,
+        "calls": 868,
+        "triangles": 679138,
         "points": 0,
-        "lines": 128,
+        "lines": 256,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 95.35783364789248
+        "fps": 88.42193302087045
       },
       {
-        "frame": 37779,
-        "calls": 509,
-        "triangles": 566714,
+        "frame": 33432,
+        "calls": 336,
+        "triangles": 253478,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 95.84491953771115
+        "fps": 88.37564979177458
       }
     ],
     [
       {
-        "frame": 38838,
-        "calls": 603,
-        "triangles": 565500,
+        "frame": 34394,
+        "calls": 644,
+        "triangles": 562734,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 91.98231025202061
+        "fps": 85.43168989254377
       },
       {
-        "frame": 38747,
-        "calls": 946,
-        "triangles": 757834,
+        "frame": 34364,
+        "calls": 1042,
+        "triangles": 764622,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 92.41354527286973
+        "fps": 83.93303370760364
       },
       {
-        "frame": 38457,
-        "calls": 669,
-        "triangles": 626254,
+        "frame": 34002,
+        "calls": 461,
+        "triangles": 240370,
         "points": 0,
         "lines": 128,
         "sparks": 0,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 94.31303275446808
+        "fps": 84.05133254408878
       }
     ],
     [
       {
-        "frame": 39460,
-        "calls": 572,
-        "triangles": 561554,
+        "frame": 35049,
+        "calls": 614,
+        "triangles": 558820,
         "points": 0,
         "lines": 128,
         "sparks": 2,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 89.08357076935388
+        "fps": 88.60478316585863
       },
       {
-        "frame": 39369,
-        "calls": 873,
-        "triangles": 692598,
+        "frame": 34971,
+        "calls": 949,
+        "triangles": 691188,
         "points": 0,
         "lines": 128,
-        "sparks": 0,
+        "sparks": 2,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 88.6181482141026
+        "fps": 87.94909154829418
       },
       {
-        "frame": 39072,
-        "calls": 742,
-        "triangles": 684720,
+        "frame": 34650,
+        "calls": 547,
+        "triangles": 595726,
         "points": 0,
         "lines": 128,
-        "sparks": 0,
+        "sparks": 2,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 90.68603631502833
+        "fps": 87.8620641673714
       }
     ],
     [
       {
-        "frame": 40115,
-        "calls": 531,
-        "triangles": 458444,
-        "points": 0,
-        "lines": 128,
-        "sparks": 3,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 90.81615455479934
-      },
-      {
-        "frame": 40024,
-        "calls": 808,
-        "triangles": 682782,
+        "frame": 35610,
+        "calls": 567,
+        "triangles": 455362,
         "points": 0,
         "lines": 128,
         "sparks": 6,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 91.53798384115564
+        "fps": 86.96510157922589
       },
       {
-        "frame": 39720,
-        "calls": 687,
-        "triangles": 678306,
+        "frame": 35595,
+        "calls": 864,
+        "triangles": 677298,
         "points": 0,
         "lines": 128,
         "sparks": 4,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 89.92132115330402
-      }
-    ],
-    [
-      {
-        "frame": 40800,
-        "calls": 512,
-        "triangles": 496402,
-        "points": 0,
-        "lines": 128,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 90.31039392385642
+        "fps": 86.63202600224287
       },
       {
-        "frame": 40709,
-        "calls": 753,
-        "triangles": 725060,
+        "frame": 35220,
+        "calls": 490,
+        "triangles": 527182,
         "points": 0,
         "lines": 128,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 88.95314633722712
-      },
-      {
-        "frame": 40398,
-        "calls": 616,
-        "triangles": 671176,
-        "points": 0,
-        "lines": 128,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 90.39082497605794
-      }
-    ],
-    [
-      {
-        "frame": 41513,
-        "calls": 686,
-        "triangles": 638530,
-        "points": 0,
-        "lines": 256,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 101.12675036434844
-      },
-      {
-        "frame": 41437,
-        "calls": 659,
-        "triangles": 712758,
-        "points": 0,
-        "lines": 128,
-        "sparks": 7,
-        "circuit": "las-vegas",
-        "modelsReady": true,
-        "finish": "colour",
-        "fps": 99.35679808507729
-      },
-      {
-        "frame": 41166,
-        "calls": 2287,
-        "triangles": 1375574,
-        "points": 0,
-        "lines": 896,
         "sparks": 6,
         "circuit": "las-vegas",
         "modelsReady": true,
         "finish": "colour",
-        "fps": 101.33441586471237
+        "fps": 87.2422957686503
+      }
+    ],
+    [
+      {
+        "frame": 36250,
+        "calls": 547,
+        "triangles": 493498,
+        "points": 0,
+        "lines": 128,
+        "sparks": 8,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 88.30414510261352
+      },
+      {
+        "frame": 36235,
+        "calls": 999,
+        "triangles": 757196,
+        "points": 0,
+        "lines": 256,
+        "sparks": 10,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 89.63403013431643
+      },
+      {
+        "frame": 35853,
+        "calls": 504,
+        "triangles": 531906,
+        "points": 0,
+        "lines": 128,
+        "sparks": 10,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 86.73013857013761
+      }
+    ],
+    [
+      {
+        "frame": 36965,
+        "calls": 507,
+        "triangles": 483552,
+        "points": 0,
+        "lines": 128,
+        "sparks": 5,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 92.98271425443762
+      },
+      {
+        "frame": 36887,
+        "calls": 712,
+        "triangles": 710462,
+        "points": 0,
+        "lines": 128,
+        "sparks": 4,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 94.68486703836695
+      },
+      {
+        "frame": 36546,
+        "calls": 511,
+        "triangles": 188476,
+        "points": 0,
+        "lines": 128,
+        "sparks": 10,
+        "circuit": "las-vegas",
+        "modelsReady": true,
+        "finish": "colour",
+        "fps": 95.99483248007131
       }
     ]
   ],
@@ -1939,7 +1939,7 @@
     "snapshotHz": 30,
     "speed": 4,
     "rooms": 1,
-    "tick": 15067,
+    "tick": 15074,
     "connected": {
       "a": true,
       "b": true

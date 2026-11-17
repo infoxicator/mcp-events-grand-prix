@@ -39,7 +39,7 @@ def build(cid):
    if alpha:m.node_tree.links.new(node.outputs['Alpha'],bs.inputs['Alpha']);m.surface_render_method='DITHERED'
   mats[name]=m;return name
  mat('Asphalt',(.19,.20,.21),.52 if night else .91,tex='asphalt-color');mat('Grass',(.23,.26,.15),tex='grass-color');mat('Gravel',(.62,.58,.49),tex='gravel');mat('White',(.76,.75,.68));mat('Red',(.46,.027,.022));mat('Green',(.10,.24,.15));mat('Steel',(.38,.42,.45),.48,.65);mat('Concrete',(.47,.48,.45));mat('Dark',(.022,.027,.032));mat('Glass',(.10,.16,.20),.22,.45);mat('Foliage',(.3,.4,.2),tex='foliage',alpha=True);mat('Fence',(.5,.5,.5),tex='fence',alpha=True);mat('Crowd',(.5,.5,.5),tex='crowd',alpha=True);mat('Sign',(.6,.6,.6),tex='sign',emission=.25 if night else 0);mat('Windows',(.5,.4,.3),tex='windows',emission=.65);mat('Gold',(.85,.52,.19),.5,emission=2);mat('Ice',(.6,.8,1),.5,emission=4);mat('Pink',(.8,.04,.3),emission=2);mat('Rubber',(.1,.1,.1),tex='rubber',alpha=True);mat('Water',(.015,.045,.06),.18,.5);mat('Trunk',(.14,.10,.07));mat('Sphere',(.1,.5,.6),tex='sphere-art',emission=1)
- for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex='canopy')
+ for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex='canopy',alpha=True)
  for i,c in enumerate([(.38,.025,.025),(.04,.08,.16),(.62,.60,.55),(.12,.15,.16)]):mat('Spectator'+str(i),c,.95)
  mat('Skin',(.43,.28,.19),.9)
  if night:
@@ -72,10 +72,32 @@ def build(cid):
   for i in range(sides):j=(i+1)%sides;face([rings[0][i],rings[0][j],rings[1][j],rings[1][i]],m)
  instanceRoot=bpy.data.objects.new('Blender solid instances',None);bpy.context.collection.objects.link(instanceRoot)
  prototypes={};instance_triangles=0
+ def leaf_sprays(m,count,seed):
+  # Bent, independently oriented branchlet fans throughout the crown volume.
+  # Open space is actual geometry plus leaf cutouts; no closed ellipsoid shell.
+  rng=random.Random(1701+seed);vv=[];ff=[];uvs=[]
+  for j in range(count):
+   a=j*2.39996+seed;t=(j+.5)/count;zz=1-2*t;rad=math.sqrt(max(0,1-zz*zz))
+   c=Vector((math.cos(a)*rad*.68,math.sin(a)*rad*.68,zz*.78))
+   normal=Vector((math.cos(a)*rad,math.sin(a)*rad,zz*.6)).normalized()
+   u=normal.cross(Vector((0,0,1)))
+   if u.length<.01:u=Vector((1,0,0))
+   u.normalize();v=normal.cross(u).normalized();size=rng.uniform(.48,.67) if count>=24 else rng.uniform(.65,.81)
+   start=len(vv)
+   vv.extend([tuple(c+u*x*size+v*y*size) for x,y in [(-1,-1),(1,-1),(1,1),(-1,1)] ]+[tuple(c+normal*.13)])
+   uvs.extend([(0,0),(1,0),(1,1),(0,1),(.5,.5)])
+   ff.extend([(start+k,start+(k+1)%4,start+4) for k in range(4)])
+  me=bpy.data.meshes.new('Layered branchlets '+m);me.from_pydata(vv,[],ff);me.materials.append(mats[m]);me.update();uv=me.uv_layers.new(name='UVMap')
+  for poly in me.polygons:
+   poly.use_smooth=True
+   for li in poly.loop_indices:uv.data[li].uv=uvs[me.loops[li].vertex_index]
+  return me
  def blob(p,scale,m,segments=8,rings=4,seed=0):
   nonlocal instance_triangles
   segments,rings=(12,6) if m.startswith('Canopy') else (segments,rings)
   key=(m,segments,rings,seed%2);mesh=prototypes.get(key)
+  if mesh is None and m.startswith('Canopy'):
+   mesh=leaf_sprays(m,24,seed%2);prototypes[key]=mesh
   if mesh is None:
    vv=[];ff=[]
    for j in range(rings+1):
@@ -196,9 +218,9 @@ def build(cid):
   atbox(c['d']-30,23,1.2,(2,2.4,3),'White');atbox(c['d']-30,23,2.5,(2.4,.2,3.4),'Red');atbox(c['d']-30,21.9,1.7,(.03,.8,2),'Glass')
   for j in range(12):atbox(c['d']+30+j*1.3,27,.65,(1.1,1.3,1.2),'Red' if j%3 else 'White')
  if not night:
-  # Solid multi-lobed oak/hornbeam crowns, varied silhouettes and visible branches.
+  # Layered, perforated oak/hornbeam branchlet fans and exposed branch structure.
   for i in range(5100):
-   d=random.random()*L;off=random.choice([-1,1])*(43+random.random()**1.6*165);p=pt(d,off);x,y,z=p
+   d=random.random()*L;off=random.choice([-1,1])*(43+random.random()**1.6*165);p=pt(d,off);x,y,z=p;y=ground(x,z)-2;p=(x,y,z)
    if min((x-q[0])**2+(z-q[1])**2 for q in coarse)<38**2:continue
    if (d>L-460 or d<150) and abs(off)<90:continue
    if min((x-pt(v,side)[0])**2+(z-pt(v,side)[2])**2 for v in range(int(L)-420,int(L)+100,35) for side in [-38,40])<28**2:continue
@@ -217,7 +239,7 @@ def build(cid):
   # A second vegetation stratum breaks the bare-trunk horizon; no billboard foliage.
   # Reuse crown prototypes so shrubs and saplings stay in the existing instanced batches.
   for i in range(1800):
-   d=random.random()*L;off=random.choice([-1,1])*random.uniform(39,105);x,y,z=pt(d,off)
+   d=random.random()*L;off=random.choice([-1,1])*random.uniform(39,105);x,y,z=pt(d,off);y=ground(x,z)-2
    if min((x-q[0])**2+(z-q[1])**2 for q in coarse)<36**2:continue
    if (d>L-470 or d<170) and abs(off)<92:continue
    h=random.uniform(1.4,5.5);species=i%4
@@ -250,7 +272,40 @@ def build(cid):
      blob((xx,g+23,zz),(18,7,18),'CopperRoof',24,12)
      for yy in [20,21.5]:box((xx,g+yy,zz),(33,.7,33),'Gold')
     return
-   box((x,g+h/2,z),(w,h,dep),'Windows');box((x,g+4,z),(w+24,8,dep+22),'Concrete')
+   if name in ['EDEN','PALATIAL']:
+    # Curved bronze resort wings, tall slit between towers and stepped crown.
+    for wing in [-1,1]:
+     for bay in range(9):
+      a=(bay-4)*.105;xx=x+wing*(18+bay*11);zz=z+26*math.cos(a)-bay*3;hh=h*(1-.016*abs(bay-3))
+      box((xx,g+hh/2,zz),(13,hh,dep*.60),'WarmWindows' if name=='PALATIAL' else 'Windows',wing*a)
+      box((xx+wing*6.5,g+hh*.52,zz),(1,hh*.96,dep*.63),'CopperRoof',wing*a)
+      box((xx,g+hh+1,zz),(14,2,dep*.64),'Gold',wing*a)
+    box((x,g+6,z),(w+90,12,dep*1.8),'Travertine')
+    return
+   if name=='METROPOLIS':
+    # Art-deco setbacks and a lit spire distinguish the south skyline.
+    for tier in range(6):
+     hh=h*(1-tier*.12);ww=w*(1-tier*.13);zz=z+tier*5
+     box((x,g+hh/2+tier*11,zz),(ww,hh,dep*(1-tier*.11)),'Windows')
+     box((x,g+hh+tier*11,zz),(ww+1,1.1,dep*(1-tier*.11)+1),'Ice')
+    rod((x,g+h,z),(x,g+h+38,z),1.3,'Steel',8)
+    box((x,g+10,z),(w*1.8,20,dep*1.6),'Travertine')
+    return
+   box((x,g+h/2,z),(w,h,dep),'WarmWindows' if name in ['IMPERIAL','SERENISSIMA'] else 'Windows');box((x,g+4,z),(w+24,8,dep+22),'Travertine')
+   if name=='SERENISSIMA':
+    # Venetian-inspired clock tower, arched loggia and pitched campanile roof.
+    tx=x+w*.65;tz=z+dep*.8
+    box((tx,g+44,tz),(17,88,17),'Travertine');box((tx,g+90,tz),(23,8,23),'CopperRoof')
+    for side in [-1,1]:
+     box((tx+side*9,g+84,tz),(.5,10,13),'Glass')
+    apex=(tx,g+110,tz)
+    corners=[(tx+dx,g+94,tz+dz) for dx,dz in [(-12,-12),(12,-12),(12,12),(-12,12)]]
+    for j in range(4):face([corners[j],corners[(j+1)%4],apex],'CopperRoof',[(0,0),(1,0),(.5,1)])
+   if name=='IMPERIAL':
+    for side in [-1,1]:
+     xx=x+side*w*.44;box((xx,g+h+7,z),(30,14,dep+8),'Travertine')
+     blob((xx,g+h+15,z),(18,8,dep*.56),'CopperRoof',24,10)
+
    for y in [h*.1,h*.85,h]:box((x,g+y,z),(w+1,.45,dep+1),'Gold')
    for dx in range(-int(w/2),int(w/2),12):box((x+dx,g+h/2,z+dep/2),(.7,h,1),'Concrete')
    # Architectural wings give stepped, compound footprints rather than solitary boxes.
@@ -274,7 +329,7 @@ def build(cid):
    if any(abs(p[0]-project(lon,lat)[0])<95 and abs(p[2]-project(lon,lat)[1])<95 for lon,lat in [(-115.172,36.1125),(-115.1766,36.1127)]):continue
    if math.hypot(p[0]-sphereXZ[0],p[2]-sphereXZ[1])<140:continue
    if min((p[0]-q[0])**2+(p[2]-q[1])**2 for q in coarse)<65**2:continue
-   w=random.uniform(20,58);dep=random.uniform(22,60);angle=random.choice([0,.12,-.18,.3]);box((p[0],p[1]+h/2,p[2]),(w,h,dep),'Windows',angle)
+   w=random.uniform(20,58);dep=random.uniform(22,60);angle=random.choice([0,.12,-.18,.3]);box((p[0],p[1]+h/2,p[2]),(w,h,dep),'WarmWindows' if i%4==0 else 'Windows',angle)
    box((p[0],p[1]+3,p[2]),(w+12,6,dep+10),'Concrete',angle)
    for level in range(random.randint(1,3)):
     box((p[0],p[1]+h+level*4+2,p[2]),(w*(.8-level*.16),4,dep*(.8-level*.16)),'Glass',angle)
@@ -356,12 +411,7 @@ def build(cid):
  # Authored distant crown LODs; runtime uses these meshes, never generated substitutes.
  if not night:
   for i in range(4):
-   bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2,radius=1);o=bpy.context.object;o.name='LOD_Canopy'+str(i);o.data.materials.append(mats['Canopy'+str(i)]);uv=o.data.uv_layers.new(name='UVMap')
-   for v in o.data.vertices:v.co*=1+.07*math.sin(v.co.x*12+v.co.y*8+i)
-   for poly in o.data.polygons:
-    poly.use_smooth=True
-    for li in poly.loop_indices:
-     co=o.data.vertices[o.data.loops[li].vertex_index].co.normalized();uv.data[li].uv=(math.atan2(co.y,co.x)/math.tau+.5,math.acos(max(-1,min(1,co.z)))/math.pi)
+   name='Canopy'+str(i);o=bpy.data.objects.new('LOD_'+name,leaf_sprays(name,16,i));bpy.context.collection.objects.link(o)
  # Export per-material spatial chunks; GLB geometries, including all terrain, are Blender-authored.
  triangles=instance_triangles
  for (tile,m),(verts,faces,uvs) in batches.items():

@@ -429,3 +429,43 @@ FPS order is Vector / Chaos / Broadcast. Each benchmark used three independent h
 Before-shots, three intermediate review sets, final shots, rejected-run logs and detailed critique are in `artifacts/realism-v6/`. The script run on the rejected capped-mouth asset was stopped before benchmarks. Full verification was repeated on the corrected asset; after that, only an additional exported-aperture regression test and documentation were added. Build/typecheck and the complete 55-test unit suite were rerun. No gameplay/provider logic changed. All measured/tested agent decisions used mock mode; no real Jev/Luna/engineer API calls were made.
 
 Final review confirms the inlet silhouette, individual finger motion, foliage depth and warm lakeside landmark changes. It does **not** claim reference-level photorealism: cockpit coaming/halo-root transitions, tyre/controls detail, solid tree crowns, generic surrounding towers and approximate reflections remain visible gaps. See `artifacts/realism-v6/REVIEW.md` for concrete comparisons and perspective limitations.
+
+## Realism v7 — 2026-11-17
+
+Baseline `feb5baa`; final captures and logs: `artifacts/realism-v7/`. Blender **5.2.2 LTS** (`d13f752e3b9c`), factory startup, Cycles CPU AO baking. No Blender crash, reinstall, backend workaround or Three.js model fallback was needed. Both car and circuits were regenerated from their Blender scripts.
+
+Actual authoring commands:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender --version
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_car.py
+npm run circuit:build
+```
+
+The circuit command exports the authoritative render paths, generates the original texture atlases and invokes Blender with `build_circuits.py -- 7`. The final car has **241,170 triangles**, under the unchanged 245,000 high-LOD cap. Exported bounds measure **5.627269 m long × 2.000000 m wide**, **3.600000 m wheelbase**; highest point is **1.171 m**, including the camera. Monza has 96-triangle open near branchlet prototypes and 64-triangle open far prototypes, with native GPU instancing. The new asset test verifies alpha textures and both prototype budgets.
+
+Final verification command: `zsh artifacts/realism-v7/verify.sh` — **exit 0**. It exports Node 24.14.0 onto PATH, `JEV_MOCK=1 ENGINEER_MOCK=1`, both review output directories and `WRANGLER_SEND_METRICS=false`. No real Jev, Luna, engineer or paid provider requests were made.
+
+| Actual command | Final result |
+| --- | --- |
+| `npm run build` | PASS; web/MCP/host build and both TypeScript targets; largest MCP HTML **23,493,692 / 26,214,400 bytes** |
+| `npm run typecheck` | PASS |
+| `npm test` | **56 passed / 8 files**, including geometry/LOD/rigs, apertures, connected body, circuits, physics, timing and mock brains |
+| `CAR_REVIEW_DIR=realism-v7/after/cars CIRCUIT_REVIEW_DIR=realism-v7/after npm run test:e2e` | **9 passed**, headed Chromium; shared races on both circuits, both agent matchups in mock mode, radio/pit/laps/results, all car/circuit cameras and scene switching |
+| `npm run test:mcp` | **2 passed**; independent MCP app contexts, invitation join, clipboard fallback, browser invite joining/spectator, both circuits, strict CSP |
+| `npm run test:worker` | **2 passed**, local workerd/Durable Objects; physics, both intents, radio, disconnect/ownership and MCP resource; paid calls 0 |
+| `npm run worker:check` | PASS; **dry-run only**, no deployment |
+| `npm run test:handling` | PASS; fixed-step handling and calibration |
+| `PORT=5577 npm run test:performance` | PASS; Monza mean FPS **84.07 / 84.55 / 85.66**, minimum sampled smoothed FPS **67.21 / 67.96 / 69.46** |
+| `RACE_CIRCUIT=las-vegas PORT=5578 npm run test:performance` | PASS; Vegas means **91.64 / 91.50 / 91.39**, minima **75.93 / 76.00 / 77.66** |
+| `PORT=5579 npm run demo:smoke` | PASS; 3 independent windows, both seats connected, mock decisions, racing phase, HTTP health; own resources closed |
+| `curl --fail --silent http://127.0.0.1:5477/health` | PASS; existing server remains reachable, mock, **paidCalls: 0** |
+| `curl --fail --silent -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:5477/` | **HTTP 200** |
+| `python3 scripts/measure-car.py` | PASS; actual GLB bounds saved to `measurements.json` |
+| `python3 scripts/review-v7.py after` | All final reference pairs, before/after pairs and contact sheets generated and visually inspected |
+
+Performance order is Vector / Chaos / Broadcast. Three independent headed contexts, each **1100×850**, Apple M4 Pro / ANGLE Metal, 50 samples at 500 ms after warmup, no overlapping Blender or browser-test work. Means and minimum smoothed samples exceed 60 FPS. These are HUD EMA measurements, not a per-frame guarantee. **Performance is lower than v6** (Monza approximately 97 FPS; Vegas approximately 100 FPS): transparent leaf coverage and additional lighting cost rendering time despite the lower Monza triangle count. The earlier 110 FPS Monza stretch target remains unmet. Raw samples and a concise JSON summary are in the round folder.
+
+Visual iteration evidence: pass 1 rejected lumpy halo roots, sparse far foliage and clipped wordmarks; pass 2 caught a white underside strip in the cockpit close-up; pass 3 rejected a triangular paint-mask artifact; pass 4 verified a continuous rolled liner with clean edges. Final `after/` captures were freshly taken by the full suite. The earlier verification sequence was stopped for that visual defect and the entire sequence rerun after correction. Extra focused Playwright capture runs are retained in `logs/captures-pass-*.log`.
+
+Remaining gaps are explicit in `artifacts/realism-v7/REVIEW.md`: body ripples in macro views, chunky controls and fingers, approximate studio/cube-map reflections, repeated foliage forms, sparse undergrowth and insufficient Vegas street-level density. This is not a claim of reference-level photorealism or surveyed circuit scenery. Gameplay, radio, server/provider logic, MCP/invite, Worker and mock architecture remain intact. Local commit only; no push, publishing or deployment.

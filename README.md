@@ -308,3 +308,13 @@ Each glove has five exported finger pivots. Their subtly different curls respond
 Monza adds a lower vegetation layer and denser mixed crown placement, sharing fewer prototypes and switching to Blender-authored distant crowns at 115 m. Vegas adds a curved, warm-stone lakeside hotel, pilasters, domed pavilions and fountain arcs/rings inspired by the Bellagio area, with fictional branding. Existing Sphere and casino towers remain. The architecture is an interpretation, and reflections remain a low-resolution local probe rather than ray tracing.
 
 Before/after PNGs, every-camera contact sheets and reference comparisons are in `artifacts/realism-v6/`. `python3 scripts/review-v6.py after` regenerates sheets. Build source remains Blender 5.2.2 LTS; `npm run model:build` and `npm run circuit:build` regenerate the assets. Full mock checks and measured three-window performance are recorded in `VERIFICATION.md`.
+
+## Realism round 7
+
+The cockpit aperture is cut cleanly after Blender's body union, with carbon inner faces and a continuous curved liner. Halo roots use a smooth tapered sweep into the deck, replacing the separate caps and rejected voxel-union roots. Sidepod lettering is projected onto the finished skin. A new `?spectate&camera=showroom&angle=halo` view exposes the joint and coaming for close inspection. The car remains within the existing 245,000-triangle high-LOD budget.
+
+Gloves have articulated finger seams, double cuff stitching, suede reinforcement panels and a dedicated fine knit bump/sheen material. The wheel includes rear shift paddles/linkages, rotary index ticks and contrasting blue-button lettering. The live gear/speed/ERS/DRS display and steering animation remain intact. These are visual rigs, not cloth or hand-contact simulation.
+
+Monza crowns now contain layered bent branchlet fans with leaf cutouts, visible interior space, and 96/64-triangle near/far prototypes. Native GPU instancing and spatial LODs remain; trunks are seated on the terrain. Vegas adds curved resort wings, stepped crowns, domed pavilions and a campanile-inspired tower, plus warm façade light spill and stronger road/wall environment response. Both circuits still use the original authoritative paths and terrain-scale DEM profile. All landmarks and branding are interpretations, not survey-accurate replicas.
+
+`artifacts/realism-v7/` contains the baseline, rejected first pass, final captures, reference/before-after comparisons, measurements and verification logs. `python3 scripts/review-v7.py after` regenerates the review sheets. See its `REVIEW.md` for remaining visual gaps and `VERIFICATION.md` for the full mock checks. All car and circuit geometry still comes through Blender 5.2.2 LTS; no runtime geometry fallback was introduced.

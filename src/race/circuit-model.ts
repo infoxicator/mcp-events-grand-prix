@@ -43,11 +43,11 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
   gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;o.receiveShadow=true;o.castShadow=false;o.geometry.computeBoundingSphere();o.userData.cullCenter=(o instanceof T.InstancedMesh?o.boundingSphere!:o.geometry.boundingSphere!).center.clone().applyMatrix4(o.matrixWorld);
    const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){const m=material as T.MeshStandardMaterial;m.side=T.DoubleSide;
     if(m.map){m.map.anisotropy=anisotropy;m.map.wrapS=m.map.wrapT=T.RepeatWrapping;}
-    if(track.night&&['Asphalt','Concrete','Steel'].includes(m.name)){m.envMapIntensity=m.name==='Asphalt'?1.4:.7;m.roughness=m.name==='Asphalt'?.32:.38;m.metalness=m.name==='Asphalt'?.08:.25;}
-    if(m.name==='Asphalt'){m.color.set(track.night?'#737982':'#777b7e');m.normalMap=normal;m.normalScale.set(.09,.09);m.roughness=track.night?.32:.91;m.roughnessMap=null;
-     if(track.night)m.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 roadUv;').replace('#include <begin_vertex>','#include <begin_vertex>\nroadUv=uv;');s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 roadUv;').replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nfloat pool=.5+.5*cos(roadUv.y*3.*6.283185/45.);totalEmissiveRadiance+=diffuseColor.rgb*(.16+.38*pool);');};
+    if(track.night&&['Asphalt','Concrete','Steel'].includes(m.name)){m.envMapIntensity=m.name==='Asphalt'?1.65:1.0;m.roughness=m.name==='Asphalt'?.27:.32;m.metalness=m.name==='Asphalt'?.08:.25;}
+    if(m.name==='Asphalt'){m.color.set(track.night?'#737982':'#777b7e');m.normalMap=normal;m.normalScale.set(.09,.09);m.roughness=track.night?.27:.91;m.roughnessMap=null;
+     if(track.night)m.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 roadUv;').replace('#include <begin_vertex>','#include <begin_vertex>\nroadUv=uv;');s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 roadUv;').replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\nfloat pool=.5+.5*cos(roadUv.y*3.*6.283185/45.);totalEmissiveRadiance+=diffuseColor.rgb*(.60+1.30*pool*pool);');};
     }
-    if(m.name.startsWith('Canopy')){m.color.set(['#6a7947','#708447','#526e43','#808448'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.13;m.roughness=1;if(m.map)m.map.repeat.set(2,2);}
+    if(m.name.startsWith('Canopy')){m.color.set(['#6a7947','#708447','#526e43','#808448'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.035;m.roughness=1;m.transparent=false;m.alphaTest=.43;m.alphaToCoverage=true;m.depthWrite=true;if(m.map)m.map.repeat.set(1,1);}
     if(m.name==='Windows'&&m.map){m.map.repeat.set(2.25,1.25);m.color.set('#85888d');m.emissiveIntensity=.55;}
     if(m.name==='WarmWindows'&&m.map){m.map.repeat.set(1,1);m.color.set('#ffdfae');m.emissiveIntensity=.65;}
     if(m.name==='Travertine'){m.emissive.set('#c28b43');m.emissiveIntensity=.30;m.envMapIntensity=.8;}

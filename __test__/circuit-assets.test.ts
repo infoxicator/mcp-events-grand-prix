@@ -28,3 +28,12 @@ for(const id of ['monza','las-vegas'] as const)describe(id+' Blender circuit',()
   expect(materials).toContain(id==='monza'?'Canopy0':'Sphere');expect(statSync(new URL(`../src/race/assets/circuits/${id}.glb.gz`,import.meta.url)).size).toBeLessThan(7_500_000);expect(g.extensionsUsed).toContain('EXT_mesh_gpu_instancing');if(id==='monza')expect(g.nodes.some((n:any)=>n.name==='LOD_Canopy0')).toBe(true);expect(g.nodes.filter((n:any)=>n.extensions?.EXT_mesh_gpu_instancing).length).toBeGreaterThan(4);
  });
 });
+
+it('authors Monza as perforated branchlet layers with a cheaper open distant LOD',()=>{
+ const b=readFileSync(new URL('../src/race/assets/circuits/monza-mcp.glb.gz',import.meta.url)),raw=gunzipSync(b),g=JSON.parse(raw.toString('utf8',20,20+raw.readUInt32LE(12)));
+ const canopies=g.materials.filter((m:any)=>m.name.startsWith('Canopy'));expect(canopies).toHaveLength(4);
+ for(const m of canopies){expect(m.alphaMode).toBe('BLEND');expect(m.pbrMetallicRoughness.baseColorTexture).toBeTruthy();}
+ const near=g.nodes.find((n:any)=>n.extensions?.EXT_mesh_gpu_instancing&&n.mesh!==undefined&&g.meshes[n.mesh].primitives.some((p:any)=>g.materials[p.material].name==='Canopy0')),far=g.nodes.find((n:any)=>n.name==='LOD_Canopy0');expect(near).toBeTruthy();expect(far).toBeTruthy();
+ const count=(n:any)=>g.meshes[n.mesh].primitives.reduce((sum:number,p:any)=>sum+g.accessors[p.indices].count/3,0);
+ expect(count(near)).toBe(96);expect(count(far)).toBe(64);
+});
