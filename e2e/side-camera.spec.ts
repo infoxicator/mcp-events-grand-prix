@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import type {RaceState} from '../src/race/types';
 import {mkdir,writeFile} from 'node:fs/promises';
 
-for(const circuit of ['monza','las-vegas'] as const)test(`broadcast holds a steady side shot at ${circuit} through anchors, gaps, timers and overtakes`,async({browser,request})=>{
- const out='artifacts/steady-side/recordings';await mkdir(out,{recursive:true});
+for(const circuit of ['monza','las-vegas'] as const)test(`manual side camera holds a steady shot at ${circuit} through anchors, gaps, timers and overtakes`,async({browser,request})=>{
+ const out=`artifacts/${process.env.SIDE_REVIEW_DIR||'steady-side/recordings'}`;await mkdir(out,{recursive:true});
  const links=await request.get('/api/default').then(r=>r.json());
  const fixture:RaceState=await request.get(`/api/rooms/${links.room}/status`).then(r=>r.json());
  fixture.race.circuit=circuit;fixture.connected={a:true,b:true};fixture.race.phase='racing';fixture.race.events=[];fixture.mode='mock';fixture.paidCalls=0;
@@ -26,7 +26,7 @@ for(const circuit of ['monza','las-vegas'] as const)test(`broadcast holds a stea
   }
  });});
  try{
-  await page.goto('/?spectate&cameraDebug');await page.waitForFunction(()=>!!(window as any).__renderStats?.modelsReady);
+  await page.goto('/?spectate&camera=side&cameraDebug');await page.waitForFunction(()=>!!(window as any).__renderStats?.modelsReady);
   await page.evaluate(()=>{document.querySelector<HTMLElement>('#viewport')!.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;z-index:1000';});
   await page.waitForTimeout(500);start=Date.now();
   const samples=await page.evaluate(()=>new Promise<{time:number;position:number[];quaternion:number[];target:number[];label:string;fov:number}[]>(resolve=>{

@@ -1,0 +1,13 @@
+[WebServer] (node:65543) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:65627) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:65656) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/broadcast-camera.spec.ts:5:53 › broadcast rotates through both onboards and external shots, with manual hold (monza) (1.3m)
+  ✓  2 e2e/broadcast-camera.spec.ts:5:53 › broadcast rotates through both onboards and external shots, with manual hold (las-vegas) (1.3m)
+
+  2 passed (2.6m)

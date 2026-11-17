@@ -563,3 +563,32 @@ The two new browser motion tests each record 769 rendered samples across approxi
 I inspected both final motion sheets. Framing stays continuous; the trailing car can leave the fixed frame at larger gaps, and Vegas fencing/light posts can naturally occlude the view. This is a camera-continuity fix, not a guarantee of eliminating all lighting/material aliasing. The saved `recordings/*-straight.webm` files and motion JSON make this review reproducible.
 
 Performance order: Vector / Chaos / Broadcast; three independent headed Chromium processes, 1100×850, Apple M4 Pro / ANGLE Metal. These are uncapped capacity measurements of smoothed HUD FPS (ceiling 120), not display refresh rates or a per-frame minimum guarantee. No other browser tests ran during the benchmark. Previous committed screenshots were retained; newly generated legacy-path regression screenshots were copied into this round's `regression/` folder. Local commit only; no push, publish or deployment.
+
+## Restore mixed broadcast rotation — 2026-11-17
+
+Baseline `3f6cd42`. Broadcast now rotates Side → Vector T-cam → Aerial → Chaos driver-eye → Chase → Chaos T-cam → Vector driver-eye → Aerial, then repeats. Holds last 7–9 real seconds, independent of the accelerated race clock. The stable side/aerial/chase rigs remain; no old anchor resets or event-triggered cut bursts return. Individual buttons hold their selected view, including the new Side button. Broadcast restarts the cycle.
+
+All commands used Node 24.14.0, `JEV_MOCK=1 ENGINEER_MOCK=1`, zero paid calls. Evidence and screenshots are in `artifacts/broadcast-rotation/`. Build/unit ran first; `verify.sh` ran the broad checks, then `complete.sh` reran the corrected new tests and completed the remaining checks.
+
+| Command | Result |
+| --- | --- |
+| `npm run build` | PASS; web/MCP/host, largest MCP HTML 23,340,979 / 26,214,400 bytes |
+| `npm run typecheck` | PASS; both targets, including corrected browser tests |
+| `npm test` | 72 passed / 12 files |
+| `npm run test:e2e` | 13 existing scenarios passed; 2 new tests initially failed because a test selector matched both viewport and button |
+| `npx playwright test e2e/broadcast-camera.spec.ts` | After correcting selectors to target buttons: 2 passed (2.6 min), complete cycles and manual override on Monza and Vegas; all 15 distinct scenarios verified |
+| `npm run test:mcp` | 2 passed, invitations/clipboard fallback/browser join/shared spectator |
+| `npm run test:worker` | 2 passed, local workerd |
+| `npm run worker:check` | PASS; dry-run only |
+| `npm run test:handling` | PASS |
+| `PERF_UNCAPPED=1 PERF_DEMO_PROCESSES=1 PORT=5577 npm run test:performance` | PASS; Monza means 119.89 / 119.80 / 119.85 FPS, minima 118.95 / 117.41 / 116.35 |
+| `PERF_UNCAPPED=1 PERF_DEMO_PROCESSES=1 RACE_CIRCUIT=las-vegas PORT=5578 npm run test:performance` | PASS; Vegas means 119.72 / 119.63 / 119.78 FPS, minima 117.14 / 114.08 / 117.32 |
+| `PORT=5579 npm run demo:smoke` | PASS; three independent windows, both seats, mock decisions, racing and health |
+| HTTP `/health` and `/` on existing port 5477 | PASS, HTTP 200; server left running |
+| Python HTTP check of served scene/UI/director modules | PASS; running Vite server supplies the new rotation and Side button |
+
+The new browser tests capture seven distinct camera views per circuit, measure the complete 62-second cycle, inject an overtake every second, verify no shortened holds, then hold Side manually for 10 seconds and return to Broadcast. Measured holds: Side/Chase 7.98–8.02 s, onboard shots 7.00–7.02 s, Aerial 9.00–9.02 s. Existing side-motion thresholds remain unchanged and pass on both circuits with manual Side selected.
+
+I inspected both `monza/rotation.jpg` and `las-vegas/rotation.jpg` contact sheets plus full-size onboard captures. Helmet visibility in T-cam, wheel/dash/mirrors in driver-eye, both liveries and external framing are preserved. `shots.json` files retain the exact transition times. This is a fixed TV-style cut rotation, not an event-aware director or crossfade system; geometry/material limitations are unchanged.
+
+Performance order: Vector / Chaos / Broadcast; three independent headed Chromium processes at 1100×850 on Apple M4 Pro / ANGLE Metal. These uncapped capacity checks sample smoothed HUD FPS with a 120 ceiling; they do not guarantee every frame or represent monitor refresh rates. Prior committed screenshots were preserved; refreshed legacy-path artifacts are copied into this round's `regression/`. No push, publish or deployment.

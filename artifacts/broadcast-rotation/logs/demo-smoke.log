@@ -1,0 +1,14 @@
+
+> jev-grand-prix@1.0.0 demo:smoke
+> node scripts/demo.mjs --smoke
+
+JEV GRAND PRIX · MONZA · JEV-VS-JEV · MOCK · 4× race clock
+http://127.0.0.1:5579/?team=a
+http://127.0.0.1:5579/?spectate
+http://127.0.0.1:5579/?team=b
+MCP: http://127.0.0.1:5579/mcp
+
+Three independent Chromium windows are connected: VECTOR | SPECTATOR | CHAOS.
+Record the spectator view; use Title sequence for the intro. Ctrl+C closes everything.
+
+DEMO SMOKE PASS: 3 independent windows, both players connected, mock decisions visible, phase=racing, HTTP health OK.
