@@ -15,3 +15,6 @@ __test__/__screenshots__/
 worker-test-results/
 worker-dist/
 *.blend1
+
+# Blender/Python build caches
+__pycache__/

@@ -231,7 +231,7 @@ npm run model:build
 blender -b --factory-startup --python scripts/blender/build_car.py
 ```
 
-The macOS npm command uses `/Applications/Blender.app/Contents/MacOS/Blender`. The initial sandboxed launch crashed during Metal-device detection; running with normal local application/GPU access resolved it. Final exports use factory startup, with user add-ons disabled. No reinstall or substitute car renderer was needed. High detail is ~104k triangles, with a reduced LOD from 32 m; material batches keep draw calls bounded. GLBs are embedded in the MCP HTML so sandboxed app views need no model CDN or extra asset permissions.
+The macOS npm command uses `/Applications/Blender.app/Contents/MacOS/Blender`. The initial sandboxed launch crashed during Metal-device detection; running with normal local application/GPU access resolved it. Final exports use factory startup, with user add-ons disabled. No reinstall or substitute car renderer was needed. High detail is ~231k triangles, with a reduced LOD from 32 m; material batches keep draw calls bounded. GLBs are embedded in the MCP HTML so sandboxed app views need no model CDN or extra asset permissions.
 
 Review images, before/after JPEG sheets, reference comparisons, test logs and measured GPU results are in `artifacts/realism-v2/`. `python3 scripts/realism-sheets.py` recreates sheets from the screenshots and locally downloaded reference frames. The reference video remains local and outside production bundles.
 
@@ -259,7 +259,7 @@ The car review rounds 2–3 are recorded in `artifacts/realism-v3/REVIEW.md`; th
 
 **Blender 5.2.2 LTS** builds every car and static circuit mesh. Car changes include subdivided body transitions, inset sidepod tunnels, cambered wing sections, suspension joints/brackets/ducts, rounded slicks, articulated steering gloves and actual Cycles CPU AO bakes. Driver-eye height is 0.70 m with a 68° camera; `?team=a&visor` enables the optional visor vignette. The existing T-cam and Colour/Clay/Wireframe showroom remain available.
 
-Both **Monza** and **Las Vegas** now load spatially chunked Blender GLBs: kerbs, runoff, walls/fencing, seated crowd cards, pit buildings, garages, gantries, marshal posts and signage. Monza adds layered woodland and a curved hospitality tower; Vegas retains the Sphere, Strip hotels, tower, observation wheel, fountains, floodlights and sparks. The skyline and building details are approximations. `/?spectate&camera=pits` gives the new pit/grandstand view; aerial and other camera query parameters now work consistently.
+Both **Monza** and **Las Vegas** now load spatially chunked Blender GLBs: kerbs, runoff, walls/fencing, solid seated spectators, pit buildings, garages, gantries, marshal posts and signage. Monza adds instanced solid woodland and a curved hospitality tower; Vegas retains the Sphere, Strip hotels, tower, observation wheel, fountains, floodlights and sparks. The skyline and building details are approximations. `/?spectate&camera=pits` gives the new pit/grandstand view; aerial and other camera query parameters now work consistently.
 
 ```sh
 npm run model:build       # Blender cars + baked AO
@@ -275,3 +275,16 @@ The model scripts require Blender at `/Applications/Blender.app/Contents/MacOS/B
 Browser views decode Draco GLBs and cull distant foliage/crowd/fence detail. MCP Apps load **identical Blender geometry** as gzip GLBs using direct byte decoding and data-URI textures, avoiding blob workers/WASM/fetch restrictions without changing the host CSP. The `.blend` sources, manifests and reproducible scripts are retained. Existing WebSocket rooms, Jev/Luna/engineer decisions, invitations, Worker setup and default mock mode are unchanged.
 
 Elevation uses smoothed, coarse Mapzen terrain samples—not surveyed road elevation. The rendered road, cars, cameras and sparks share that profile; elevation does not add new gravity forces to the physics simulation. Track and DEM attribution, photo references and accuracy limits are documented in [`data/CIRCUITS-V2-SOURCES.md`](data/CIRCUITS-V2-SOURCES.md). Reference photos are not distributed as game textures. All circuit texture atlases and fictional sponsor art are original.
+
+
+## Realism round 4
+
+`artifacts/realism-v4/REVIEW.md` records the screenshot critiques and rejected iterations. Final images and video/photo comparison sheets are in `artifacts/realism-v4/after/{cars,monza,las-vegas}`; the preceding committed renders are in `before/`.
+
+The Blender car now preserves curved paint surfaces, has thinner cambered wing stacks, a continuous floor shell, shaped endplates, conformal fictional wordmarks and a broader rear body. Layered satin paint, close-up weave and rubber grain use separate material responses. Slicks flatten/bulge visually with speed, braking and lateral load while their contact patch stays downward during rotation. This is a visual effect; the existing deterministic tyre forces remain authoritative. Remeshed fabric gloves and forearms follow steering. Both onboard mirrors display a shared rear-facing 256×96 camera feed, refreshed every six frames.
+
+All trees and seated spectators are now solid Blender meshes. Native `EXT_mesh_gpu_instancing` and 180 m spatial batches share crowns, branches, heads and torsos; Blender-made crown LODs take over beyond 220 m; distant detail is culled and nearby objects cast shadows. Hotels have varied wings, setbacks, cornices and columns; garages add roof plant/stairs, fencing adds structural wires/canted posts, and Monza kerbs have geometric serrations. Fine catch-fence mesh still uses a texture. Skyline proportions and planting remain approximations.
+
+Builds enforce the Worker's **25 MiB per-file limit**. Web circuits use gzip-wrapped Draco; MCP uses native instancing and `KHR_mesh_quantization`, decoded without WASM/workers under the existing strict CSP. Car positions stay float precision. Blender circuit position quantization is under 2 cm per step (normally a few millimetres); this never changes the authoritative simulation path. Regenerate models with the existing `model:build` and `circuit:build` commands. `JGP_FONT` can select a bold italic font on another platform; the Mac build uses the installed Arial Bold Italic and exports its lettering as geometry.
+
+Blender remains **5.2.2 LTS**. A slow mass-deletion step was fixed with its batch-removal API, and instances were parented as required by its native glTF exporter. No procedural Three.js model fallback was introduced. Baked AO and planar reflections approximate studio shading; this remains visibly short of the reference's hand-sculpted surfaces and ray-traced finish. See the review for the specific remaining gaps.

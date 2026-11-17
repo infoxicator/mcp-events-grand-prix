@@ -296,3 +296,49 @@ Both running-server checks returned **HTTP 200**; health records `mode: mock`, `
 Failures found and fixed are retained in the review notes: overlapping ground AO bake and wrong blending; oversized car mesh; low camera obstructed by the old cockpit tub; terrain/road intersections; a missing Sphere shader brace and later inverted UV artwork; a city block intersecting the Sphere; worker-backed decoding incompatible with strict MCP CSP; a missing test-host favicon; generic `networkidle` waits unsuitable for decoder work. The MCP test explicitly permits only the existing 403 response from probing owner-only `/links` with a team token, then asserts no other console errors through browser invitation joining.
 
 The final circuits have **287,076 Monza / 131,980 Vegas triangles**, spatial chunks and distance-culled detail. Cars retain high/far LODs. MCP uses the same Blender geometry with gzip transport and a direct byte/image loader; host CSP was not relaxed. Current gameplay/provider behaviour remains unchanged. Mock tests do **not** establish live-provider latency, actual ChatGPT/Claude host resource limits, survey-grade elevation, full physical response to slopes, or photorealistic parity. Read the round-by-round critiques before judging fidelity.
+
+## Realism round 4 — 17 November 2026
+
+Continues f390a4a / 13a5147. Evidence and the detailed visual critique are under `artifacts/realism-v4/`; before shots were copied before edits. Blender **5.2.2 LTS** remains the modelling pipeline, with `-b --factory-startup`, normal local graphics access and CPU Cycles AO. Fixed slow scene deletion using `bpy.data.batch_remove`, and supplied the common parent required by Blender's native GPU-instancing exporter. No procedural Three.js model fallback, push, publication, deployment or paid API calls.
+
+Commands use this exact prefix for Node:
+
+```sh
+env PATH=/Users/ruben.casas@postman.com/.nvm/versions/node/v24.14.0/bin:$PATH
+```
+
+| Command after the Node prefix | Result |
+| --- | --- |
+| `JEV_MOCK=1 npm run build` | PASS: Node/Worker typechecks, web/MCP/host builds, static asset budget; largest file 22,629,942 / 26,214,400 bytes |
+| `npm run typecheck` | PASS independently |
+| `JEV_MOCK=1 npm test` | PASS: 52 tests / 8 files, including decoder-free quantized MCP assets, native instances, crown LOD presence, geometry/physics/brains/providers/room tests |
+| `JEV_MOCK=1 CAR_REVIEW_DIR=realism-v4/after/cars CIRCUIT_REVIEW_DIR=realism-v4/after npm run test:e2e` | PASS: 9 tests, 3.1 min, on final LOD/camera/material assets; full races, radio, pits, results, camera/studio modes and circuit switching |
+| `JEV_MOCK=1 CAR_REVIEW_DIR=realism-v4/after/cars CIRCUIT_REVIEW_DIR=realism-v4/after npx playwright test e2e/realism-v2.spec.ts e2e/circuit-review.spec.ts e2e/mcp.spec.ts` | PASS: 4 tests before the final crown-LOD/T-cam/roughness refinements; both invitations/browser joins/clipboard fallbacks and strict-CSP model loading pass, errors [], paidCalls 0 |
+| `JEV_MOCK=1 npm run test:mcp` | PASS: 2 tests, 33.6 s, final assets; both circuits, shared invitations, browser joins and clipboard fallback; paidCalls 0, errors [] |
+| `JEV_MOCK=1 WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jgp-v4-worker.log npm run test:worker` | PASS: 2 local workerd tests, 11.9 s; models, physics, intents, radio, disconnect, owner authorization and MCP invitations; paid calls 0 |
+| `WRANGLER_SEND_METRICS=false WRANGLER_LOG_PATH=/tmp/jgp-v4-wrangler.log npm run worker:check` | PASS: dry-run only, 52 assets, Worker 1290.24 KiB / gzip 234.46 KiB; no upload |
+| `JEV_MOCK=1 npm run test:handling` | PASS: deterministic handling/calibration unchanged |
+| `JEV_MOCK=1 PORT=5577 npm run test:performance` | PASS: final Monza LODs, means **86.24 / 83.70 / 87.69 FPS**, minimum smoothed samples **71.65 / 66.72 / 73.82** |
+| `JEV_MOCK=1 RACE_CIRCUIT=las-vegas PORT=5578 npm run test:performance` | PASS: means **111.55 / 111.64 / 111.63 FPS**, minimum smoothed samples **101.14 / 101.01 / 100.13** |
+| `PORT=5579 JEV_MOCK=1 npm run demo:smoke` | PASS: three independent windows, both players, mock decisions, racing phase and HTTP health; own windows/server cleaned up |
+
+Performance: Apple M4 Pro / ANGLE Metal, three independent headed Chromium contexts at 1100×850, 50 samples at 500 ms after loading/warmup. No concurrent Blender or browser tests during the accepted measurements. All saved final smoothed samples exceed 60 FPS; the benchmark now checks the minimum as well as the mean. These are HUD EMA readings, not a guarantee about every individual frame, Retina resolution or every MacBook. Full samples and a summary are in `artifacts/realism-v4/performance-*.json`.
+
+Additional commands:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender --version
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_car.py
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python scripts/blender/build_circuits.py -- 4
+python3 scripts/review-v4.py iteration-2
+python3 scripts/review-v4.py iteration-3
+python3 scripts/review-v4.py after
+curl --fail --silent http://127.0.0.1:5477/health
+curl --fail --silent -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:5477/
+```
+
+The existing server returned HTTP 200 and `mode: mock`, `paidCalls: 0`. It remains running on port 5477. Blender exports completed successfully; car high detail is **230,970 triangles**, with a reduced far LOD. The close-detail budget was intentionally raised to retain curved skins, glove surfaces and tessellated wordmarks, then checked against actual three-view performance. Monza contains about 5.50 million triangles if every high-detail instance were drawn simultaneously; spatial culling and Blender-made distant crown LODs avoid that cost in normal views. Native export reduced Monza's scene graph from 53,920 nodes to roughly 700. Vegas has about 501k total triangles. Actual rendering counts are retained in performance samples.
+
+Failures were corrected rather than accepted: reserved GLSL identifier hid tyres; open tube ends broke glove remeshing; low-detail untextured crowns looked like balls; letter faces cut into convex bodywork; mirror UVs sampled only a tiny image region; the T-cam looked into its own pod; dark albedo in the roughness slot over-amplified Vegas glare; HDR nearest filtering pixelated the sky; scene-root instances did not trigger Blender native instancing; oversized embedded bundles exceeded the Worker limit. An overlapping benchmark/test run was rejected, and the first isolated Monza run still dipped to 48 FPS; distant crown LODs brought the minimum saved sample above 66 FPS.
+
+The final review remains candid: compound body joins, glove anatomy, tyre carcass behaviour, foliage silhouettes, architectural specificity and GI/reflections still trail the reference. Tyre deformation is visual only; coarse DEM, game physics, provider configuration and room/radio/invitation behaviour are preserved. Reference video frames and location photographs are comparison evidence, not production textures or a claim of measured visual parity.

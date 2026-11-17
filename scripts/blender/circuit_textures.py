@@ -46,3 +46,8 @@ for i in range(2):
  x=256+i*512;d.rounded_rectangle((x-230,150,x+230,360),radius=20,fill=(10,13,28),outline=(210,53,112),width=3)
  for text,y,size,col in [('WELCOME TO',190,25,(224,98,158)),('LAS VEGAS',255,57,(248,230,195)),('JEV GRAND PRIX',320,28,(90,219,209))]:d.text((x,y),text,anchor='mm',font=ImageFont.truetype(font,size),fill=col)
 save(im,'sphere-art')
+# Opaque leaf clusters for solid 3D crowns (no billboard or alpha cutout).
+random.seed(731);im=Image.new('RGB',(512,256),(51,57,42));d=ImageDraw.Draw(im)
+for i in range(24000):
+ x=random.randrange(512);y=random.randrange(256);r=random.choice([1,1,2,3,5]);v=random.randint(45,180);d.ellipse((x-r,y-r*.5,x+r,y+r*.5),fill=(v,int(v*.98),int(v*.81)))
+save(im,'canopy')

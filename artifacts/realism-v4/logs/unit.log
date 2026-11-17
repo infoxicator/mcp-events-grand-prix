@@ -1,0 +1,12 @@
+
+> jev-grand-prix@1.0.0 test
+> vitest run
+
+
+ RUN  v4.1.12 /Users/ruben.casas@postman.com/.t3/scratch/2026-11-13-build-jev-grand-prix-an-e75bd481/jev-grand-prix
+
+
+ Test Files  8 passed (8)
+      Tests  52 passed (52)
+   Start at  01:48:04
+   Duration  2.79s (transform 555ms, setup 0ms, import 2.38s, tests 6.96s, environment 1ms)
