@@ -328,3 +328,11 @@ Blender now exports a detailed yellow/ivory helmet, compact articulated gloves w
 Unedited before/after images, the supplied reference, rejected iterations and full mock verification are saved in `artifacts/onboard-v8/`. Read its [review](artifacts/onboard-v8/REVIEW.md) for specific remaining differences. `python3 scripts/review-onboard.py after` regenerates the comparison sheets. The car remains a realtime Blender/GLB model, with visual finger/forearm animation rather than cloth or biomechanical simulation. Monza, Las Vegas, engineer/driver brains, invitations and MCP/Worker behaviour remain supported.
 
 For a rendering-capacity benchmark matching the launcher's three independent Chromium processes, use `PERF_DEMO_PROCESSES=1 PERF_UNCAPPED=1 npm run test:performance` (add `RACE_CIRCUIT=las-vegas` for night). Without those flags the helper retains its original shared-browser, display-synchronised measurement. Reports explicitly record both choices; uncapped results are not the monitor's displayed refresh rate.
+
+## Glove fit and stable aerial tracking
+
+The onboard gloves use a continuous, flattened Blender palm/wrist shell, slim curled digits and flush sewn fabric panels. The rounded cuff balls and large oval backhand pads have been removed. Both driver's-eye and helmet-visible T-cam views remain available, including steering articulation.
+
+Aerial tracking now looks along a 110 m road corridor, damps yaw and lateral offsets in elapsed time, and blends symmetrically around a close battle. It no longer changes its anchor abruptly when the lead swaps or the gap crosses 55 m. Forward travel follows the interpolated race directly so accelerated races stay in frame. This applies to the Aerial button and the helicopter shot in automatic Broadcast.
+
+`artifacts/onboard-v9/` holds before/after glove comparisons, recorded straight-line camera tests on both circuits, motion measurements and full mock verification. `python3 scripts/review-gloves.py` regenerates the visual comparisons; `node --import tsx scripts/review-aerial.ts` compares the old/new camera math with identical telemetry. The gloves remain a visual articulated rig, not simulated cloth.

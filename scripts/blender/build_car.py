@@ -299,21 +299,50 @@ for x,y in [(.067,-.066),(0,-.073),(-.072,-.089)]:
  for i in range(9):
   a=(i/8*1.5+.25)*math.pi
   rod('Rotary index tick',(x+.029*math.cos(a),y+.029*math.sin(a),-.024),(x+.032*math.cos(a),y+.032*math.sin(a),-.024),.00055,silver,steer,4)
-fabric=mat('GloveFabric','d6d3c9',.92);stitch=mat('GloveStitch','9c9c96',.96);suede=mat('GloveSuede','30343c',.98)
+fabric=mat('GloveFabric','d6d3c9',.92);stitch=mat('GloveStitch','9c9c96',.96);suede=mat('GloveSuede','30343c',.98);glovepanel=mat('GlovePanel','9fa820',.95)
 # Sculpted grip pose. Hand and forearm pivots are exported separately for articulation.
 hands=group('Hands');hands.parent=steer
 for side in [-1,1]:
  hand=group('HandL' if side<0 else 'HandR');hand.parent=hands
- ellipsoid('Gloved palm',(side*.204,-.018,-.038),(.036,.052,.030),fabric,hand)
- ellipsoid('Soft wrist cuff',(side*.208,-.082,-.045),(.035,.030,.031),fabric,hand)
+ # One tailored shell from the sleeve opening to the metacarpals. The back
+ # is broad and shallow, not a sphere; a narrow wrist joins the cuff smoothly.
+ sections=interp([
+  [-.111,.208,.025,-.041,.019],[-.098,.208,.026,-.043,.020],
+  [-.078,.207,.023,-.044,.018],[-.060,.205,.025,-.044,.018],
+  [-.035,.204,.026,-.041,.020],[-.010,.206,.026,-.037,.021],
+  [.004,.208,.025,-.034,.020],[.013,.210,.024,-.027,.018],
+  [.018,.210,.020,-.023,.016]],4)
+ vs=[];fs=[];N=24
+ for y,x,w,z,depth in sections:
+  for k in range(N):
+   a=k*math.tau/N;c=math.cos(a);q=math.sin(a)
+   # Rounded rectangular section gives a flat fabric dorsum and palm pad.
+   vs.append((side*(x+math.copysign(abs(c)**.72,c)*w),y,z+math.copysign(abs(q)**.70,q)*depth))
+ for j in range(len(sections)-1):
+  for k in range(N):a=j*N+k;b=j*N+(k+1)%N;fs.append((a,b,b+N,a+N))
+ fs.extend([tuple(reversed(range(N))),tuple((len(sections)-1)*N+k for k in range(N))])
+ palm=mesh('Tailored palm and wrist shell',vs,fs,fabric,hand)
+ # A sewn stretch panel uses the SAME shell surface, offset by 0.35mm.
+ # Its softly zig-zagged boundaries and narrow colour break read as textile,
+ # not a giant padded oval stuck to the glove.
+ pv=[];pf=[];rows=[row for row in sections if -.067<=row[0]<=-.004];cols=10
+ for y,x,w,z,depth in rows:
+  for k in range(cols+1):
+   a=4.37+(k/cols)*.68+.05*math.sin(y*170)
+   xx=x+math.copysign(abs(math.cos(a))**.72,math.cos(a))*w
+   zz=z+math.copysign(abs(math.sin(a))**.70,math.sin(a))*depth-.00035
+   pv.append((side*xx,y,zz))
+ for j in range(len(rows)-1):
+  for k in range(cols):a=j*(cols+1)+k;pf.append((a,a+1,a+cols+2,a+cols+1))
+ mesh('Flush woven stretch panel',pv,pf,glovepanel,hand)
  for j in range(5):
   # Independent, embedded knuckle pivots. Different lengths/curl avoid parallel tubes.
   finger=group(('FingerL' if side<0 else 'FingerR')+str(j));finger.parent=hand
-  yy=.025-j*.021;root=Vector((side*.211,yy,-.038)) if j<4 else Vector((side*.196,-.046,-.045));finger.location=root
+  yy=.016-j*.018;root=Vector((side*.220,yy,-.041)) if j<4 else Vector((side*.189,-.037,-.039));finger.location=root
   # Proximal phalanges join the broad back of the glove; the tips curl away
   # from the driver around the OUTSIDE of the grip. No exposed noodle loops.
-  pts=[tuple(root),(side*(.229-j*.001),yy-.001,-.010),(side*(.213-j*.002),yy-.004,.028),(side*(.178+j*.003),yy-.008,.033)] if j<4 else [tuple(root),(side*.175,-.028,-.060),(side*.160,-.004,-.049),(side*.157,.014,-.025)]
-  radii=[.013,.0135,.011,.007] if j<4 else [.017,.015,.012,.008]
+  pts=[tuple(root),(side*(.239-j*.001),yy-.001,-.019),(side*(.218-j*.002),yy-.004,.024),(side*(.185+j*.003),yy-.008,.026)] if j<4 else [tuple(root),(side*.177,-.023,-.046),(side*.167,-.006,-.034),(side*.164,.004,-.015)]
+  radii=[.0105,.010,.0085,.0055] if j<4 else [.012,.0105,.009,.0055]
   sections=interp([list(Vector(p)-root)+[r] for p,r in zip(pts,radii)],5)
   vs=[];fs=[];N=12
   for k,sec in enumerate(sections):
@@ -325,26 +354,24 @@ for side in [-1,1]:
    for i in range(N):a=k*N+i;b=k*N+(i+1)%N;fs.append((a,b,b+N,a+N))
   fs.extend([tuple(reversed(range(N))),tuple((len(sections)-1)*N+i for i in range(N))])
   mesh('Tapered articulated phalanges',vs,fs,fabric,finger)
-  # Short seam on the outer knuckle, rather than a wire across the fingertip.
-  seampts=[tuple(Vector(p)-root+Vector((side*.009,0,0))) for p in pts[:3]]
-  seam=curve('Finger outer seam',seampts,.00045,stitch,finger);seam.data.resolution_u=3;seam.data.bevel_resolution=1
- # Cuff binding and a suede reinforcement patch conform to the back of the hand.
- patch=ellipsoid('Suede knuckle reinforcement',(side*.199,-.018,-.068),(.022,.030,.0025),suede,hand,seg=20,rings=10)
+ # Thin reinforcement follows the palm edge, leaving the fabric back exposed.
+ # No oversized oval badge, inflated knuckle spheres or detached wrist ball.
  for j in range(4):
-  yy=.024-j*.021
-  ellipsoid('Embedded knuckle',(side*.224,yy,-.040),(.017,.012,.022),fabric,hand,seg=16,rings=10)
-  crease=curve('Knuckle flex seam',[(side*.219,yy-.008,-.062),(side*.229,yy-.009,-.059),(side*.237,yy-.006,-.051)],.0006,stitch,hand)
-  crease.data.resolution_u=3;crease.data.bevel_resolution=1
- for j in range(10):
-  yy=-.053+j*.005
-  rod('Lock stitch',(side*.224,yy,-.066),(side*.224,yy+.002,-.066),.00042,stitch,hand,4)
+  yy=.014-j*.018
+  seam=curve('Knuckle flex seam',[(side*.226,yy,-.045),(side*.234,yy-.003,-.037),(side*.239,yy-.004,-.023)],.00045,stitch,hand)
+  seam.data.resolution_u=3;seam.data.bevel_resolution=1
+ for x in [.196,.224]:
+  c=curve('Flat dorsal stitch',[(side*x,-.042,-.062),(side*(x+.002),-.018,-.059),(side*(x+.003),.006,-.052)],.00035,stitch,hand)
+  c.data.resolution_u=3;c.data.bevel_resolution=1
  for j in range(2):
-  pts=[(side*(.208+.033*math.cos(a)),-.09-j*.003,-.045+.029*math.sin(a)) for a in [k*math.tau/32 for k in range(33)]]
-  c=curve('Cuff double seam',pts,.00065,stitch,hand);c.data.resolution_u=2;c.data.bevel_resolution=1
- text('N',(side*.205,-.016,-.071),.019,silver,(0,math.pi,0),hand)
- for j in range(3):curve('Stitched knuckle dart',[(side*(.19+j*.010),.015,-.061),(side*(.192+j*.010),.026,-.057)],.0005,stitch,hand)
- for j in range(3):
-  curve('Cuff fabric fold',[(side*.184,-.072-j*.005,-.054),(side*.208,-.076-j*.005,-.075),(side*.234,-.072-j*.005,-.052)],.0012,fabric,hand)
+  pts=[(side*(.208+.0255*math.copysign(abs(math.cos(a))**.72,math.cos(a))),-.099-j*.003,-.043+.0205*math.copysign(abs(math.sin(a))**.70,math.sin(a))) for a in [k*math.tau/32 for k in range(33)]]
+  c=curve('Cuff double seam',pts,.00045,stitch,hand);c.data.resolution_u=2;c.data.bevel_resolution=1
+ patch=box('Flat cuff fastening',(side*.207,-.092,-.064),(.030,.010,.0015),suede,hand,r=.002)
+ text('N',(side*.207,-.032,-.0625),.010,silver,(0,math.pi,0),hand)
+ # Fine fabric compression folds at the wrist, not raised padded tubes.
+ for j in range(2):
+  c=curve('Wrist compression seam',[(side*.187,-.064-j*.006,-.057),(side*.205,-.066-j*.006,-.062),(side*.226,-.062-j*.006,-.056)],.0004,stitch,hand)
+  c.data.resolution_u=3;c.data.bevel_resolution=1
  arm=group('ForearmL' if side<0 else 'ForearmR');arm.parent=body
  # Unit Y-axis tapered sleeve; runtime aims it from elbow to moving wrist.
  ellipsoid('Sleeve capsule',(0,.5,0),(.044,.55,.040),sleeve,arm,seg=24,rings=16)
@@ -540,14 +567,7 @@ for parent in list(groups.values()):
   # Generate metric UVs for a subtle carbon twill applied by the runtime.
   if name=='Carbon':
    bpy.ops.object.mode_set(mode='EDIT');bpy.ops.uv.smart_project(angle_limit=1.15,island_margin=.015);bpy.ops.object.mode_set(mode='OBJECT')
-# Merge glove skin at finger/palm intersections, retaining thin seams separately.
-for o in [v for hand in hands.children for v in hand.children]:
- if o.type=='MESH' and o.data.materials[0].name=='GloveFabric':
-  bpy.context.view_layer.objects.active=o
-  rem=o.modifiers.new('Continuous glove fabric','REMESH');rem.mode='VOXEL';rem.voxel_size=.0034;rem.use_smooth_shade=True;bpy.ops.object.modifier_apply(modifier=rem.name)
-  sm=o.modifiers.new('Relax textile surface','SMOOTH');sm.factor=.8;sm.iterations=5;bpy.ops.object.modifier_apply(modifier=sm.name)
-  d=o.modifiers.new('Even glove surface budget','DECIMATE');d.ratio=.70;bpy.ops.object.modifier_apply(modifier=d.name)
-  for poly in o.data.polygons:poly.use_smooth=True
+# The glove shell is a continuous loft; preserve its tailored profile (no voxel puffing).
 # Preserve curved painted skins and tyre shoulders; simplify small mechanical parts only.
 for o in bpy.context.scene.objects:
  if o.type=='MESH' and o.parent not in [floor,decals] and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','Rubber','GloveFabric','Sleeve','HelmetPaint','HelmetInk'] for m in o.data.materials):

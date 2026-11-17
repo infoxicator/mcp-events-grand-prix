@@ -1,0 +1,16 @@
+[
+  {
+    circuit: 'monza',
+    oldAngularTravel: 0.0762769986979942,
+    newAngularTravel: 0.04634244016741329,
+    oldPeakAngularRate: 0.05385960472311268,
+    newPeakAngularRate: 0.013444905814617157
+  },
+  {
+    circuit: 'las-vegas',
+    oldAngularTravel: 0.0737035658335685,
+    newAngularTravel: 0.05291925439422709,
+    oldPeakAngularRate: 0.06614729226942782,
+    newPeakAngularRate: 0.019117847132343026
+  }
+]

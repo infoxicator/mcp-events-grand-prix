@@ -51,7 +51,8 @@ export function createCar(team:'a'|'b'){
     for(let i=0;i<pos.count;i++){const cx=pos.getX(i)<mid?bounds.min.x+.0875:bounds.max.x-.0875;uv[i*2]=.5+(pos.getX(i)-cx)/.175;uv[i*2+1]=(pos.getY(i)-bounds.min.y)/.038;}o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
    }
    if(p.name==='GloveSuede'){p.roughness=.98;p.sheen=.6;p.sheenColor.set('#858a90');p.sheenRoughness=.95;p.bumpMap=grainMap;p.bumpScale=.00012;}
-   if(p.name==='GloveFabric'){p.color.set(team==='a'?'#d7df32':'#d6d3c9');p.roughness=.94;p.bumpMap=fabricMap;p.bumpScale=.00016;p.sheen=.5;p.sheenColor.set('#e4e1d8');p.sheenRoughness=.9;}
+   if(p.name==='GlovePanel'){p.color.set(team==='a'?'#969f21':'#999b94');p.roughness=.97;p.bumpMap=fabricMap;p.bumpScale=.00028;p.sheen=.15;}
+   if(p.name==='GloveFabric'){p.color.set(team==='a'?'#d7df32':'#d6d3c9');p.roughness=.94;p.bumpMap=fabricMap;p.bumpScale=.00016;p.sheen=.25;p.sheenColor.set('#cac9b8');p.sheenRoughness=.9;}
    if(p.name==='HelmetPaint'){p.color.set(team==='a'?'#e9ed24':'#e5edf0');p.roughness=.30;p.clearcoat=.5;p.clearcoatRoughness=.19;}
    if(p.name==='HelmetVisor'){p.roughness=.13;p.metalness=.65;p.clearcoat=.8;p.envMapIntensity=1.2;}
    if(p.name==='Rubber'){p.color.set('#17181a');p.roughness=.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
@@ -64,7 +65,7 @@ export function createCar(team:'a'|'b'){
      transformed.x+=sign(position.x)*tyreLoad*.4*contactWeight;
     `);};p.customProgramCacheKey=()=> 'loaded-slick-v1';
    }
-   p.aoMap=['Mirror','MarkWhite'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='GloveFabric'?.25:p.name==='WheelDish'?.28:.65;p.side=T.DoubleSide;m=p;if(!wheelRubber)materials.set(original,m);
+   p.aoMap=['Mirror','MarkWhite'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='GloveFabric'?.50:p.name==='WheelDish'?.28:.65;p.side=T.DoubleSide;m=p;if(!wheelRubber)materials.set(original,m);
   }return m;};o.material=Array.isArray(o.material)?o.material.map(m=>make(m as T.MeshStandardMaterial)):make(o.material as T.MeshStandardMaterial);o.castShadow=!(Array.isArray(o.material)?o.material:[o.material]).every(m=>bakedDetailShadow.has(m.name));o.receiveShadow=true;originals.set(o,o.material);}});
   for(const name of team==='a'?['NumberB','HelmetNumberB']:['NumberA','HelmetNumberA']){const unused=model.getObjectByName(name);if(unused)unused.visible=false;}
   fingerRigs.set(model,([-1,1] as const).flatMap(side=>Array.from({length:5},(_,digit)=>({node:model.getObjectByName(`Finger${side<0?'L':'R'}${digit}`)!,side,digit})).filter(binding=>!!binding.node)));

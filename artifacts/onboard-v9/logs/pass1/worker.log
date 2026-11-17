@@ -1,0 +1,15 @@
+
+> jev-grand-prix@1.0.0 test:worker
+> playwright test --config playwright.worker.config.ts
+
+
+Running 2 tests using 1 worker
+
+(node:16324) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS: workerd assets, Durable Object fixed-step physics, both Jev intents, engineer radio, independent disconnect, owner authorization and MCP invitations; paid calls=0.
+  ✓  1 e2e-worker/worker.spec.ts:2:44 › local Worker Durable Object drives one race and serves the MCP invitation resource (monza) (4.6s)
+PASS: workerd assets, Durable Object fixed-step physics, both Jev intents, engineer radio, independent disconnect, owner authorization and MCP invitations; paid calls=0.
+  ✓  2 e2e-worker/worker.spec.ts:2:44 › local Worker Durable Object drives one race and serves the MCP invitation resource (las-vegas) (4.4s)
+
+  2 passed (12.0s)

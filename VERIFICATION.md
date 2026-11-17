@@ -503,3 +503,34 @@ The earlier display-synchronised shared-browser run averaged approximately 60 FP
 Final screenshots are under `artifacts/onboard-v8/after/cars/`, especially `reference-vs-tcam.jpg`, `before-after-cockpit-onboard.jpg`, `clean-tcam-a.png`, `clean-tcam-b.png`, `clean-cockpit-a.png`, and `full-lock-left.png` / `full-lock-right.png`. Before shots, rejected camera/driver iterations, Blender logs and exact test outputs are preserved in the same round directory. The reference comparison uses the photo’s exact aspect ratio without cropping or retouching.
 
 Remaining gaps: stylised fabric/pressure deformation, chunkier wheel controls, simpler lighting/material response, and the prior approved white/red upper-body livery differs from the new photo. The T-cam hides more of the steering wheel behind the helmet than the photographed corner. This is a substantial POV/driver correction, not a claim of photoreal equivalence. Monza/Vegas geometry, authoritative gameplay, engineer/driver providers, radio and invitations remain intact.
+
+## Glove fit and stable aerial tracking — 2026-11-17
+
+Baseline `51b88c4`. Final Blender **5.2.2 LTS** export: **235,538 high-LOD triangles**. Factory startup and Cycles CPU AO worked without fixes or fallback. Five exports/review passes removed the inflated cuff/palm forms, then corrected the pointed upper silhouette and hard edge shading. Before images, rejected passes and final captures are in `artifacts/onboard-v9/`; its `REVIEW.md` records the remaining angular fabric/panel and finger-joint limitations.
+
+Final complete run: `zsh artifacts/onboard-v9/verify.sh` — **exit 0**, after the final Blender export. Node **24.14.0**, `JEV_MOCK=1 ENGINEER_MOCK=1`, no paid API calls. The earlier complete verification also passed, but the subsequent close-up review prompted a final glove correction and full rerun. Both runs are retained in the logs.
+
+| Command | Final result |
+| --- | --- |
+| `npm run model:build` | PASS; Blender source, both GLB LODs, gzip assets, AO and manifest |
+| `npm run build` | PASS; all web/MCP/host bundles, largest MCP HTML **23,340,684 / 26,214,400 bytes** |
+| `npm run typecheck` | PASS; both targets |
+| `npm test` | **65 passed / 10 files**; includes camera lead-swap/gap continuity, damping, cuts/teleports, 18× travel and complete laps on both circuits; actual GLB sightline tests remain green |
+| `CAR_REVIEW_DIR=onboard-v9/after/cars CIRCUIT_REVIEW_DIR=onboard-v9/after npm run test:e2e` | **11 passed**, headed Chromium; full races, radio/pits/results, both circuits, cameras, studio, provider UI and two new recorded aerial motion cases |
+| `npm run test:mcp` | **2 passed**; independent app contexts, invite/clipboard/browser joining and shared spectator |
+| `npm run test:worker` | **2 passed**, local workerd; paid calls 0 |
+| `npm run worker:check` | PASS, **dry-run only** |
+| `npm run test:handling` | PASS |
+| `PERF_UNCAPPED=1 PERF_DEMO_PROCESSES=1 PORT=5577 npm run test:performance` | PASS; Monza means **119.89 / 119.95 / 119.99**, minima **118.40 / 119.07 / 119.51** |
+| `PERF_UNCAPPED=1 PERF_DEMO_PROCESSES=1 RACE_CIRCUIT=las-vegas PORT=5578 npm run test:performance` | PASS; Vegas means **119.85 / 119.71 / 119.83**, minima **118.58 / 117.93 / 117.62** |
+| `PORT=5579 npm run demo:smoke` | PASS; three independent windows, connected teams, mock decisions, racing and HTTP health |
+| `curl --fail --silent http://127.0.0.1:5477/health` and HTTP check of `/` | PASS; HTTP 200, mock, paid calls 0. This existing server was idle; the fresh demo smoke establishes the connected race. |
+| `python3 scripts/measure-car.py` | PASS; exported geometry report saved |
+| `python3 scripts/review-gloves.py` | Unretouched equal-scale before/after comparisons generated and inspected |
+| `node --import tsx scripts/review-aerial.ts` | Deterministic old/new camera comparison saved |
+
+The aerial browser tests each collect **349 rendered samples over more than 405 m**, deliberately swapping the lead and oscillating lateral offsets. Peak angular rates are **0.01345 rad/s (Monza)** and **0.01914 rad/s (Vegas)**, below the **0.03** regression threshold; the previous math reaches approximately **0.054 / 0.066** with the same input. Recordings, motion JSON and contact sheets are in `artifacts/onboard-v9/after/aerial/`. This also verifies the production renderer uses the stabilised rig, not just a standalone helper.
+
+Performance order is Vector / Chaos / Broadcast, three independent headed browser processes at 1100×850, Apple M4 Pro / ANGLE Metal. These are uncapped capacity tests using the existing smoothed HUD FPS capped at 120; they are not monitor refresh rates or a guarantee for every frame. No Blender or other browser tests overlapped performance measurement.
+
+Final comparison: `artifacts/onboard-v9/after/cars/before-after-gloves.jpg`. Both lower onboard and helmet-visible T-cam remain, with shots for both teams and full steering locks. Gameplay/provider/radio/invite/Worker behaviours remain supported. All changes and evidence are local; no push, publish or deployment.

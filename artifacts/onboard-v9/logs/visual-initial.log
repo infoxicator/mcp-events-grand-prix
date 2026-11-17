@@ -1,0 +1,14 @@
+[WebServer] (node:4076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:4102) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 3 tests using 1 worker
+
+(node:4103) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/aerial-camera.spec.ts:5:53 › aerial follows the monza straight without bouncing during lead swaps (11.3s)
+  ✓  2 e2e/aerial-camera.spec.ts:5:53 › aerial follows the las-vegas straight without bouncing during lead swaps (10.9s)
+  ✓  3 e2e/realism-v2.spec.ts:4:1 › Blender cars, onboard, studio finishes and live camera transitions (37.9s)
+
+  3 passed (1.0m)

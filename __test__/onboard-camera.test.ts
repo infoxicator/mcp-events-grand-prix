@@ -52,7 +52,7 @@ describe('onboard sightlines through the exported Blender car',()=>{
   for(const lock of [0,-.20,.20,-.42,.42]){
    steer.rotation.z=-lock*3.6;poseForearms(model,steer);model.updateMatrixWorld(true);
    for(const side of [-1,1]){
-    const name=side<0?'HandL':'HandR',point=steer.localToWorld(new T.Vector3(side*.204,-.018,-.070));
+    const name=side<0?'HandL':'HandR',point=steer.localToWorld(new T.Vector3(side*.210,-.018,-.057));
     const hits=new T.Raycaster(c.position,point.sub(c.position).normalize()).intersectObject(model,true).filter(h=>{
      let n:T.Object3D|null=h.object;while(n){if(!n.visible)return false;n=n.parent;}return true;
     });
