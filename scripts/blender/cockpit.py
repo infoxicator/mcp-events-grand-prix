@@ -40,6 +40,22 @@ def build_halo(mesh, interp, carbon, titanium, cavity, rod):
                       up * (row[3]*math.sin(k*math.tau/24)) for k in range(24)])
     mesh('Halo', *closed_rings(rings), carbon)
 
+    # A narrow spoiler is bonded to the upper, outer edge of the titanium
+    # shroud. Each side tapers back into the swept wishbone before the centre.
+    for half in [rail[:len(rail)//2],list(reversed(rail[len(rail)//2+1:]))]:
+        rows=[]
+        for i,row in enumerate(half[4:-1],start=4):
+            t=(i-4)/(len(half)-6)
+            tangent=(Vector(half[i+1][:3])-Vector(half[i-1][:3])).normalized()
+            across=tangent.cross(Vector((0,1,0))).normalized()
+            if across.x*row[0]<0:across.negate()
+            up=Vector((0,1,0))
+            envelope=math.sin(math.pi*t)**.7
+            centre=Vector(row[:3])+across*(row[4]*.78)+up*(row[3]*.36)
+            rows.append([centre+across*w*envelope+up*h*envelope for w,h in
+                         [(0,0),(.008,.008),(.011,.022),(.008,.024),(.003,.017),(-.002,.005)]])
+        mesh('Bonded halo upper fairing',*closed_rings(rows),carbon)
+
     # The front leg flares beneath the junction and sits on a teardrop foot.
     stations = interp([[.601,.679,.042,.080],[.622,.671,.040,.070],
                        [.657,.667,.020,.046],[.748,.631,.014,.045],

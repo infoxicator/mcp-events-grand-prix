@@ -25,6 +25,13 @@ def pack(source,dest,positions=False):
     a.update(componentType=5123,normalized=True,byteOffset=0)
     if 'min' in a:a['min']=[min(encoded[::2]),min(encoded[1::2])]
     if 'max' in a:a['max']=[max(encoded[::2]),max(encoded[1::2])]
+  if not positions and len(attrs)==1 and attrs[0][0] in position_mesh and attrs[0][1]['componentType']==5126 and not v.get('byteStride'):
+   # Keep standard float attributes and the original mesh transforms. A
+   # binary grid limits packing error to 3.82 micrometres per coordinate.
+   a=attrs[0][1];values=struct.unpack_from('<'+'f'*(a['count']*3),raw,a.get('byteOffset',0))
+   rounded=[round(x*131072)/131072 for x in values]
+   raw=struct.pack('<'+'f'*len(rounded),*rounded);a['byteOffset']=0
+   a['min']=[min(rounded[k::3]) for k in range(3)];a['max']=[max(rounded[k::3]) for k in range(3)]
   if positions and len(attrs)==1 and attrs[0][0] in position_mesh and attrs[0][1]['componentType']==5126 and not v.get('byteStride'):
    a=attrs[0][1];values=struct.unpack_from('<'+'f'*(a['count']*3),raw,a.get('byteOffset',0));lo=[min(values[k::3]) for k in range(3)];hi=[max(values[k::3]) for k in range(3)];centre=[(lo[k]+hi[k])/2 for k in range(3)];extent=max(max(hi[k]-lo[k] for k in range(3))/2,1e-6)
    ints=[max(-32767,min(32767,round((x-centre[i%3])/extent*32767))) for i,x in enumerate(values)];raw=b''.join(struct.pack('<hhhh',*ints[i:i+3],0) for i in range(0,len(ints),3));a.update(componentType=5122,normalized=True,byteOffset=0,min=[min(ints[k::3]) for k in range(3)],max=[max(ints[k::3]) for k in range(3)]);v['byteStride']=8;transforms[position_mesh[attrs[0][0]]]=(centre,extent);quantized=True
