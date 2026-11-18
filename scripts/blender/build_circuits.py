@@ -50,6 +50,10 @@ def build(cid):
  mat('GarageFascia',(.45,.45,.43),.62,tex='garage-fascia',emission=.45 if night else 0)
  mat('RoofSheet',(.36,.395,.43),.54,.35)
  mat('Cabinet',(.11,.14,.15),.55,.23)
+ mat('ImpactRed',(.58,.026,.016),.68)
+ mat('ImpactIvory',(.73,.72,.65),.72)
+ mat('RescueOrange',(.94,.16,.018),.8)
+ mat('RunoffPaint',(.046,.24,.137),.89)
  mat('SignalLens',(.084,.012,.009),.28,.15)
  mat('Skin',(.43,.28,.19),.9)
  mat('Hospitality',(.62,.68,.72),.31,.16,tex='hospitality-glass')
@@ -197,6 +201,21 @@ def build(cid):
    face([pt(a,l,y),pt(b,lb,y),pt(b,rb,y+(ys or 0)),pt(a,r,y+(ys or 0))],m,[(l/3,a/3),(lb/3,b/3),(rb/3,b/3),(r/3,a/3)] if m not in ('Rubber',) else [(0,a/6),(0,b/6),(1,b/6),(1,a/6)])
  def atbox(d,off,y,size,m):
   s=sample(d);box(pt(d,off,y),size,m,math.atan2(s['tx'],s['tz']))
+ def street_hardware(d,off,h,size,material):
+  # Gutter bars and reflectors use the same unit casting. Keep their transforms
+  # as Blender/glTF instances instead of encoding a cube at each world position.
+  nonlocal instance_triangles
+  key=('street hardware',material)
+  mesh=prototypes.get(key)
+  if mesh is None:
+   mesh=bpy.data.meshes.new('Street hardware '+material)
+   bm=bmesh.new();bmesh.ops.create_cube(bm,size=1);bm.to_mesh(mesh);bm.free()
+   mesh.materials.append(mats[material]);prototypes[key]=mesh
+  obj=bpy.data.objects.new('Instance_StreetHardware',mesh)
+  bpy.context.collection.objects.link(obj);obj.parent=instanceRoot
+  x,y,z=pt(d,off,h);obj.location=(x,-z,y);obj.scale=(size[0],size[2],size[1])
+  tangent=sample(d);obj.rotation_euler.z=math.atan2(tangent['tx'],tangent['tz'])
+  instance_triangles+=12
  # Broad land follows the coarse DEM; fine surface always follows exact exported track.
  xs=[s['x'] for s in samples];zs=[s['z'] for s in samples]
  for x in range(int(min(xs))-650,int(max(xs))+650,100):
@@ -210,13 +229,17 @@ def build(cid):
  strip(data['pitEntry'],L+data['pitExit'],lambda d:sample(d)['pit']-3.4,lambda d:sample(d)['pit']+3.4,'Asphalt',.025)
  strip(data['pitEntry'],L+data['pitExit'],lambda d:sample(d)['pit']-3.25,lambda d:sample(d)['pit']-3.12,'White',.04)
  strip(0,L,lambda d:sample(d)['line']-1.7,lambda d:sample(d)['line']+1.7,'Rubber',.044)
+ last_braking_corner=-1000
  for c in data['corners']:
   if c['speed']>78:continue
   start=c['d']-(18 if night else 140 if c['name']=='Parabolica' else 45);end=c['d']+(25 if night else 180 if c['name']=='Parabolica' else 70)
   for side in [-1,1]:
    if not night:
-    strip(start-25,end+30,lambda d:side*(sample(d)['width']+1.1),lambda d:side*(sample(d)['width']+4),'Green',.03)
-    if c['name']!='Parabolica' or side<0:strip(start-35,end+40,lambda d:side*(sample(d)['width']+4),lambda d:side*(sample(d)['width']+4+18*max(.1,math.sin(math.pi*(d-start+35)/(end-start+75)))**.5),'Gravel',.025)
+    def apron(d):
+     taper=min(1,max(0,(d-start+25)/25),max(0,(end+30-d)/30))
+     return 1.1+2.9*taper*taper*(3-2*taper)
+    strip(start-25,end+30,lambda d:side*(sample(d)['width']+1.1),lambda d:side*(sample(d)['width']+apron(d)),'RunoffPaint',.03)
+    if c['name']!='Parabolica' or side<0:strip(start-35,end+40,lambda d:side*(sample(d)['width']+apron(d)),lambda d:side*(sample(d)['width']+apron(d)+18*max(0,math.sin(math.pi*(d-start+35)/(end-start+75)))**.75),'Gravel',.025)
    d=start
    while d<end:
     w=.85 if night else 1.1;m='White' if int((d-start)/1.8)%2 else 'Red';strip(d,min(d+1.8,end),lambda q:side*sample(q)['width'],lambda q:side*(sample(q)['width']+w),m,.04,step=2,ys=.025 if night else .07);
@@ -225,7 +248,19 @@ def build(cid):
     d+=1.8
    if not night and c['speed']<45:
     for j in range(7):atbox(c['d']-9+j*3,side*(sample(c['d'])['width']+1.4),.105,(.3,.17,1.7),'Red')
-  for delta in [150,100,50]:atbox(c['d']-delta,-sample(c['d'])['width']-2,1,(.12,1.2,1.3),'Brake'+str(delta))
+  # In a sequence of turns, mark the braking approach once. Mount the
+  # printed face across the driver's sightline with the lettering upright.
+  if c['speed']<=70 and c['d']-last_braking_corner>210:
+   last_braking_corner=c['d']
+   for delta in [150,100,50]:
+    st=c['d']-delta;off=-sample(st)['width']-(1.67 if night else 2.65)
+    bottom=1.24 if night else .34
+    for x in [-.43,.43]:
+     rod(pt(st+.08,off+x,.03),pt(st+.08,off+x,bottom+.92),.030,'Steel',5)
+    atbox(st+.05,off,bottom+.47,(1.35,.94,.073),'RoofSheet')
+    face([pt(st,off+x,bottom+y) for x,y in [(-.65,.022),(.65,.022),(.65,.92),(-.65,.92)]],
+         'Brake'+str(delta),[(0,0),(1,0),(1,1),(0,1)])
+
  # Grid and painted pit stalls.
  strip(0,.35,-7.5,7.5,'White',.05)
  for i in range(20):
@@ -267,8 +302,62 @@ def build(cid):
    for hh in [1.7,2.6,3.4]:rod(pt(d,off,hh),pt(d+8,side*edge(d+8),hh),.009,'Steel',4)
    rod((a[0],a[1]+3.9,a[2]),(b[0],b[1]+3.9,b[2]),.026,'Steel')
    face([(a[0],a[1]+1,a[2]),(b[0],b[1]+1,b[2]),(b[0],b[1]+3.9,b[2]),(a[0],a[1]+3.9,a[2])],'Fence',[(0,0),(8,0),(8,3),(0,3)])
-   if night or d%40==0:
+   # Boards occupy groups of concrete spans. Breaks expose the formed wall
+   # and give the floodlights real joints and shoulder reflectors to pick up.
+   sponsored=(d//8+(4 if side>0 else 0))%17<8 if night else d%40==0
+   if sponsored:
     toward=-side*.35;aa=pt(d+.08,off+toward,.22);bb=pt(d+7.92,side*edge(d+7.92)+toward,.22);face([aa,bb,(bb[0],bb[1]+.75,bb[2]),(aa[0],aa[1]+.75,aa[2])],'Sign',[(1,0),(0,0),(0,1),(1,1)] if side>0 else None)
+   elif night and d%24==0:
+    street_hardware(d+1,off-side*.18,.78,(.06,.25,.15),'Dark')
+    street_hardware(d+1,off-side*.218,.79,(.025,.15,.095),'Gold')
+  if night and d%48==0 and not inpit(d):
+   # Storm drains sit flush with the road in the gutter, inside the walls.
+   side=-1 if d%96==0 else 1
+   gutter=side*(edge(d)-.74)
+   street_hardware(d,gutter,.030,(.48,.015,1.03),'Steel')
+   street_hardware(d,gutter,.039,(.40,.006,.94),'Dark')
+   for j in range(9):street_hardware(d-.40+j*.10,gutter,.045,(.39,.009,.028),'Steel')
+ # Modular impact absorbers follow the outside of each braking zone.
+ # The moulded shoulders and tie channels catch light under grazing angles.
+ for corner in data['corners']:
+  if corner['speed']>(40 if night else 68):continue
+  d=corner['d']
+  incoming=sample(d-16);outgoing=sample(d+16)
+  bend=incoming['tx']*outgoing['tz']-incoming['tz']*outgoing['tx']
+  side=-1 if bend>0 else 1
+  if side<0 and inpit(d):continue
+  start=d-12 if night else d-30
+  for index in range(18 if night else 33):
+   st=start+index*1.95;material='ImpactRed' if index//3%2==0 else 'ImpactIvory'
+   # Raised ribs run across the face, with the dark belt below the shoulder.
+   profile=[(0,.95),(.10,1.04),(.24,1.06),(.27,1.02),(.48,1.02),(.51,1.07),(.86,1.07),(.96,.98),(.96,.22)]
+   for (h0,x0),(h1,x1) in zip(profile,profile[1:]):
+    u=st+.015;v=st+1.935
+    face([pt(u,side*(edge(u)-x0),h0),pt(v,side*(edge(v)-x0),h0),
+          pt(v,side*(edge(v)-x1),h1),pt(u,side*(edge(u)-x1),h1)],material)
+   if index in (0,(17 if night else 32)):
+    e=st+(.015 if index==0 else 1.935)
+    face([pt(e,side*(edge(e)-x),h) for x,h in [(.22,.03),(1.03,.03),(1.03,.93),(.22,.93)]],material)
+  # Staff and equipment stay inside the protected post, behind the catch fence.
+  st=d+8;off=side*(edge(st)+2.4)
+  atbox(st,off,.12,(2.7,.24,4.6),'Concrete')
+  for j in [-1.8,1.8]:
+   for x in [-1.03,1.03]:rod(pt(st+j,off+x,.20),pt(st+j,off+x,2.98),.052,'Steel')
+  atbox(st,off,2.98,(2.85,.13,4.65),'RoofSheet')
+  atbox(st,off-side*1.38,2.86,(.07,.19,4.64),'RescueOrange')
+  atbox(st,off+side,1.04,(.09,1.6,3.7),'Cabinet')
+  atbox(st-1.25,off-side*.20,.78,(.45,1.08,.66),'ServiceRed')
+  for j in [-.62,.68]:
+   def limb(d1,x1,y1,d2,x2,y2,r,m):
+    rod(pt(st+j+d1,off+x1,y1),pt(st+j+d2,off+x2,y2),r,m,7)
+   for leg in [-1,1]:
+    limb(leg*.14,0,.29,leg*.09,.01,1.03,.105,'RescueOrange')
+    limb(leg*.135,0,.47,leg*.133,0,.52,.106,'ImpactIvory')
+    limb(leg*.19,0,1.48,leg*.26,-side*.08,1.16,.08,'RescueOrange')
+   limb(0,0,.95,0,0,1.48,.195,'RescueOrange')
+   limb(0,0,1.24,0,0,1.30,.199,'ImpactIvory')
+   blob(pt(st+j,off,1.64),(.108,.143,.113),'Skin',8,5)
+   blob(pt(st+j,off,1.73),(.131,.084,.133),'ImpactIvory',8,4)
  strip(L-405,L+45,-26,-8,'Asphalt',.026)
  # Separate protected pit wall, keeping entry/exit gaps open.
  for d in range(int(L)-390,int(L)-20,8):atbox(d,-12,.65,(.45,1.3,8),'Concrete')

@@ -100,7 +100,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
        float lane=pow((metres.y-45.*floor(metres.y/45.+.5))/15.,2.);
        float axial=exp(-lane);
        float lateral=exp(-pow((abs(metres.x)-7.5)/10.,2.));
-       totalEmissiveRadiance+=diffuseColor.rgb*vec3(.45,.54,.68)*axial*lateral;
+       totalEmissiveRadiance+=diffuseColor.rgb*vec3(.50,.59,.73)*(.25+.8*axial)*lateral;
       `);
      };
     }
@@ -121,12 +121,33 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
      m.transparent=false;m.alphaTest=.40;m.alphaToCoverage=true;m.depthWrite=true;}
     if(m.name==='Grass')m.color.set('#708554');
     if(m.name==='Gravel'){m.bumpMap=m.map;m.bumpScale=.008;}
+    if(m.name==='RunoffPaint'&&!m.userData.canopyBaked){
+     m.roughness=.88;
+     // The slab joints run across the apron. Scuffed binder shows through
+     // the paint between joints, with subpixel grit filtered at distance.
+     m.onBeforeCompile=shader=>{
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 apronMetres;')
+       .replace('#include <begin_vertex>','#include <begin_vertex>\napronMetres=uv*3.;');
+      shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 apronMetres;')
+       .replace('#include <color_fragment>',`#include <color_fragment>
+        float joint=abs(fract(apronMetres.y/4.)-.5)*4.;
+        float aa=max(fwidth(apronMetres.y),.002);
+        float seam=1.-smoothstep(.007,.007+aa,joint);
+        float scuff=sin(apronMetres.y*1.71+.6*cos(apronMetres.x*3.1))*sin(apronMetres.x*4.2+apronMetres.y*.16);
+        float grit=fract(sin(dot(floor(apronMetres*44.),vec2(12.9898,78.233)))*43758.5453);
+        float resolved=1.-smoothstep(.012,.05,max(fwidth(apronMetres.x),aa));
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.31,.32,.29),.08+.16*max(scuff,0.)+.12*grit*resolved);
+        diffuseColor.rgb*=1.-.36*seam;
+       `);
+     };
+    }
     if(['Concrete','White','Steel','Foliage','Trunk'].includes(m.name)||m.name.startsWith('Canopy'))casters.push(o);
+    if(m.name==='Ice'&&track.night)m.emissiveIntensity=2.6;
     if(m.name==='Dark'&&track.night)m.color.set('#080b12');
     if(['Foliage','Fence','Crowd'].includes(m.name)){m.transparent=false;m.alphaTest=.4;m.depthWrite=true;}
     if(m.name==='Rubber'){m.transparent=true;m.depthWrite=false;m.polygonOffset=true;m.polygonOffsetFactor=-1;}
     if(['Fence','Crowd','Foliage','Trunk','Skin'].includes(m.name)||m.name.startsWith('Spectator'))distant.push(o);
-    if(canopyLight&&['Asphalt','Grass','White','Red','Green','Gravel','Rubber'].includes(m.name)){
+    if(canopyLight&&['Asphalt','Grass','White','Red','Green','RunoffPaint','Gravel','Rubber'].includes(m.name)){
      if(m.name==='Asphalt'||!m.userData.canopyBaked){
       const original=m.onBeforeCompile;
       m.onBeforeCompile=function(shader,renderer){

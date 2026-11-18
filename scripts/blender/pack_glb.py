@@ -2,8 +2,14 @@
 Cars retain float positions; circuit chunks use 16-bit positions with uniform
 node transforms. No decoder/WASM required by MCP hosts.
 """
-import json,struct,gzip
+import json,struct,gzip,zlib
 from pathlib import Path
+
+def compress_circuit(data):
+ # Smaller deflate blocks fit the changes of entropy between spatial chunks.
+ # The decoded buffer and its glTF accessors stay byte-identical.
+ encoder=zlib.compressobj(level=9,wbits=31,memLevel=7)
+ return encoder.compress(data)+encoder.flush()
 
 def pack(source,dest,positions=False):
  b=Path(source).read_bytes();n=struct.unpack_from('<I',b,12)[0];g=json.loads(b[20:20+n]);binary=b[28+n:];views=g['bufferViews'];accessors=g.get('accessors',[]);normal_indices={p['attributes']['NORMAL'] for m in g['meshes'] for p in m['primitives'] if 'NORMAL' in p['attributes']};instanced={n['mesh'] for n in g['nodes'] if 'EXT_mesh_gpu_instancing' in n.get('extensions',{})};position_mesh={p['attributes']['POSITION']:mi for mi,m in enumerate(g['meshes']) for p in m['primitives'] if mi not in instanced};transforms={};out=bytearray();quantized=False
@@ -48,4 +54,4 @@ def pack(source,dest,positions=False):
    if 'KHR_mesh_quantization' not in g[k]:g[k].append('KHR_mesh_quantization')
  js=json.dumps(g,separators=(',',':')).encode();js+=b' '*(-len(js)%4)
  result=struct.pack('<III',0x46546c67,2,28+len(js)+len(out))+struct.pack('<II',len(js),0x4e4f534a)+js+struct.pack('<II',len(out),0x004e4942)+out
- Path(dest).write_bytes(gzip.compress(result,compresslevel=9,mtime=0))
+ Path(dest).write_bytes(compress_circuit(result) if positions else gzip.compress(result,compresslevel=9,mtime=0))
