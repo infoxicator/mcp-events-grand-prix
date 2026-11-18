@@ -1,3 +1,4 @@
+import {pitBox} from './pit-service';
 import {getTrack,type Track,type CircuitId} from './track';
 import {VEHICLE,brakeCapacity,cornerLimit,drivetrain} from './vehicle';
 import { TEAMS,type Team,type Race,type Car,type Instruction,type DriverIntent,type Compound } from './types';
@@ -32,7 +33,7 @@ export function racingSpeed(c:Car,rival:Car,track:Track=getTrack()){
  return limit;
 }
 export function stepRace(s:Race){
- const track=getTrack(s.circuit),{LENGTH,wrap,SECTORS,DRS_ZONES,PIT_ENTRY,PIT_STOP,PIT_EXIT,PIT_LIMIT,PIT_STOP_SECONDS,SPEED_TRAP,racingLineOffset,signedCurvatureAt,trackHalfWidth,pointAt,tangentAt,pitOffset}=track;
+ const track=getTrack(s.circuit),{LENGTH,wrap,SECTORS,DRS_ZONES,PIT_ENTRY,PIT_EXIT,PIT_LIMIT,PIT_STOP_SECONDS,SPEED_TRAP,racingLineOffset,signedCurvatureAt,trackHalfWidth,pointAt,tangentAt,pitOffset}=track;
  const crossed=(before:number,after:number,mark:number)=>crossedLine(before,after,mark,LENGTH);
  s.tick++;
  if(s.phase==='lobby'||s.phase==='finished')return;
@@ -41,7 +42,7 @@ export function stepRace(s:Race){
  // Read a stable pair to prevent team iteration order influencing aerodynamics.
  const prior=structuredClone(s.cars);
  for(const team of TEAMS){const c=s.cars[team],rival=prior[other(team)];if(c.finishTime!==null)continue;
-  const before=c.distance;
+  const before=c.distance,PIT_STOP=pitBox(track,team);
   if(c.pit==='stopped'){
    c.pitTime+=DT;c.speed=0;c.throttle=0;c.brake=1;c.drs=false;
    if(c.pitTime+1e-8>=PIT_STOP_SECONDS){c.compound=c.instruction.tyre;c.wear=0;c.temperature=75;c.tyreAge=0;c.stops++;c.instruction.box=false;c.pit='exit';event(s,'pit',team,`${team.toUpperCase()} · ${PIT_STOP_SECONDS.toFixed(1)}s STOP · ${c.compound.toUpperCase()}`);}continue;

@@ -11,13 +11,15 @@ import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {createCar,type Finish} from './car-model';
+import {pitCrew} from './pit-crew';
+import {pitBox} from './pit-service';
 import {createShowroom} from './showroom';
 import {BroadcastDirector} from './broadcast-camera';
 import {DriverHead,onboardLens} from './onboard-camera';
 import {TrackingCameraRig,AERIAL_CAMERA,SIDE_CAMERA,CHASE_CAMERA} from './tracking-camera';
 
 export type CameraMode='broadcast'|'side'|'cockpit-a'|'cockpit-b'|'helicopter'|'flythrough'|'detail'|'sphere'|'strip'|'showroom'|'tcam-a'|'tcam-b'|'chase'|'pits';
-export interface RenderCar{distance:number;offset:number;speed:number;steering?:number;pit?:string;heading?:number;acceleration?:number;lateralG?:number;compound?:string;drs?:boolean;gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
+export interface RenderCar{distance:number;offset:number;speed:number;steering?:number;pit?:string;pitTime?:number;instruction?:{tyre?:string};heading?:number;acceleration?:number;lateralG?:number;compound?:string;drs?:boolean;gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
 export interface RenderRace{laps?:number;cars:Record<'a'|'b',RenderCar>;time:number;phase:string}
 export function createScene(container:HTMLElement,track:Track=getTrack()){
  const {pointAt,tangentAt}=track,night=track.night;
@@ -45,6 +47,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  }
  const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  const circuit=loadCircuit(scene,track,anisotropy),vegas=night?circuit:null;
+ const crew=pitCrew(scene,track);
  const sparks=night?createSparks(scene,track,circuit.heightAt):null;
  // Warm architectural spill is fixed to the two resort facades, independent of the car.
  if(night)for(const [lon,lat] of [[-115.1757,36.1127],[-115.1693,36.1212]]){const q=track.project(lon,lat);const light=new T.PointLight('#ffc584',6500,230,2);light.position.set(q.x,24,q.z);scene.add(light);}
@@ -55,7 +58,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const nightProbe=night?new T.WebGLCubeRenderTarget(64,{generateMipmaps:true,minFilter:T.LinearMipmapLinearFilter}):null,probeCamera=nightProbe?new T.CubeCamera(.5,1800,nightProbe):null;let probeDistance=-Infinity;
  const rearTarget=new T.WebGLRenderTarget(256,96),rearCamera=new T.PerspectiveCamera(58,256/96,.1,500);rearTarget.texture.wrapS=T.RepeatWrapping;rearTarget.texture.repeat.x=-1;let mirrorFrame=0;
  const studio=createShowroom(renderer);let finish:Finish='colour',turntable=true;const params=new URLSearchParams(location.search);
- const loading=document.createElement('div');loading.className='model-loading';loading.textContent='LOADING JGP–26';container.append(loading);Promise.all([cars.a.loaded,cars.b.loaded,circuit.loaded]).then(()=>{if(!disposed){loading.textContent=cars.a.error||cars.b.error||circuit.error?'3D ASSET UNAVAILABLE':'';loading.hidden=cars.a.ready&&cars.b.ready&&circuit.ready;}});
+ const loading=document.createElement('div');loading.className='model-loading';loading.textContent='LOADING JGP–26';container.append(loading);Promise.all([cars.a.loaded,cars.b.loaded,circuit.loaded,crew.loaded]).then(()=>{if(!disposed){loading.textContent=cars.a.error||cars.b.error||circuit.error||crew.error?'3D ASSET UNAVAILABLE':'';loading.hidden=cars.a.ready&&cars.b.ready&&circuit.ready&&crew.ready;}});
  let selectedMode:CameraMode='broadcast',activeMode:CameraMode='side',cameraLabel='SIDE / STABILISED';
  const director=new BroadcastDirector(),driverHead=new DriverHead(),mountRotation=new T.Quaternion();
  const aerial=new TrackingCameraRig(AERIAL_CAMERA),side=new TrackingCameraRig(SIDE_CAMERA),chase=new TrackingCameraRig(CHASE_CAMERA),target=new T.Vector3(),desired=new T.Vector3();
@@ -65,6 +68,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   if(mode!==activeMode){aerial.reset();side.reset();chase.reset();driverHead.reset();activeMode=mode;}
   renderer.info.reset();container.classList.toggle('visor-edge',params.has('visor')&&mode.startsWith('cockpit'));
   for(const id of ['a','b'] as const){const c=race.cars[id],p=carPosition(c),t=tangentAt(c.distance);cars[id].root.position.copy(p);cars[id].root.position.y=p.y+.026;cars[id].root.rotation.set(Math.atan2(circuit.heightAt(c.distance-3)-circuit.heightAt(c.distance+3),6),Math.atan2(t.x,t.z)+(c.heading??0),0,'YXZ');cars[id].update(c,mode===`cockpit-${id}`,mode==='showroom',now);}
+  for(const id of ['a','b'] as const)crew.update(id,race.cars[id]);
   const onboard=mode.startsWith('cockpit')||mode.startsWith('tcam');
   const leader=race.cars.a.distance>=race.cars.b.distance?'a':'b';
   const focus=onboard?(mode.endsWith('-b')?'b':'a'):mode==='detail'?'a':leader;
@@ -90,6 +94,21 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
     const h=circuit.heightAt(d);
     light.position.set(q.x,h+12.47,q.z);light.target.position.set(aim.x,h,aim.z);
     light.intensity=floodlightCandela*(1-T.MathUtils.smoothstep(i<2?travel:1-travel,.59,1));
+    // The upper pair illuminates the service apron from the visible garage fascias.
+    // Reuse the race light budget and keep lights local to an occupied box.
+    if(i>=2){
+     const primary=i===2?'a':'b',alternate=primary==='a'?'b':'a';
+     for(const team of [primary,alternate] as const){
+      const car=race.cars[team];if(!car.pit||car.pit==='none')continue;
+      const box=car.pit==='stopped'?track.wrap(car.distance):pitBox(track,team);
+      const delta=track.wrap(car.distance-box+track.LENGTH/2)-track.LENGTH/2;
+      if(delta < -32||delta>20)continue;
+      const housing=pointAt(box+(i===2?-4.5:4.5),-24.5),service=pointAt(box,-17);
+      light.position.set(housing.x,circuit.heightAt(box)+4.12,housing.z);
+      light.target.position.set(service.x,circuit.heightAt(box)+.65,service.z);
+      light.intensity=190;break;
+     }
+    }
    });
   }
   sun.position.set(p.x-80,p.y+120,p.z-50);sun.target.position.copy(p);
@@ -118,7 +137,17 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   }else if(mode==='sphere'&&vegas){const sp=vegas.spherePosition;camera.position.set(sp.x+190,88,sp.z+200);camera.lookAt(sp.x,42,sp.z);camera.fov=52;cameraLabel='SPHERE / NIGHT SESSION';
   }else if(mode==='strip'&&vegas){const q=track.project(-115.1719,36.1093),target=track.project(-115.1730,36.1145);camera.position.set(q.x,117,q.z);camera.lookAt(target.x,30,target.z);camera.fov=59;cameraLabel='THE STRIP / NIGHT AERIAL';
   }else if(mode==='pits'){
-   const q=pointAt(track.LENGTH-126,night?20.0:30.5),a=pointAt(track.LENGTH-178,-26);camera.position.set(q.x,circuit.heightAt(track.LENGTH-126)+8.8,q.z);camera.lookAt(a.x,circuit.heightAt(track.LENGTH-178)+4.1,a.z);camera.fov=46;cameraLabel='PIT LANE / GRANDSTANDS';
+   const service=(['a','b'] as const).find(id=>{
+    const v=race.cars[id],delta=track.wrap(v.distance-pitBox(track,id)+track.LENGTH/2)-track.LENGTH/2;
+    return v.pit==='stopped'||(v.pit==='entry'&&delta>-16&&delta<1)||(v.pit==='exit'&&delta>=0&&delta<14);
+   });
+   if(service){
+    const box=race.cars[service].pit==='stopped'?track.wrap(race.cars[service].distance):pitBox(track,service),q=pointAt(box+5.8,-12.9),a=pointAt(box,-18);
+    camera.position.set(q.x,circuit.heightAt(box)+3.5,q.z);camera.lookAt(a.x,circuit.heightAt(box)+.76,a.z);
+    camera.fov=47;cameraLabel='PIT BOX / '+service.toUpperCase();
+   }else{
+    const q=pointAt(track.LENGTH-126,night?20.0:30.5),a=pointAt(track.LENGTH-178,-26);camera.position.set(q.x,circuit.heightAt(track.LENGTH-126)+8.8,q.z);camera.lookAt(a.x,circuit.heightAt(track.LENGTH-178)+4.1,a.z);camera.fov=46;cameraLabel='PIT LANE / GRANDSTANDS';
+   }
   }else if(mode==='detail'){
    const root=cars.a.root;const angle=new URLSearchParams(location.search).get('angle')??'front';const pos=angle==='rear'?new T.Vector3(-4.4,1.75,-6.1):angle==='side'?new T.Vector3(-7,1.1,0):angle==='top'?new T.Vector3(.01,10,.01):new T.Vector3(-4.1,1.65,6.1);desired.copy(root.localToWorld(pos));camera.position.copy(desired);target.copy(root.position).add(new T.Vector3(0,.45,0));camera.lookAt(target);camera.fov=35;cameraLabel='CAR DETAIL / JGP–26';
   }else if(mode==='flythrough'){
@@ -141,5 +170,5 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   camera.updateProjectionMatrix();if(mode==='showroom')renderer.render(studio.scene,camera);else{if(cars.a.root.parent!==scene)scene.add(cars.a.root);if(composer)composer.render();else renderer.render(scene,camera);}
  }
  const resize=new ResizeObserver(()=>{const w=container.clientWidth,h=container.clientHeight;renderer.setSize(w,h,false);composer?.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();});resize.observe(container);
- return {render,setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars.a.setFinish(next==='showroom'?finish:'colour');},setFinish:(next:Finish)=>{finish=next;cars.a.setFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(params.has('cameraDebug')?{cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,circuit:track.id,modelsReady:cars.a.ready&&cars.b.ready&&circuit.ready,modelError:cars.a.error??cars.b.error??circuit.error,finish};},dispose:()=>{disposed=true;nightProbe?.dispose();rearTarget.dispose();circuit.dispose();loading.remove();cars.a.dispose();cars.b.dispose();scene.add(cars.a.root);studio.dispose();resize.disconnect();sparks?.dispose();composer?.passes.forEach(p=>p.dispose());composer?.dispose();const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();scene.traverse(o=>{if(o instanceof T.DirectionalLight||o instanceof T.PointLight||o instanceof T.SpotLight)o.shadow.dispose();if(o instanceof T.Mesh||o instanceof T.Sprite){if(o instanceof T.Mesh)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);if(m instanceof T.ShaderMaterial)for(const u of Object.values(m.uniforms))if(u.value instanceof T.Texture)textures.add(u.value);for(const value of Object.values(m))if(value instanceof T.Texture)textures.add(value);}}});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());if(scene.background instanceof T.Texture)scene.background.dispose();scene.environment?.dispose();environment.dispose();pmrem.dispose();renderer.dispose();renderer.domElement.remove();}};
+ return {render,setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars.a.setFinish(next==='showroom'?finish:'colour');},setFinish:(next:Finish)=>{finish=next;cars.a.setFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(params.has('cameraDebug')?{cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,circuit:track.id,modelsReady:cars.a.ready&&cars.b.ready&&circuit.ready&&crew.ready,modelError:cars.a.error??cars.b.error??circuit.error??crew.error,finish};},dispose:()=>{disposed=true;nightProbe?.dispose();rearTarget.dispose();crew.dispose();circuit.dispose();loading.remove();cars.a.dispose();cars.b.dispose();scene.add(cars.a.root);studio.dispose();resize.disconnect();sparks?.dispose();composer?.passes.forEach(p=>p.dispose());composer?.dispose();const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();scene.traverse(o=>{if(o instanceof T.DirectionalLight||o instanceof T.PointLight||o instanceof T.SpotLight)o.shadow.dispose();if(o instanceof T.Mesh||o instanceof T.Sprite){if(o instanceof T.Mesh)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);if(m instanceof T.ShaderMaterial)for(const u of Object.values(m.uniforms))if(u.value instanceof T.Texture)textures.add(u.value);for(const value of Object.values(m))if(value instanceof T.Texture)textures.add(value);}}});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());if(scene.background instanceof T.Texture)scene.background.dispose();scene.environment?.dispose();environment.dispose();pmrem.dispose();renderer.dispose();renderer.domElement.remove();}};
 }

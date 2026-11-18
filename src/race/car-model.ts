@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 import {fingerCurl,poseForearms,bindGloveCompression} from './grip';
+import {jackLift,cornerService} from './pit-service';
 import {Suspension,wheelStations} from './suspension';
 import type {Track} from './track';
 import {embeddedGLB} from './embedded-glb';
@@ -31,7 +32,7 @@ function knit(){
  for(let y=0;y<64;y++)for(let x=0;x<64;x++){const row=Math.floor(y/8),u=(x+(row%2)*4)%8,v=y%8;const thread=Math.exp(-Math.pow((u-4-Math.sin(v/8*Math.PI)*2)/1.4,2));const n=150+85*thread+8*Math.sin(v*Math.PI);c.fillStyle=`rgb(${n},${n},${n})`;c.fillRect(x,y,1,1);}
  const t=new T.CanvasTexture(canvas);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(96,96);t.anisotropy=8;return t;
 }
-export interface CarTelemetry{distance:number;speed:number;offset?:number;heading?:number;steering?:number;drs?:boolean;compound?:string;acceleration?:number;lateralG?:number;pit?:string;gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
+export interface CarTelemetry{distance:number;speed:number;offset?:number;heading?:number;steering?:number;drs?:boolean;compound?:string;acceleration?:number;lateralG?:number;pit?:string;pitTime?:number;instruction?:{tyre?:string};gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
 function drawTelemetry(ctx:CanvasRenderingContext2D,c:CarTelemetry){
  const width=512,lapDelta=c.lastLap&&c.bestLap?c.lastLap-c.bestLap:0;
  ctx.fillStyle='#10161c';ctx.fillRect(0,0,width,256);
@@ -174,9 +175,11 @@ export function createCar(team:'a'|'b',track:Track){
  let lastDash=-1;
  return {root,chassis,loaded,get ready(){return ready;},get error(){return error;},setFinish,setMirror(texture:T.Texture|null){for(const m of mirrors){if(m.map!==texture){m.map=texture;m.emissiveMap=texture;m.emissive.set(texture?'#ffffff':'#000000');m.emissiveIntensity=.7;m.roughness=texture?1:.08;m.metalness=texture?0:.9;m.needsUpdate=true;}}},
  update(c:CarTelemetry,onboard=false,studio=false,now=performance.now()){
-  for(const ink of sidewallInks)ink.color.set(studio?'#b7b4a9':(compoundColors[c.compound?.toLowerCase()??'hard']??compoundColors.hard));
+  const service=c.pit==='stopped'&&!studio,seconds=c.pitTime??0;
+  const compound=service&&seconds>1.66?(c.instruction?.tyre??c.compound):c.compound;
+  for(const ink of sidewallInks)ink.color.set(studio?'#b7b4a9':(compoundColors[compound?.toLowerCase()??'hard']??compoundColors.hard));
   suspension.update(track,c,now,studio);
-  chassis.rotation.set(suspension.pitch,0,suspension.roll);chassis.position.y=suspension.heave;
+  chassis.rotation.set(suspension.pitch,0,suspension.roll);chassis.position.y=suspension.heave+(studio?0:jackLift(c));
   inverseBody.copy(chassis.quaternion).invert();
   const spin=studio?0:c.distance/CAR_DIMENSIONS.tyreRadius;
   for(const u of tyreUniforms){u.spin.value=spin;u.load.value=suspension.compression[u.wheel];u.shutter.value=studio?0:Math.min(1.3,Math.abs(c.speed)/(240*CAR_DIMENSIONS.tyreRadius));}
@@ -186,6 +189,11 @@ export function createCar(team:'a'|'b',track:Track){
     // The sprung chassis moves around the hubs. Express the road-space pose
     // in the moving chassis frame so neither pitch nor roll lifts a tyre.
     const height=CAR_DIMENSIONS.tyreRadius-suspension.compression[i]+suspension.heights[i];
+    const uncovered=service&&cornerService(seconds,i).off;
+    if(hub.userData.uncovered!==uncovered){
+     for(const part of hub.children)part.visible=!uncovered||part.name.includes('BrakeDisc');
+     hub.userData.uncovered=uncovered;
+    }
     hub.position.set(station.x,height-suspension.heave,station.z).applyQuaternion(inverseBody);
     hub.rotation.set(0,i<2?(c.steering??0):0,0);hub.rotateX(spin);hub.quaternion.premultiply(inverseBody);
    }
