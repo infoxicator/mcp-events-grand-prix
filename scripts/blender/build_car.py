@@ -114,7 +114,7 @@ def wing(name,span,z,y,chord,m,parent=body,sweep=.15,lift=.05,side=0,root_width=
  f.extend([tuple(reversed(range(ns))),tuple(nx*ns+j for j in range(ns))])
  return bevel(mesh(name,v,f,m,parent),.0007,2)
 def text(label,pos,size,m=silver,rotation=(0,0,0),parent=body):
- cu=bpy.data.curves.new('Mark '+label,'FONT');cu.body=label;cu.font=brandfont;cu.align_x='CENTER';cu.align_y='CENTER';cu.size=size;cu.shear=.14 if label in ['44','23','NOVA','NEXUS'] else 0;cu.extrude=0;cu.fill_mode='FRONT';cu.offset=.0006 if len(label)==1 else 0;cu.resolution_u=3
+ cu=bpy.data.curves.new('Mark '+label,'FONT');cu.body=label;cu.font=brandfont;cu.align_x='CENTER';cu.align_y='CENTER';cu.size=size;cu.shear=.14 if label in ['44','63','NOVA','NEXUS'] else 0;cu.extrude=0;cu.fill_mode='FRONT';cu.offset=.0006 if len(label)==1 else 0;cu.resolution_u=3
  o=bpy.data.objects.new('Mark '+label,cu);bpy.context.collection.objects.link(o);o.location=pos;o.rotation_euler=rotation;o.data.materials.append(m);o.parent=parent;return o
 dish=mat('WheelDish','343a42',.29,.62);brake=mat('BrakeDisc','565859',.63,.45);sleeve=mat('Sleeve','60212b',.9)
 secondary=mat('DeepLivery','56091f',.33,.17);tyreink=mat('CompoundInk','b6b2a4',.78)
@@ -330,7 +330,7 @@ loft('Engine cover spine',[[-2.195,0,.020,.497,.876],[-2.16,0,.038,.491,.921],
  paint,n=30,power=.31)
 for s in [-1,1]:
  text('44',(s*.014,.833,-1.854),.305,silver,(0,s*math.pi/2,0),numberA)
- text('23',(s*.014,.833,-1.854),.305,silver,(0,s*math.pi/2,0),numberB)
+ text('63',(s*.014,.833,-1.854),.305,silver,(0,s*math.pi/2,0),numberB)
  text('ION',(s*.38,.61,-.2),.058,black,(0,s*math.pi/2,0))
 # Halo carbon arch, centre pillar, camera pod.
 build_halo(mesh, interp, carbon, metal, black, rod)
@@ -478,9 +478,9 @@ for side in [-1,1]:
  curve('Helmet rear graphic',[(side*.10,.87,-.40),(side*.137,.80,-.414),(side*.106,.69,-.43)],.006,helmetink,helmet)
  vent=ellipsoid('Crown intake',(side*.065,.932,-.33),(.009,.004,.022),black,helmet,seg=24,rings=12)
 # Crown marks are shrinkwrapped onto the compound curve, facing the T-camera.
-for label,pos,size in [('NEXUS',(0,.966,-.344),.037),('44',(0,.949,-.407),.036),('23',(0,.949,-.407),.036)]:
+for label,pos,size in [('NEXUS',(0,.966,-.344),.037),('44',(0,.949,-.407),.036),('63',(0,.949,-.407),.036)]:
  parent=helmet
- if label in ['44','23']:
+ if label in ['44','63']:
   parent=group('HelmetNumberA' if label=='44' else 'HelmetNumberB');parent.parent=helmet
  o=text(label,pos,size,helmetink,(-math.pi/2,math.pi,0),parent)
  bpy.context.view_layer.objects.active=o;o.select_set(True);bpy.ops.object.convert(target='MESH');o=bpy.context.object
@@ -695,7 +695,7 @@ for front in [True,False]:
     a=j*math.tau/8;rod('Cover fastener',(xx,.216*math.cos(a),.216*math.sin(a)),(xx+side*.003,.216*math.cos(a),.216*math.sin(a)),.002,metal,pivot,6)
 # Nose and front wing marks are projected on the final target meshes below.
 nose_labels=[]
-for label,z,size,parent in [('44',1.42,.49,numberA),('23',1.42,.49,numberB),
+for label,z,size,parent in [('44',1.42,.49,numberA),('63',1.42,.49,numberB),
                             ('NEXUS',.88,.185,decals),('VECTOR',1.78,.077,decals),
                             ('SOLAR',2.04,.060,decals),('JGP',2.46,.067,decals)]:
  nose_labels.append(text(label,(0,1,z),size,silver,(-math.pi/2,0,0),parent).name)

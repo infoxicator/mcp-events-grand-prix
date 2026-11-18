@@ -13,9 +13,23 @@ export function brakeCapacity(speed:number,mass:number,grip:number,lateralAccele
  const f=forces(speed,mass,grip,false,0,dirtyAir),lateral=mass*Math.abs(lateralAcceleration);
  return Math.min(VEHICLE.maxBrakeG*9.81,(Math.sqrt(Math.max(0,f.tyreForce**2-lateral**2))+f.drag+f.rolling)/mass);
 }
+// Each braking forecast tests dozens of corners with identical mass, grip and
+// wake. Bisection revisits exactly the same speed at a given tree node.
+const lateralLimits=new Float64Array(4096),epochs=new Float64Array(4096);
+let epoch=0,lastMass=0,lastGrip=0,lastWake=0;
 export function cornerLimit(curvature:number,mass:number,grip:number,dirtyAir=0){
  const k=Math.abs(curvature);if(k<.0004)return 105;
- let lo=5,hi=105;for(let i=0;i<12;i++){const v=(lo+hi)*.5,f=forces(v,mass,grip,false,0,dirtyAir);if(v*v*k<=Math.min(5.5*9.81,f.tyreForce/mass))lo=v;else hi=v;}return lo;
+ if(mass!==lastMass||grip!==lastGrip||dirtyAir!==lastWake){
+  epoch++;lastMass=mass;lastGrip=grip;lastWake=dirtyAir;
+ }
+ let lo=5,hi=105,node=1;
+ for(let i=0;i<12;i++){
+  const v=(lo+hi)*.5;
+  if(epochs[node]!==epoch){lateralLimits[node]=Math.min(5.5*9.81,forces(v,mass,grip,false,0,dirtyAir).tyreForce/mass);epochs[node]=epoch;}
+  const inside=v*v*k<=lateralLimits[node];node=node*2+Number(inside);
+  if(inside)lo=v;else hi=v;
+ }
+ return lo;
 }
 export function drivetrain(speed:number,mass:number,grip:number,deploy:boolean,drs:boolean,tow:number,dirtyAir:number,lateralAcceleration:number){
  const f=forces(speed,mass,grip,drs,tow,dirtyAir),power=VEHICLE.enginePower+(deploy?VEHICLE.ersPower:0);

@@ -2,7 +2,9 @@
 
 Two teams. Two speeds of intelligence. Monza by day. Las Vegas by night. Built for Ruben Casas ([@Infoxicador](https://x.com/Infoxicador)).
 
-**Vector** is calm and precise, in red and white. **Chaos** is aggressive, in teal and silver. Each has a slow race engineer and a fast driver. Choose **Jev vs Jev** or **Jev vs Luna**; in the latter, Vector uses Jev and Chaos uses GPT-6 Luna through OpenAI Decisions. The engineer chooses strategy; Jev chooses structured driving intent; a deterministic local controller handles acceleration, braking and line following. Every window watches the same authoritative race.
+Player A races Lewis Hamilton’s **#44 Ferrari**. Player B races George Russell’s **#63 Mercedes**. The other 20 drivers start alongside them and race for the same classification. Both circuits use the November 2026 Las Vegas entry list and a game-specific starting order. Open **Full grid** in the timing tower to see every driver. [Official F1 driver roster](https://www.formula1.com/en/drivers)
+
+Each player has a race engineer and a driver. Choose **Jev vs Jev** or **Jev vs Luna**. In the latter, Jev drives for Ferrari and GPT-6 Luna drives for Mercedes. The engineer chooses strategy, the driver chooses intent, and the local controller handles acceleration, braking and steering. Every window watches the same authoritative race.
 
 ## Run
 
@@ -14,7 +16,7 @@ npm ci
 npm run demo
 ```
 
-The launcher starts a local server on **http://127.0.0.1:5277** and opens three independent Chromium app windows side by side: **Vector | Broadcast | Chaos**. It installs Chromium if missing. Ctrl+C or closing a demo window cleans up its browsers and server. An occupied port is rejected; use `PORT=5278 npm run demo` for another instance. The demo defaults to `JEV_MOCK=1`, even when a local key exists.
+The launcher starts a local server on **http://127.0.0.1:5277** and opens three independent Chromium app windows side by side: **Ferrari | Broadcast | Mercedes**. It installs Chromium if missing. Ctrl+C or closing a demo window cleans up its browsers and server. An occupied port is rejected; use `PORT=5278 npm run demo` for another instance. The demo defaults to `JEV_MOCK=1`, even when a local key exists.
 
 Manual windows:
 
@@ -33,7 +35,7 @@ Keep both team seats open. Missing seats pause physics without losing laps, tyre
 
 Maximize the broadcast window to 1440×980 or 1920×1080. **Title sequence → Lights out** resets the default race and gives a clean recording start. The opening title is also available with `/?spectate&intro`. The engineer/radio panels, battle banner, timing tower and telemetry work with the sound muted.
 
-Use **44 Onboard**, **23 Onboard**, **Broadcast**, **Aerial** or **Car detail** to switch cameras. Onboard includes the physical halo, visible nose/wheels and a steering wheel dash with gear, speed, DRS and ERS. Broadcast rotates every 7–9 real seconds through stabilised Side, both teams’ T-cams and driver-eye onboards, Aerial and Chase. Each shot holds steadily; race events do not trigger extra cuts. Choose Side, Chase, Aerial or an onboard button to hold that view manually; Broadcast restarts the rotation. **Instant replay** replays the closest captured on-track lead change at 0.65×; **Back to live** restores the race. Results show classification, race and best-lap times, tyre stops and the winner. **Race again** resets the owner’s race.
+Use **44 Onboard**, **63 Onboard**, **Broadcast**, **Aerial** or **Car detail** to switch cameras. Onboard includes the physical halo, visible nose/wheels and a steering wheel dash with gear, speed, DRS and ERS. Broadcast rotates every 7–9 real seconds through stabilised Side, both teams’ T-cams and driver-eye onboards, Aerial and Chase. Each shot holds steadily; race events do not trigger extra cuts. Choose Side, Chase, Aerial or an onboard button to hold that view manually; Broadcast restarts the rotation. **Instant replay** replays the closest captured on-track lead change at 0.65×; **Back to live** restores the race. Results list all 22 drivers in finishing order with their race times. **Race again** resets the owner’s race.
 
 Three laps take about 80–100 wall seconds at the default **4× race clock**. `npm run demo:realistic` uses real simulation time (1×); up to 24× is supported for tests. Tyre degradation is deliberately accelerated so undercuts matter in three laps. Each pit-wall view has **Push / Manage / Box, box** radio overrides; they take priority for three wall seconds. Engineers otherwise update every 12 simulated seconds (3 wall seconds at 4×). Drivers request a decision every 200 ms, with one request in flight per team. A late response never advances or rewinds physics.
 
@@ -77,7 +79,7 @@ Authentication failures (401/403) disable further Jev requests until the server 
 npm run demo:luna
 ```
 
-This opens **Vector / Jev** against **Chaos / GPT-6 Luna**. It defaults to mock mode. The race owner can also choose **Jev vs Luna** from the **Drivers** selector above the feed; changing the matchup starts a fresh race and updates every connected view. Team seats and invitation credentials stay intact. `RACE_MATCHUP=jev-vs-luna` selects the initial mode for `npm run dev` or `npm start`.
+This opens **Ferrari / Jev** against **Mercedes / GPT-6 Luna**. It defaults to mock mode. The race owner can also choose **Jev vs Luna** from the **Drivers** selector above the feed; changing the matchup starts a fresh race and updates every connected view. Team seats and invitation credentials stay intact. `RACE_MATCHUP=jev-vs-luna` selects the initial mode for `npm run dev` or `npm start`.
 
 For real Jev and real Luna, put both keys in the ignored `.env.local`:
 
@@ -207,9 +209,9 @@ This is a recording demo, not a tyre or aerodynamic engineering simulator. Tyre 
 
 ## Blender cars, onboard and studio (realism v2)
 
-The approved [reference clip](https://x.com/reach_vb/status/2096271854193271229) informed proportions, colour placement, wheel covers and steering-wheel controls. Its sponsor logos and geometry were not copied. Vector uses #44 with red bodywork, broad white upper panels, a white-front/red-rear fin, carbon halo/wings and white generic tyre marks. Chaos uses #23 in teal/silver. Recessed wheel dishes have metallic centre nuts, red rings and yellow centres.
+The approved [reference clip](https://x.com/reach_vb/status/2096271854193271229) informed proportions, colour placement, wheel covers and steering-wheel controls. Its sponsor logos and geometry were not copied. Ferrari uses #44 with red bodywork, broad white upper panels, a white-front/red-rear fin, carbon halo/wings and white generic tyre marks. Mercedes uses #63 in silver and teal. The 20 opponents share a Blender exterior derived from the editable JGP car, with constructor colours and individual nose numbers. Recessed wheel dishes have metallic centre nuts, red rings and yellow centres.
 
-**44 Onboard / 23 Onboard** use a 70° vertical-FOV driver's-eye camera with a physical halo, mirrors, tyres, subtle speed-dependent vibration and the actual modelled butterfly steering wheel. **T-cam** moves above the airbox. The wheel has green/yellow/blue knurled rotaries (driver's left to right), labelled coloured buttons, a fictional wordmark, live gear/speed/ERS/DRS/delta and subdued RPM lights. The former CSS wheel overlay is hidden. Delta is last-lap minus best-lap, not a predictive mini-sector delta.
+**44 Onboard / 63 Onboard** use a 70° vertical-FOV driver's-eye camera with a physical halo, mirrors, tyres, subtle speed-dependent vibration and the actual modelled butterfly steering wheel. **T-cam** moves above the airbox. The wheel has green/yellow/blue knurled rotaries (driver's left to right), labelled coloured buttons, a fictional wordmark, live gear/speed/ERS/DRS/delta and subdued RPM lights. The former CSS wheel overlay is hidden. Delta is last-lap minus best-lap, not a predictive mini-sector delta.
 
 **Showroom** uses a neutral studio environment, dark floor, soft contact-occlusion texture, shadow maps and a blurred planar reflection. Colour / Clay / Wireframe operate on the same GLBs used during racing. Pause rotation and Back to race are available. Studio shots omit the helmet and leave the display black, matching the reference. Fixed compositions:
 
@@ -321,7 +323,7 @@ Monza crowns now contain layered bent branchlet fans with leaf cutouts, visible 
 
 ## Reference onboard rebuild
 
-The **44 T-cam / 23 T-cam** buttons select a helmet-visible broadcast view matched to the supplied onboard photograph. Direct links: `/?spectate&camera=tcam-a` and `/?spectate&camera=tcam-b`. The **44 Onboard / 23 Onboard** buttons retain the lower driver's-eye camera, with clearer tyre/mirror sightlines, live dash and rebuilt gloves. Team pit-wall defaults remain the lower camera.
+The **44 T-cam / 23 T-cam** buttons select a helmet-visible broadcast view matched to the supplied onboard photograph. Direct links: `/?spectate&camera=tcam-a` and `/?spectate&camera=tcam-b`. The **44 Onboard / 63 Onboard** buttons retain the lower driver's-eye camera, with clearer tyre/mirror sightlines, live dash and rebuilt gloves. Team pit-wall defaults remain the lower camera.
 
 Blender now exports a detailed yellow/ivory helmet, compact articulated gloves with knuckles and cuffs, and conforming fictional halo markings. The T-cam clears the airbox without hiding bodywork. Both cameras follow chassis pitch and heading with mild speed vibration. Geometry-based regressions check helmet visibility, dashboard/tyre framing, and glove clearance at centre and both steering locks.
 

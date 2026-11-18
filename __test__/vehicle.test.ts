@@ -19,7 +19,7 @@ it('smoothed track remains closed, within 1% length, with continuous headings an
  expect(length/LENGTH).toBeGreaterThan(.99);expect(pointAt(0)).toEqual(pointAt(LENGTH));
 });
 it('clean fresh-tyre flying lap stays on circuit with bounded tyre forces and finite steering',()=>{
- const s=createRace(2);s.phase='racing';const c=s.cars.a;s.cars.b.distance=-1000;c.instruction.pace='push';c.instruction.ers='deploy';c.intent.ers=true;c.intent.brakeAggression=.85;
+ const s=createRace(2);s.field=[];s.phase='racing';const c=s.cars.a;s.cars.b.distance=-1000;c.instruction.pace='push';c.instruction.ers='deploy';c.intent.ers=true;c.intent.brakeAggression=.85;
  let maxOffset=0,maxG=0;for(let i=0;i<210/DT&&c.lap<2;i++){c.wear=0;c.temperature=95;c.fuel=10;stepRace(s);maxOffset=Math.max(maxOffset,Math.abs(c.offset));maxG=Math.max(maxG,Math.abs(c.lateralG));expect(Number.isFinite(c.heading)).toBe(true);expect(Math.abs(c.steering)).toBeLessThanOrEqual(.42);}
  expect(c.lapTimes).toHaveLength(2);expect(c.lapTimes[1]).toBeGreaterThan(75);expect(c.lapTimes[1]).toBeLessThan(90);expect(maxOffset).toBeLessThan(5.9);expect(maxG).toBeLessThanOrEqual(5.50001);
 });

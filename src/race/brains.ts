@@ -1,8 +1,8 @@
 import { type Race,type Team,type Instruction,type DriverIntent } from './types';
-import {other} from './physics';
+import {nearbyRival} from './grid';
 import {getTrack} from './track';
 export function mockEngineer(s:Race,team:Team):Instruction{
- const c=s.cars[team],rival=s.cars[other(team)],gap=(rival.distance-c.distance)/Math.max(30,c.speed);
+ const c=s.cars[team],rival=nearbyRival(s,team),gap=(rival.distance-c.distance)/Math.max(30,c.speed);
  if(c.pit!=='none')return {...c.instruction,line:c.pit==='stopped'?'Hold. New tyres going on.':'Limiter on. We need a clean exit.'};
  const track=getTrack(s.circuit),isDrsZone=track.isDrsZone;
  const box=c.stops===0&&(team==='a'?c.distance>track.LENGTH*.725:c.distance>track.LENGTH*1.69||c.wear>.8);
@@ -14,7 +14,7 @@ export function mockEngineer(s:Race,team:Team):Instruction{
  return {pace:team==='b'?'push':'balanced',ers:c.ers<30?'harvest':'balanced',box:false,tyre:c.compound,tactic:'hold',line:team==='a'?'Good rhythm. Hit the apexes. Let the strategy come to us.':'You have clear air. Keep the pressure on.'};
 }
 export function mockDriver(s:Race,team:Team):DriverIntent{
- const c=s.cars[team],rival=s.cars[other(team)],instruction=c.instruction,gap=rival.distance-c.distance,attack=instruction.tactic==='attack'||gap>0&&gap<70,defend=instruction.tactic==='defend';
+ const c=s.cars[team],rival=nearbyRival(s,team),instruction=c.instruction,gap=rival.distance-c.distance,attack=instruction.tactic==='attack'||gap>0&&gap<70,defend=instruction.tactic==='defend';
  const side=attack?(rival.offset>=0?'left':'right'):defend?'right':'hold';
  return {offset:side==='left'?-3:side==='right'?3:team==='a'?-.6:.6,speedBias:instruction.pace==='manage'?-2:team==='b'?1.6:.3,brakeAggression:instruction.pace==='manage'?.2:team==='a'?.58:.9,side,ers:instruction.ers==='deploy'&&c.ers>8,drs:true,reply:instruction.box?(team==='a'?'Copy. Box this lap. Let’s make it count.':'Box? Fine. Give me the softs.'):(team==='a'?'Understood. Smooth inputs. On the delta.':attack?'Leave it to me. I’m sending it.':'There’s more in this car. Let me push.')};
 }
