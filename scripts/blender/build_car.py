@@ -176,7 +176,20 @@ for side in [-1,1]:
    if j and len(vv)>13:
     n=len(vv)-1;ff.append((n-14,n-13,n,n-1))
  mesh('Rising diffuser tunnel roof',vv,ff,carbon,floor)
-for x in [-.6,-.4,-.2,0,.2,.4,.6]:panel('Diffuser strake',[(x,.07,-2.72),(x,.33,-2.72),(x,.14,-2.05),(x,.07,-1.9)],.012,carbon)
+for x in [-.6,-.4,-.2,0,.2,.4,.6]:
+ # The fences follow the ramp and splay toward the rear tyre wake. Each
+ # trailing edge has a narrow return, visible against the floor in rear view.
+ vv=[];ff=[]
+ for j,(z,low,high,flare) in enumerate([(-1.88,.080,.105,0),(-2.08,.071,.152,.006),
+    (-2.32,.066,.204,.016),(-2.56,.071,.265,.034),(-2.723,.093,.292,.053)]):
+  centre=x*(1+flare);h=high-.026*abs(x)
+  for dx,y in [(-.005,low+.006),(-.004,h),(.004,h+.002),(.006,low+.010),(.002,low),(-.002,low)]:
+   vv.append((centre+dx,y,z))
+  if j:
+   for k in range(6):
+    a=(j-1)*6+k;b=(j-1)*6+(k+1)%6;ff.append((a,b,b+6,a+6))
+ ff.extend([tuple(range(5,-1,-1)),tuple(range(24,30))]);mesh('Formed diffuser fence',vv,ff,carbon,floor)
+
 # Raised tapering nose; no box-shaped body.
 # Full survival cell from the rear bulkhead to the deformable nose cone.
 # The square upper shoulders flow into the radiator decks and no exposed
@@ -394,8 +407,38 @@ for s in [-1,1]:
  curve('Swan neck rear support',[(s*.14,.3,-2.07),(s*.14,.61,-2.16),(s*.14,.91,-2.3),(s*.14,.91,-2.45),(s*.14,.81,-2.48)],.018)
  text('V-PULSE',(s*.803,.77,-2.41),.067,silver,(0,s*math.pi/2,0));text('PERIGEE',(s*.803,.68,-2.4),.043,silver,(0,s*math.pi/2,0))
 box('DRS hydraulic pod',(0,.885,-2.3),(.065,.075,.19),carbon,r=.025);rod('DRS ram',(0,.88,-2.32),(0,.89,-2.46),.009,metal)
-rod('Titanium exhaust',(0,.41,-2.25),(0,.41,-2.67),.052,metal,vertices=32);rod('Exhaust opening',(0,.41,-2.665),(0,.41,-2.675),.044,black,vertices=32)
-box('Rain light',(0,.2,-2.72),(.085,.06,.015),red,r=.009)
+# Rear impact attenuator supports the tail lamp between the two tunnel exits.
+loft('Rear carbon impact casing',[[-2.705,0,.052,.167,.285],[-2.61,0,.080,.161,.307],
+ [-2.42,0,.097,.145,.345],[-2.20,0,.135,.132,.358]],carbon,n=16,power=.43)
+heat=mat('OxidisedTitanium','785947',.40,.74)
+weld=mat('HeatAffectedAlloy','585466',.33,.78)
+lining=mat('ExhaustLiner','322d2b',.74,.29)
+def tail_rings(name,rows,material,segments=36):
+ vv=[];ff=[]
+ for j,(z,y,rx,ry) in enumerate(rows):
+  for k in range(segments):
+   a=math.tau*k/segments;vv.append((rx*math.cos(a),y+ry*math.sin(a),z))
+  if j:
+   for k in range(segments):
+    a=(j-1)*segments+k;b=(j-1)*segments+(k+1)%segments;ff.append((a,b,b+segments,a+segments))
+ return mesh(name,vv,ff,material)
+tail_rings('Formed titanium tailpipe',[(-2.19,.415,.069,.053),(-2.31,.426,.064,.051),(-2.42,.434,.059,.052),
+ (-2.51,.441,.059,.053),(-2.59,.446,.062,.054),(-2.677,.448,.066,.056)],heat)
+tail_rings('Rolled exhaust lip',[(-2.663,.448,.065,.056),(-2.677,.448,.067,.057),(-2.683,.448,.066,.056),(-2.683,.448,.060,.050),(-2.671,.448,.059,.050)],metal)
+tail_rings('Recessed exhaust throat',[(-2.672,.448,.059,.050),(-2.60,.446,.056,.049),(-2.50,.437,.051,.046),(-2.40,.428,.043,.038)],lining)
+rod('Deep exhaust throat',(0,.428,-2.398),(0,.428,-2.403),.046,black,vertices=24)
+for z,cy,rx in [(-2.47,.438,.059),(-2.575,.445,.061)]:
+ tail_rings('Circumferential weld',[(z+.005,cy,rx,.053),(z,cy,rx+.0027,.055),(z-.005,cy,rx,.053)],weld,32)
+for side in [-1,1]:
+ rod('Tailpipe stay',(side*.051,.41,-2.49),(side*.088,.313,-2.44),.006,metal,vertices=7)
+ rod('Rear casing fastener',(side*.061,.291,-2.606),(side*.061,.295,-2.613),.010,metal,vertices=6)
+box('Tail lamp seal',(0,.231,-2.705),(.107,.113,.024),black,r=.007)
+box('Recessed tail lens',(0,.231,-2.720),(.090,.091,.009),mat('TailLens','46080a',.27),r=.005)
+lens=mat('TailOptic','be1d13',.24,.08)
+for row in range(4):
+ for col in range(3):
+  x=(col-1)*.027;y=.231+(row-1.5)*.021
+  rod('Individual tail optic',(x,y,-2.724),(x,y,-2.729),.0081,lens,vertices=10)
 # Seated driver, modelled in metres. The camera sees the crown from behind;
 # the helmet is a shaped shell with an actual curved visor, not a white ball.
 helmetpaint=mat('HelmetPaint','e9ed24',.31,.07)
