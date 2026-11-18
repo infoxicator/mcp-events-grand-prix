@@ -13,7 +13,7 @@ import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {createCar,type Finish} from './car-model';
 import {createShowroom} from './showroom';
 import {BroadcastDirector} from './broadcast-camera';
-import {onboardLens} from './onboard-camera';
+import {DriverHead,onboardLens} from './onboard-camera';
 import {TrackingCameraRig,AERIAL_CAMERA,SIDE_CAMERA,CHASE_CAMERA} from './tracking-camera';
 
 export type CameraMode='broadcast'|'side'|'cockpit-a'|'cockpit-b'|'helicopter'|'flythrough'|'detail'|'sphere'|'strip'|'showroom'|'tcam-a'|'tcam-b'|'chase'|'pits';
@@ -48,22 +48,23 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const sparks=night?createSparks(scene,track,circuit.heightAt):null;
  // Warm architectural spill is fixed to the two resort facades, independent of the car.
  if(night)for(const [lon,lat] of [[-115.1757,36.1127],[-115.1693,36.1212]]){const q=track.project(lon,lat);const light=new T.PointLight('#ffc584',6500,230,2);light.position.set(q.x,24,q.z);scene.add(light);}
- const lights=night?Array.from({length:4},()=>{const l=new T.PointLight('#d9eaff',420,70,2);scene.add(l);return l;}):[];
- const composer=night?new EffectComposer(renderer):null;let bloom:UnrealBloomPass|null=null;if(composer){composer.addPass(new RenderPass(scene,camera));bloom=new UnrealBloomPass(new T.Vector2(640,360),.20,.4,1.5);composer.addPass(bloom);composer.addPass(new OutputPass());}
- const cars={a:createCar('a'),b:createCar('b')};scene.add(cars.a.root,cars.b.root);
+ const floodlightCandela=1050;
+ const lights=night?Array.from({length:4},()=>{const l=new T.SpotLight('#d9eaff',floodlightCandela,76,1.22,.76,2);scene.add(l,l.target);return l;}):[];
+ const composer=night?new EffectComposer(renderer):null;let bloom:UnrealBloomPass|null=null;if(composer){composer.addPass(new RenderPass(scene,camera));bloom=new UnrealBloomPass(new T.Vector2(640,360),.11,.18,1.65);composer.addPass(bloom);composer.addPass(new OutputPass());}
+ const cars={a:createCar('a',track),b:createCar('b',track)};scene.add(cars.a.root,cars.b.root);
  const nightProbe=night?new T.WebGLCubeRenderTarget(64,{generateMipmaps:true,minFilter:T.LinearMipmapLinearFilter}):null,probeCamera=nightProbe?new T.CubeCamera(.5,1800,nightProbe):null;let probeDistance=-Infinity;
  const rearTarget=new T.WebGLRenderTarget(256,96),rearCamera=new T.PerspectiveCamera(58,256/96,.1,500);rearTarget.texture.wrapS=T.RepeatWrapping;rearTarget.texture.repeat.x=-1;let mirrorFrame=0;
  const studio=createShowroom(renderer);let finish:Finish='colour',turntable=true;const params=new URLSearchParams(location.search);
  const loading=document.createElement('div');loading.className='model-loading';loading.textContent='LOADING JGP–26';container.append(loading);Promise.all([cars.a.loaded,cars.b.loaded,circuit.loaded]).then(()=>{if(!disposed){loading.textContent=cars.a.error||cars.b.error||circuit.error?'3D ASSET UNAVAILABLE':'';loading.hidden=cars.a.ready&&cars.b.ready&&circuit.ready;}});
  let selectedMode:CameraMode='broadcast',activeMode:CameraMode='side',cameraLabel='SIDE / STABILISED';
- const director=new BroadcastDirector();
+ const director=new BroadcastDirector(),driverHead=new DriverHead(),mountRotation=new T.Quaternion();
  const aerial=new TrackingCameraRig(AERIAL_CAMERA),side=new TrackingCameraRig(SIDE_CAMERA),chase=new TrackingCameraRig(CHASE_CAMERA),target=new T.Vector3(),desired=new T.Vector3();
  const carPosition=(c:RenderCar)=>{const q=pointAt(c.distance,c.offset);return new T.Vector3(q.x,circuit.heightAt(c.distance),q.z);};
  function render(race:RenderRace,now:number){
   const mode=selectedMode==='broadcast'?director.update(now):selectedMode;
-  if(mode!==activeMode){aerial.reset();side.reset();chase.reset();activeMode=mode;}
+  if(mode!==activeMode){aerial.reset();side.reset();chase.reset();driverHead.reset();activeMode=mode;}
   renderer.info.reset();container.classList.toggle('visor-edge',params.has('visor')&&mode.startsWith('cockpit'));
-  for(const id of ['a','b'] as const){const c=race.cars[id],p=carPosition(c),t=tangentAt(c.distance);cars[id].root.position.copy(p);cars[id].root.position.y=p.y+.035;cars[id].root.rotation.set(Math.atan2(circuit.heightAt(c.distance-3)-circuit.heightAt(c.distance+3),6),Math.atan2(t.x,t.z)+(c.heading??0),0,'YXZ');cars[id].update(c,mode===`cockpit-${id}`,mode==='showroom');}
+  for(const id of ['a','b'] as const){const c=race.cars[id],p=carPosition(c),t=tangentAt(c.distance);cars[id].root.position.copy(p);cars[id].root.position.y=p.y+.026;cars[id].root.rotation.set(Math.atan2(circuit.heightAt(c.distance-3)-circuit.heightAt(c.distance+3),6),Math.atan2(t.x,t.z)+(c.heading??0),0,'YXZ');cars[id].update(c,mode===`cockpit-${id}`,mode==='showroom',now);}
   const onboard=mode.startsWith('cockpit')||mode.startsWith('tcam');
   const leader=race.cars.a.distance>=race.cars.b.distance?'a':'b';
   const focus=onboard?(mode.endsWith('-b')?'b':'a'):mode==='detail'?'a':leader;
@@ -77,21 +78,41 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    sun.shadow.normalBias=extent===8?.0009:extent===22?.003:.025;
    sun.shadow.radius=extent===8?2:1;
   }
-  circuit.update(race.time,p);sparks?.update(race);lights.forEach((light,i)=>{const d=Math.floor(c.distance/45)*45+(i<2?0:45),q=pointAt(d,i%2?7.5:-7.5);light.position.set(q.x,circuit.heightAt(d)+12.2,q.z);});
+  circuit.update(race.time,p);sparks?.update(race);
+  if(night){
+   // The exported fixtures are 45 m apart with a shorter span at the timing line.
+   const station=track.wrap(c.distance),row=Math.floor(station/45)*45,next=Math.min(row+45,track.LENGTH);
+   const travel=(station-row)/(next-row);
+   lights.forEach((light,i)=>{
+    const d=i<2?row:track.wrap(next),side=i%2?1:-1,q=pointAt(d,side*7.5),aim=pointAt(d,side*1.9);
+    const h=circuit.heightAt(d);
+    light.position.set(q.x,h+12.47,q.z);light.target.position.set(aim.x,h,aim.z);
+    light.intensity=floodlightCandela*(1-T.MathUtils.smoothstep(i<2?travel:1-travel,.59,1));
+   });
+  }
   sun.position.set(p.x-80,p.y+120,p.z-50);sun.target.position.copy(p);
   if(mode==='showroom'){
-   studio.scene.add(cars.a.root);cars.a.root.position.set(0,0,0);cars.a.root.rotation.set(0,0,0);cars.a.update({...race.cars.a,steering:0,drs:false},true,true);
+   studio.scene.add(cars.a.root);cars.a.root.position.set(0,0,0);cars.a.root.rotation.set(0,0,0);cars.a.update({...race.cars.a,steering:0,drs:false},true,true,now);
    const angle=params.get('angle')??'front';const pos=angle==='halo'?new T.Vector3(-1.0,1.08,-1.1):angle==='airbox'?new T.Vector3(-.6,1.2,.65):angle==='sidepod'?new T.Vector3(-1.8,.85,1.9):angle==='rear'?new T.Vector3(-2.7,3.4,-6.6):angle==='side'?new T.Vector3(-8.6,1.2,0):angle==='steering'?new T.Vector3(-.06,.83,-.34):angle==='wheel'?new T.Vector3(-2.2,.85,2.75):new T.Vector3(-4.85,2.75,4.95);
    if(turntable&&!params.has('angle'))pos.applyAxisAngle(new T.Vector3(0,1,0),elapsed*.10);camera.position.copy(pos);camera.lookAt(angle==='halo'?new T.Vector3(-.25,.70,-.48):angle==='airbox'?new T.Vector3(0,.94,-.6):angle==='sidepod'?new T.Vector3(-.55,.54,.35):angle==='steering'?new T.Vector3(0,.57,.16):angle==='wheel'?new T.Vector3(-.83,.36,1.55):new T.Vector3(0,.42,angle==='front'?.43:0));camera.fov=angle==='steering'?50:angle==='wheel'?32:['side','front','rear'].includes(angle)?T.MathUtils.clamp(2*T.MathUtils.radToDeg(Math.atan(Math.tan(Math.PI/10)*(4/3)/camera.aspect)),23,66):36;cameraLabel=`JGP–26 / STUDIO / ${finish.toUpperCase()}`;
   }else if(mode.startsWith('cockpit')||mode.startsWith('tcam')){
    const id=mode.endsWith('-a')?'a':'b',v=race.cars[id];
-   const tc=mode.startsWith('tcam'),{height,back,pitch,fov,offset}=onboardLens(tc);const shake=Math.min(v.speed/85,1)*.0012;
-   // Both are attached to the chassis: forward-mounted TV lens clears the airbox;
-   // the lower eye camera keeps the wheel, mirrors and centre halo pillar in frame.
-   const mount=cars[id].root;mount.updateMatrixWorld(true);
-   camera.position.copy(mount.localToWorld(new T.Vector3(offset+Math.cos(elapsed*73)*shake,height+Math.sin(elapsed*91)*shake,-back)));
-   target.copy(mount.localToWorld(new T.Vector3(0,height-Math.tan(pitch*Math.PI/180)*12,12-back)));
-   camera.lookAt(target);camera.rotateZ(Math.sin(elapsed*43)*shake*.18);camera.fov=fov;cameraLabel=`${tc?'T-CAM':'ONBOARD'} / ${id==='a'?'VECTOR':'CHAOS'}`;
+   const tc=mode.startsWith('tcam'),{height,back,pitch,fov,offset}=onboardLens(tc);
+   const mount=cars[id].chassis;
+   mount.updateWorldMatrix(true,false);
+   // Read the line the driver will see in half a second, in the car's frame.
+   const here=pointAt(v.distance),ahead=pointAt(v.distance+Math.max(7,v.speed*.55));
+   const tangent=tangentAt(v.distance),dx=ahead.x-here.x,dz=ahead.z-here.z;
+   const roadAngle=Math.atan2(dx*tangent.z-dz*tangent.x,dx*tangent.x+dz*tangent.z)-(v.heading??0);
+   if(!tc)driverHead.update(now,roadAngle,v.steering??0,v.speed,v.acceleration??0,v.lateralG??0);
+   const eyeX=offset+(tc?0:driverHead.lateral),eyeZ=-back+(tc?0:driverHead.forward);
+   const yaw=tc?0:driverHead.yaw;
+   camera.position.copy(mount.localToWorld(desired.set(eyeX,height,eyeZ)));
+   mount.localToWorld(target.set(eyeX+12*Math.sin(yaw),height-12*Math.tan(T.MathUtils.degToRad(pitch)),eyeZ+12*Math.cos(yaw)));
+   camera.up.set(0,1,0).applyQuaternion(mount.getWorldQuaternion(mountRotation));camera.lookAt(target);
+   camera.up.set(0,1,0);
+   if(!tc)camera.rotateZ(driverHead.roll);
+   camera.fov=fov;cameraLabel=`${tc?'T-CAM':'ONBOARD'} / ${id==='a'?'VECTOR':'CHAOS'}`;
   }else if(mode==='sphere'&&vegas){const sp=vegas.spherePosition;camera.position.set(sp.x+190,88,sp.z+200);camera.lookAt(sp.x,42,sp.z);camera.fov=52;cameraLabel='SPHERE / NIGHT SESSION';
   }else if(mode==='strip'&&vegas){const q=track.project(-115.1719,36.1093),target=track.project(-115.1730,36.1145);camera.position.set(q.x,117,q.z);camera.lookAt(target.x,30,target.z);camera.fov=59;cameraLabel='THE STRIP / NIGHT AERIAL';
   }else if(mode==='pits'){

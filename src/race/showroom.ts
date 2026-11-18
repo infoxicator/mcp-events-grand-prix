@@ -7,13 +7,13 @@ export function createShowroom(renderer:T.WebGLRenderer){
  const scene=new T.Scene();scene.background=new T.Color('#101318');scene.fog=new T.Fog('#101318',18,65);
  const pmrem=new T.PMREMGenerator(renderer),room=new T.Scene();room.background=new T.Color('#101317');
  // Softboxes are represented in the reflection environment as well as direct lighting.
- for(const [x,y,z,w,h,power] of [[-2.3,5.6,1,2.6,7,4.2],[-3.4,2.3,.9,.64,6.8,6.2],[4,3,-2,1.25,6,2.7],[-1,2,-5,3,.65,4],[2.8,3.2,3,.38,6,4.1]]){
-  const panel=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({color:new T.Color(power,power,power),side:T.DoubleSide}));panel.position.set(x,y,z);panel.lookAt(0,.3,0);room.add(panel);
+ for(const [x,y,z,w,h,power] of [[-2.3,5.6,1,2.6,7,4.2],[-2.9,2.0,.6,.42,6.1,8.4],[3.4,2.6,-1.9,.78,5.9,5.1],[-1,2,-5,3,.65,4],[2.8,3.2,3,.38,6,4.1]]){
+  const panel=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({color:new T.Color(power,power,power),side:T.DoubleSide}));panel.position.set(x,y,z);panel.up.set(0,0,1);panel.lookAt(0,.3,0);room.add(panel);
  }
- const env=pmrem.fromScene(room,.025);room.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();(o.material as T.Material).dispose();}});pmrem.dispose();scene.environment=env.texture;scene.environmentIntensity=.82;
+ const env=pmrem.fromScene(room,.025);room.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();(o.material as T.Material).dispose();}});pmrem.dispose();scene.environment=env.texture;scene.environmentIntensity=.94;
  RectAreaLightUniformsLib.init();const overhead=new T.RectAreaLight('#fff8ee',2.8,2.1,6.7);overhead.position.set(-1,5,0);overhead.lookAt(0,0,0);scene.add(overhead);
- const key=new T.DirectionalLight('#fff4ea',1.18);key.position.set(-3,7,4);key.castShadow=true;key.shadow.mapSize.set(2048,2048);Object.assign(key.shadow.camera,{left:-4,right:4,top:4,bottom:-4,near:.1,far:20});key.shadow.normalBias=.002;key.shadow.bias=-.0001;key.shadow.radius=4;scene.add(key,new T.HemisphereLight('#e1edff','#292c33',.69));
- const sideFill=new T.RectAreaLight('#f6f3ed',2.5,5.8,2.9);sideFill.position.set(-4,2.1,1);sideFill.lookAt(0,.4,0);scene.add(sideFill);
+ const key=new T.DirectionalLight('#fff4ea',.94);key.position.set(-3,7,4);key.castShadow=true;key.shadow.mapSize.set(2048,2048);Object.assign(key.shadow.camera,{left:-4,right:4,top:4,bottom:-4,near:.1,far:20});key.shadow.normalBias=.002;key.shadow.bias=-.0001;key.shadow.radius=4;scene.add(key,new T.HemisphereLight('#e1edff','#292c33',.50));
+ const sideFill=new T.RectAreaLight('#f6f3ed',1.95,5.8,1.45);sideFill.position.set(-4,2.1,1);sideFill.lookAt(0,.4,0);scene.add(sideFill);
  const fill=new T.RectAreaLight('#d8e1ef',1.6,2.3,5.5);fill.position.set(5,3,-4);fill.lookAt(0,.4,0);scene.add(fill);
  const floor=new T.Mesh(new T.PlaneGeometry(150,150),new T.MeshStandardMaterial({color:'#10151d',roughness:.79,metalness:.03,envMapIntensity:.025}));floor.rotation.x=-Math.PI/2;floor.position.y=-.012;floor.receiveShadow=true;scene.add(floor);
  const mirror=new Reflector(new T.PlaneGeometry(150,150),{textureWidth:768,textureHeight:768,color:0x151b23,clipBias:.001});mirror.rotation.x=-Math.PI/2;mirror.position.y=-.01;

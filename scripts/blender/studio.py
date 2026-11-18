@@ -41,8 +41,8 @@ def save_studio(path):
     camera.data.lens=44
     scene.camera=camera
     light('Overhead silk',(-1.6,5.2,1.0),(3.7,6.6),600,(1,.96,.91))
-    light('Cool edge',(3.3,2.2,-2.4),(5.4,1.15),430,(.80,.88,1.0))
-    light('Front strip',(-3.7,1.8,3.8),(.60,3.4),225,(1,.98,.94))
+    light('Cool edge',(3.3,2.2,-2.4),(5.4,.78),470,(.80,.88,1.0))
+    light('Front strip',(-3.4,1.85,1.9),(5.1,.62),245,(1,.98,.94))
     light('Rear softbox',(-1.2,2.4,-4.2),(2.6,3.4),320,(.89,.93,1))
     floor_mesh=bpy.data.meshes.new('Studio floor')
     floor_mesh.from_pydata([(-120,-.001,-120),(-120,-.001,120),(120,-.001,120),(120,-.001,-120)],[],[(0,1,2,3)])
@@ -55,7 +55,7 @@ def save_studio(path):
     shader.inputs['Roughness'].default_value=.52
     shader.inputs['Specular IOR Level'].default_value=.13
     floor.data.materials.append(mat)
-    for name,coat,rough in [('Livery',.53,.26),('Ivory',.37,.30),('HelmetPaint',.65,.22)]:
+    for name,coat,rough in [('Livery',.62,.18),('Ivory',.37,.30),('HelmetPaint',.65,.22)]:
         shader=bpy.data.materials[name].node_tree.nodes.get('Principled BSDF')
         shader.inputs['Coat Weight'].default_value=coat
         shader.inputs['Coat Roughness'].default_value=rough
@@ -64,7 +64,7 @@ def save_studio(path):
     # Real-world surface scales avoid the oversized bumps of a display model.
     for name,scale,strength,distance,rough in [
         ('Rubber',1350,.18,.00015,.83),('Carbon',1600,.10,.00010,.36),
-        ('AeroLaminate',1900,.08,.00008,.47),('GloveFabric',840,.19,.00021,.94),
+        ('AeroLaminate',1900,.08,.00008,.41),('GloveFabric',840,.19,.00021,.94),
         ('GloveSuede',1300,.16,.00014,.96),('Sleeve',800,.16,.00017,.92),
         ('Livery',2100,.045,.000025,.31),('Ivory',2100,.045,.000025,.34)]:
         material=bpy.data.materials[name]
