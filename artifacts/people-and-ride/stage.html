@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><style>*{margin:0}#v{width:100vw;height:100vh}canvas{display:block}.model-loading{display:none}</style><div id="v"></div><script type="module">
+import * as T from 'three';
+import {getTrack} from '/src/race/track.ts';
+import {createScene} from '/src/race/scene.ts';
+import {circuitHeight} from '/src/race/elevation.ts';
+import {createRace} from '/src/race/physics.ts';
+const q=new URLSearchParams(location.search),id=q.get('circuit')||'monza',track=getTrack(id),r=createRace(3,id),L=track.LENGTH;
+const pt=(s,x,y)=>{const p=track.pointAt(s,x);return new T.Vector3(p.x,circuitHeight(id,s)+y,p.z)};
+const d=id==='monza'?2556:5052,sign=track.signedCurvatureAt(d)>0?-1:1;
+const off=sign*(id==='monza'?34.25:10.4),st=d+8,garage=L-184,stand=L-160;
+const views={
+ finish:[pt(-4.4,-11.9,2.85),pt(-2,-14.4,2.44),49,-2],
+ marshal:[pt(st-2.35,off-sign*2.02,1.83),pt(st-.16,off,1.59),48,st],
+ crowd:[pt(stand-3,32,4.3),pt(stand,37.3,3.21),49,stand],
+ crew:[pt(garage-2,-21,1.54),pt(garage,-26.4,1.29),38,garage],
+ road:[pt(d-28,2.5,.92),pt(d-17,2.4,.04),55,d-18],
+ rear:[new T.Vector3(-.88,.69,-3.83),new T.Vector3(0,.40,-2.42),41,d],
+ ride:null,driver:null,normal:null};
+const v=views[q.get('view')],mode=q.get('view')==='rear'?'showroom':q.get('view')==='ride'?'detail':q.get('view')==='driver'?'tcam-a':'chase';
+const orig=T.PerspectiveCamera.prototype.updateProjectionMatrix;
+T.PerspectiveCamera.prototype.updateProjectionMatrix=function(){if(v&&this.far===5000&&this.near===.06){this.position.copy(v[0]);this.up.set(0,1,0);this.lookAt(v[1]);this.fov=v[2];}return orig.call(this)};
+const scene=createScene(document.querySelector('#v'),track);scene.setMode(mode);r.phase=q.get('view')==='finish'?'finished':'racing';
+window.draw=(t=0,s=v?.[3]??d,offset=0)=>{r.time=t;r.cars.a.distance=s;r.cars.b.distance=s-15;
+ for(const c of Object.values(r.cars))Object.assign(c,{speed:45,offset,acceleration:-6,lateralG:1.2,gear:4,rpm:11000});
+ scene.render(r,t*1000+5000);return scene.info;};
+function init(){const x=window.draw();if(x.modelsReady)window.ready=true;else if(x.modelError)throw Error(x.modelError);else requestAnimationFrame(init)}init();
+</script>
