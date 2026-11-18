@@ -15,7 +15,7 @@ export function tracksideMotion(){
    Object.assign(shader.uniforms,{actorTime:clock,actorCarA:carA,actorCarB:carB,greenLaps:green,finishSignal:finish});
    const deform=seated?`
     float torso=smoothstep(.19,.55,p.y);
-    yawPart(p,n,vec3(0.,.52,.018),nod*.31*torso+headTurn*smoothstep(.58,.66,p.y));
+    yawPart(p,n,vec3(0.,.52,.018),nod*.31*torso+headTurn*uv.y);
     lean(p,n,vec3(0.,.20,0.),nod*torso);
    `:`
     float group=floor(uv.x*3.+.5);
@@ -55,6 +55,25 @@ export function tracksideMotion(){
     }`).replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
      vec3 actorPosition=position;tracksidePose(actorPosition,objectNormal);`)
     .replace('#include <begin_vertex>','vec3 transformed=actorPosition;');
+   if(seated)shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+    #if defined(USE_INSTANCING) && defined(USE_COLOR)
+     vec2 seat=(modelMatrix*instanceMatrix[3]).xz;
+     float hue=fract(sin(dot(seat,vec2(.861,1.97)))*4375.8);
+     float tone=fract(sin(dot(seat,vec2(.42,2.41)))*3251.);
+     float region=floor(uv.x*5.+.5);
+     if(region<.5){
+      vec3 kit=hue<.22?vec3(.60,.032,.025):hue<.39?vec3(.038,.13,.25):hue<.55?vec3(.76,.68,.56):hue<.68?vec3(.10,.22,.18):hue<.81?vec3(.085,.08,.11):hue<.92?vec3(.50,.21,.08):vec3(.30,.38,.48);
+      vColor.rgb*=kit*(.74+.44*tone);
+     }else if(region<1.5){
+      #ifdef USE_MAP
+       float portrait=floor(tone*4.);
+       vMapUv+=vec2(.5*mod(portrait,2.),(256./544.)*floor(portrait*.5));
+      #endif
+      vColor.rgb*=mix(vec3(.84,.79,.75),vec3(1.16,1.11,1.05),tone);
+     }
+     else if(region<2.5)vColor.rgb*=mix(vec3(.22,.18,.16),vec3(2.7,2.3,1.85),hue);
+     else if(region>3.5)vColor.rgb*=mix(vec3(.18,.22,.3),vec3(.66,.84,1.),hue);
+    #endif`);
   };
   material.customProgramCacheKey=()=>'trackside-'+name;
  }

@@ -7,7 +7,8 @@ from pathlib import Path
 from mathutils import Vector
 sys.path.insert(0,str(Path(__file__).parent))
 from pack_glb import pack
-from track_people import staff_mesh
+from grandstand_people import spectator_mesh
+from track_people import staff_mesh,staff_material
 ROOT=Path(__file__).resolve().parents[2];OUT=ROOT/'src/race/assets/circuits'
 bpy.context.preferences.filepaths.save_version=0
 ROUND=int(sys.argv[sys.argv.index('--')+1]) if '--' in sys.argv else 1
@@ -44,6 +45,8 @@ def build(cid):
  mat('Asphalt',(.19,.20,.21),.52 if night else .91,tex='asphalt-color');mat('Grass',(.23,.26,.15),tex='grass-color');mat('Gravel',(.62,.58,.49),tex='gravel');mat('White',(.76,.75,.68));mat('Red',(.46,.027,.022));mat('Green',(.10,.24,.15));mat('Steel',(.38,.42,.45),.48,.65);mat('Concrete',(.47,.48,.45),.86,tex='formed-concrete');mat('Dark',(.022,.027,.032));mat('Glass',(.10,.16,.20),.22,.45);mat('Foliage',(.3,.4,.2),tex='foliage',alpha=True);mat('Fence',(.5,.5,.5),tex='fence',alpha=True);mat('Crowd',(.5,.5,.5),tex='crowd',alpha=True);mat('Sign',(.6,.6,.6),tex='sign',emission=.25 if night else 0);mat('Windows',(.5,.4,.3),tex='hospitality-glass',emission=.70);mat('Gold',(.85,.52,.19),.5,emission=2);mat('Ice',(.6,.8,1),.5,emission=4);mat('Pink',(.8,.04,.3),emission=2);mat('Rubber',(.1,.1,.1),tex='rubber',alpha=True);mat('Water',(.015,.045,.06),.18,.5);mat('Trunk',(.14,.10,.07));mat('Sphere',(.1,.5,.6),tex='desert-screen',emission=1)
  for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex='hornbeam',alpha=True)
  for i,c in enumerate([(.38,.025,.025),(.04,.08,.16),(.62,.60,.55),(.12,.15,.16)]):mat('Spectator'+str(i),c,.95)
+ atlas=bpy.data.images.load(str(ROOT/'scripts/blender/textures/crew-atlas.jpg'),check_existing=True)
+ staff_material(mats['Spectator0'],bpy.data.images.load(str(ROOT/'scripts/blender/textures/spectators.jpg'),check_existing=True),'Wardrobe')
  mat('WorkshopBack',(.8,.8,.8),.85,tex='garage-backplate',emission=.38 if night else .12)
  mat('GarageInterior',(.105,.103,.097),.92)
  mat('GarageFloor',(.18,.18,.17),.69)
@@ -60,9 +63,7 @@ def build(cid):
  mat('SeatedSkin',(.43,.28,.19),.9);mat('SeatedDark',(.022,.027,.032))
  for name in ('MarshalUniform','FinishUniform','PitCrewUniform'):
   mat(name,(1,1,1),.85)
-  fabric=mats[name];vertex_colour=fabric.node_tree.nodes.new('ShaderNodeVertexColor')
-  vertex_colour.layer_name='Uniform and equipment'
-  fabric.node_tree.links.new(vertex_colour.outputs['Color'],fabric.node_tree.nodes.get('Principled BSDF').inputs['Base Color'])
+  staff_material(mats[name],atlas)
  # Soft contact under the two soles remains visible beneath the garage canopy.
  mat('BootContact',(.012,.011,.01),1)
  contact=mats['BootContact'];nodes=contact.node_tree.nodes
@@ -189,46 +190,13 @@ def build(cid):
   cs=math.cos(yaw);sn=math.sin(yaw)
   face([(x+xx*cs+zz*sn,y+.003,z-xx*sn+zz*cs) for xx,zz in [(-.38,-.41),(.38,-.41),(.38,.41),(-.38,.41)]],'BootContact')
  def spectator(p,h,yaw,kit,pose):
-  # Each seated silhouette faces the racing surface. Several welded lofts per
-  # material make a shared person, including the negative space between limbs.
   nonlocal instance_triangles
-  for part,m in [('shirt',kit),('face','SeatedSkin'),('legs','SeatedDark')]:
-   key=('seated',m,pose)
-   mesh=prototypes.get(key)
-   if mesh is None:
-    vv=[];ff=[]
-    def section(rows):
-     start=len(vv);n=8
-     for x,y,z,rx,rz in rows:
-      for k in range(n):
-       a=math.tau*k/n;vv.append((x+rx*math.cos(a),-(z+rz*math.sin(a)),y))
-     for j in range(len(rows)-1):
-      for k in range(n):
-       a=start+j*n+k;b=start+j*n+(k+1)%n;ff.append((a,b,b+n,a+n))
-     ff.append(tuple(start+(len(rows)-1)*n+k for k in range(n)))
-    if part=='shirt':
-     section([(0,.16,0,.15,.11),(0,.28,-.011,.16,.12),(0,.49,.014,.205,.125),(0,.56,.017,.174,.095),(0,.585,.017,.071,.070)])
-     for sign in [-1,1]:
-      reach=.1 if pose==1 and sign==1 else .175
-      section([(sign*.145,.52,.01,.070,.07),(sign*.205,.42,.042,.063,.065),(sign*.212,.34,reach*.65,.052,.05)])
-    elif part=='face':
-     turn=(pose-1)*.027
-     section([(0,.555,.013,.063,.062),(turn,.635,.037,.075,.075),(turn,.678,.042,.091,.093),(turn,.75,.022,.096,.096),(turn,.796,.012,.070,.064)])
-     section([(turn,.681,.126,.018,.018),(turn,.712,.115,.016,.021)])
-     for sign in [-1,1]:
-      up=pose==1 and sign==1
-      section([(sign*.21,.345,.105,.050,.05),(sign*.187,.345 if up else .291,.142,.041,.05),(sign*(.106 if up else .14),.618 if up else .22,.178 if up else .24,.034,.044)])
-    else:
-     section([((pose-1)*.027,.741,.013,.099,.099),((pose-1)*.027,.792,.014,.082,.080),((pose-1)*.027,.809,.014,.032,.04)])
-     for sign in [-1,1]:
-      section([(sign*.10,.164,.025,.088,.12),(sign*.105,.215,.065,.091,.146),(sign*.123,.224,.175,.079,.118)])
-      section([(sign*.124,-.17,.211,.074,.119),(sign*.124,-.13,.192,.058,.080),(sign*.124,.136,.241,.065,.069),(sign*.123,.211,.221,.076,.086)])
-    mesh=bpy.data.meshes.new('Seated '+part);mesh.from_pydata(vv,[],ff);mesh.materials.append(mats[m]);mesh.update()
-    for poly in mesh.polygons:poly.use_smooth=True
-    prototypes[key]=mesh
-   o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot
-   o.location=(p[0],-p[2],p[1]);o.scale=(h,h,h);o.rotation_euler.z=yaw
-   instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+  key=('crowd',pose)
+  if key not in prototypes:prototypes[key]=spectator_mesh(mats['Spectator0'],pose)
+  mesh=prototypes[key];o=bpy.data.objects.new('Instance_Spectator',mesh)
+  bpy.context.collection.objects.link(o);o.parent=instanceRoot
+  x,y,z=p;o.location=(x,-z,y);o.scale=(h*(.98+.065*math.sin(x*3)),h,h);o.rotation_euler.z=yaw
+  instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
  pavement_profile=json.loads((ROOT/'data/pavement.json').read_text())[cid]
  def pavement(d,offset):
   a=d*math.tau/L;w=pavement_profile['waves'];amp=pavement_profile['amplitudes']
@@ -528,7 +496,13 @@ def build(cid):
      if random.random()<.14:continue
      dd=d+j+random.uniform(-.15,.15);h=random.uniform(.9,1.1);person=pt(dd,off,y+.28)
      x,yy,z=person;cloth='Spectator'+str(random.randrange(4))
-     spectator(person,h,yaw+math.pi/2+random.uniform(-.25,.25),cloth,random.randrange(3))
+     heading=yaw+math.pi/2+random.uniform(-.34,.34);variant=random.randrange(3)
+     # Per-row shuffle leaves neighbouring seats distinct without a tiled pose sequence.
+     if j==-14 or 'row_key' not in locals() or row_key!=(station,block,row):
+      row_key=(station,block,row);previous=[];rng=random.Random(round(station)*113+block*427+row*59)
+     pool=[p for p in range(12) if p not in previous and (p not in (6,7,10) or rng.random()<.26)]
+     pose=rng.choice(pool);previous=(previous+[pose])[-4:]
+     spectator(person,h,heading,cloth,pose)
    # Folded sheet canopy with a pitched face, purlins and exposed triangular trusses.
    for rib in range(16):
     start=d-15.98+rib*2
@@ -900,6 +874,13 @@ def build(cid):
      for i in range(10):
       a=i*math.tau/10;b=(i+1)*math.tau/10
       face([(x+.34*math.cos(a),y+row*.28,z+.34*math.sin(a)),(x+.34*math.cos(b),y+row*.28,z+.34*math.sin(b)),(x+.34*math.cos(b),y+row*.28+.26,z+.34*math.sin(b)),(x+.34*math.cos(a),y+row*.28+.26,z+.34*math.sin(a))],'Dark')
+ # Preserve the near silhouettes in the stands. At track-crossing distances a
+ # seated and standing reduction share the same authored UVs and materials.
+ for label,pose in [('Seated',0),('Standing',6)]:
+  mesh=spectator_mesh(mats['Spectator0'],pose);obj=bpy.data.objects.new('LOD_Grandstand'+label,mesh)
+  bpy.context.collection.objects.link(obj);bpy.context.view_layer.objects.active=obj
+  mod=obj.modifiers.new('Distant silhouette','DECIMATE');mod.ratio=.24
+  bpy.ops.object.modifier_apply(modifier=mod.name)
  # Authored distant crown LODs; runtime uses these meshes, never generated substitutes.
  if not night:
   for i in range(4):
@@ -922,10 +903,10 @@ def build(cid):
  for img in bpy.data.images:
   if img.source=='FILE':img.pack()
  bpy.ops.wm.save_as_mainfile(filepath=str(ROOT/f'scripts/blender/{cid}.blend'))
- bpy.ops.export_scene.gltf(filepath=str(OUT/f'{cid}.glb'),export_format='GLB',export_gpu_instances=True,export_draco_mesh_compression_enable=True,export_draco_mesh_compression_level=6,export_draco_position_quantization=18,export_draco_texcoord_quantization=16,export_yup=True,export_texcoords=True,export_normals=True,export_materials='EXPORT',export_cameras=False,export_lights=False)
+ bpy.ops.export_scene.gltf(filepath=str(OUT/f'{cid}.glb'),export_format='GLB',export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_gpu_instances=True,export_draco_mesh_compression_enable=True,export_draco_mesh_compression_level=6,export_draco_position_quantization=18,export_draco_texcoord_quantization=16,export_yup=True,export_texcoords=True,export_normals=True,export_materials='EXPORT',export_cameras=False,export_lights=False)
  # Identical Blender geometry, gzip encoded for MCP hosts that prohibit workers/WASM.
  raw=Path('/tmp')/f'jgp-{cid}-mcp.glb'
- bpy.ops.export_scene.gltf(filepath=str(raw),export_format='GLB',export_gpu_instances=True,export_draco_mesh_compression_enable=False,export_yup=True,export_cameras=False,export_lights=False)
+ bpy.ops.export_scene.gltf(filepath=str(raw),export_format='GLB',export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_gpu_instances=True,export_draco_mesh_compression_enable=False,export_yup=True,export_cameras=False,export_lights=False)
  pack(raw,OUT/f'{cid}-mcp.glb.gz',positions=True);raw.unlink()
  (OUT/f'{cid}.glb.gz').write_bytes(gzip.compress((OUT/f'{cid}.glb').read_bytes(),compresslevel=9,mtime=0))
  profile={'length':L,'step':L/nr,'heights':heights,'source':'OpenTopoData Mapzen; median + Gaussian terrain smoothing; not survey grade','triangles':triangles,'chunks':len(batches),'sharedPrototypes':len(prototypes),'solidInstances':sum(1 for o in bpy.context.scene.objects if o.name.startswith('Instance_')),'round':ROUND,'blender':bpy.app.version_string}

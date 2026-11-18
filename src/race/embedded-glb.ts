@@ -9,6 +9,12 @@ function base64(bytes:Uint8Array){const parts:string[]=[];for(let i=0;i<bytes.le
 export async function embeddedGLB(url:string,gzip=false){
  let bytes=await assetBytes(url);if(gzip)bytes=await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
  const view=new DataView(bytes),jsonSize=view.getUint32(12,true),json=JSON.parse(new TextDecoder().decode(new Uint8Array(bytes,20,jsonSize))),binStart=20+jsonSize+8;
+ for(const view of json.bufferViews??[]){
+  const stride=view.extras?.byteLanes;if(!stride)continue;
+  const data=new Uint8Array(bytes,binStart+(view.byteOffset??0),view.byteLength),packed=data.slice();let at=0;
+  for(let lane=0;lane<stride;lane++){let last=0;for(let j=lane;j<data.length;j+=stride){last=(last+packed[at++])&255;data[j]=last;}}
+  delete view.extras.byteLanes;
+ }
  // Replace embedded image buffer views with img-src data: images. GLTFLoader's
  // default ImageBitmapLoader fetches blob: URLs, which strict MCP hosts forbid.
  for(const img of json.images??[])if(img.bufferView!==undefined){const b=json.bufferViews[img.bufferView];img.uri=`data:${img.mimeType};base64,${base64(new Uint8Array(bytes,binStart+(b.byteOffset??0),b.byteLength))}`;delete img.bufferView;}

@@ -7,12 +7,19 @@ for(const id of ['monza','las-vegas'] as const)describe(id+' Blender circuit',()
  it('preserves GPU instances in the decoder-free MCP asset with millimetre-scale quantization',()=>{
   const bytes=gunzipSync(readFileSync(new URL(`../src/race/assets/circuits/${id}-mcp.glb.gz`,import.meta.url))),g=JSON.parse(bytes.toString('utf8',20,20+bytes.readUInt32LE(12)));
   expect(bytes.readUInt32LE(8)).toBe(bytes.length);expect(g.extensionsRequired??[]).not.toContain('KHR_draco_mesh_compression');expect(g.extensionsUsed).toContain('EXT_mesh_gpu_instancing');
+  const poses=g.meshes.filter((m:any,i:number)=>m.name.startsWith('Grandstand pose')&&g.nodes.some((n:any)=>n.mesh===i&&n.extensions?.EXT_mesh_gpu_instancing));
+  expect(poses).toHaveLength(12);
   for(const name of ['FinishUniform','MarshalUniform','PitCrewUniform']){
    const parts=g.meshes.flatMap((mesh:any)=>mesh.primitives.filter((p:any)=>g.materials[p.material].name===name));
    expect(parts.length).toBeGreaterThan(0);
    for(const part of parts){
     expect(part.attributes.TEXCOORD_0).toBeDefined();
     expect(part.attributes.COLOR_0).toBeDefined();
+    expect(part.attributes.TEXCOORD_1).toBeDefined();
+    expect(g.materials[part.material].pbrMetallicRoughness.baseColorTexture.texCoord).toBe(1);
+    const a=g.accessors[part.attributes.COLOR_0],v=g.bufferViews[a.bufferView];
+    const bin=28+bytes.readUInt32LE(12);
+    expect(new Set(bytes.subarray(bin+v.byteOffset,bin+v.byteOffset+v.byteLength)).size).toBeGreaterThan(8);
     // Arm and head pivots operate on local positions in metres.
     expect(g.accessors[part.attributes.POSITION].componentType).toBe(5126);
    }

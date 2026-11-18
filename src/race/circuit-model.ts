@@ -57,17 +57,35 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
   draco?.dispose();
   if(disposed){gltf.scene.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material]){for(const value of Object.values(m))if(value instanceof T.Texture)value.dispose();m.dispose();}}});return;}
   // Partition Blender EXT_mesh_gpu_instancing by spatial tile for culling and shadows.
-  gltf.scene.updateMatrixWorld(true);const farCrowns=new Map<string,T.BufferGeometry>(),lodSources:T.Mesh[]=[];gltf.scene.traverse(o=>{if(o instanceof T.Mesh&&o.name.startsWith('LOD_Canopy')){farCrowns.set((o.material as T.Material).name,o.geometry.clone().applyMatrix4(o.matrixWorld));lodSources.push(o);}});lodSources.forEach(o=>{o.removeFromParent();o.geometry.dispose();});const buckets=new Map<string,{mesh:T.Mesh;matrix:T.Matrix4}[]>(),sources:T.Mesh[]=[];
+  gltf.scene.updateMatrixWorld(true);
+  const farCrowns=new Map<string,T.BufferGeometry>(),lodSources:T.Mesh[]=[];
+  gltf.scene.traverse(o=>{
+   if(!(o instanceof T.Mesh)||!(o.name.startsWith('LOD_Canopy')||o.name.startsWith('LOD_Grandstand')))return;
+   const geometry=o.geometry.clone(),position=geometry.getAttribute('position');
+   if(position.normalized){
+    // Apply the MCP export's placement in metres without clipping it back to [-1,1].
+    const floats=new T.Float32BufferAttribute(new Float32Array(position.count*3),3);
+    for(let i=0;i<position.count;i++)floats.setXYZ(i,position.getX(i),position.getY(i),position.getZ(i));
+    geometry.setAttribute('position',floats);
+   }
+   const key=o.name.startsWith('LOD_Grandstand')?o.name:(o.material as T.Material).name;
+   farCrowns.set(key,geometry.applyMatrix4(o.matrixWorld));lodSources.push(o);
+  });
+  lodSources.forEach(o=>{o.removeFromParent();o.geometry.dispose();});
+  const buckets=new Map<string,{mesh:T.Mesh;matrix:T.Matrix4}[]>(),sources:T.Mesh[]=[];
   gltf.scene.traverse(o=>{if(o instanceof T.Mesh&&(o instanceof T.InstancedMesh||o.name.startsWith('Instance_'))){sources.push(o);const count=o instanceof T.InstancedMesh?o.count:1;
    for(let i=0;i<count;i++){const matrix=new T.Matrix4();if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);matrix.premultiply(o.matrixWorld);const p=new T.Vector3().setFromMatrixPosition(matrix),key=`${o.geometry.uuid}:${(o.material as T.Material).uuid}:${Math.floor(p.x/180)}:${Math.floor(p.z/180)}`;const group=buckets.get(key)??[];group.push({mesh:o,matrix});buckets.set(key,group);}
   }});
   for(const o of sources){let parent=o.parent;o.removeFromParent();while(parent&&parent!==gltf.scene&&parent.children.length===0){const next=parent.parent;parent.removeFromParent();parent=next;}}
   for(const objects of buckets.values()){
-   const first=objects[0].mesh,farGeometry=farCrowns.get((first.material as T.Material).name),batch=new T.InstancedMesh(first.geometry,first.material,objects.length);batch.name=first.name;
+   const first=objects[0].mesh,materialName=(first.material as T.Material).name,spectator=materialName==='Spectator0';
+   if(spectator&&!first.geometry.boundingBox)first.geometry.computeBoundingBox();
+   const key=spectator?'LOD_Grandstand'+(first.geometry.boundingBox!.max.y>1.15?'Standing':'Seated'):materialName;
+   const farGeometry=farCrowns.get(key),batch=new T.InstancedMesh(first.geometry,first.material,objects.length);batch.name=first.name;
    if(farGeometry){
     const centre=new T.Vector3();for(const o of objects)centre.add(new T.Vector3().setFromMatrixPosition(o.matrix));centre.divideScalar(objects.length);
     const offset=new T.Matrix4().makeTranslation(-centre.x,-centre.y,-centre.z),far=new T.InstancedMesh(farGeometry,first.material,objects.length),lod=new T.LOD();far.name=first.name+'_far';
-    objects.forEach((o,i)=>{const matrix=o.matrix.clone().premultiply(offset);batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);});batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);lod.addLevel(batch,0);lod.addLevel(far,115,.18);lod.addLevel(new T.Group(),950,.1);gltf.scene.add(lod);
+    objects.forEach((o,i)=>{const matrix=o.matrix.clone().premultiply(offset);batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);});batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);lod.addLevel(batch,0);lod.addLevel(far,spectator?105:115,.18);lod.addLevel(new T.Group(),950,.1);gltf.scene.add(lod);
    }else{objects.forEach((o,i)=>batch.setMatrixAt(i,o.matrix));batch.computeBoundingSphere();gltf.scene.add(batch);}
   }
   gltf.scene.updateMatrixWorld(true);
