@@ -18,7 +18,7 @@ import {TrackingCameraRig,AERIAL_CAMERA,SIDE_CAMERA,CHASE_CAMERA} from './tracki
 
 export type CameraMode='broadcast'|'side'|'cockpit-a'|'cockpit-b'|'helicopter'|'flythrough'|'detail'|'sphere'|'strip'|'showroom'|'tcam-a'|'tcam-b'|'chase'|'pits';
 export interface RenderCar{distance:number;offset:number;speed:number;steering?:number;pit?:string;heading?:number;acceleration?:number;lateralG?:number;compound?:string;drs?:boolean;gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
-export interface RenderRace{cars:Record<'a'|'b',RenderCar>;time:number;phase:string}
+export interface RenderRace{laps?:number;cars:Record<'a'|'b',RenderCar>;time:number;phase:string}
 export function createScene(container:HTMLElement,track:Track=getTrack()){
  const {pointAt,tangentAt}=track,night=track.night;
  const scene=new T.Scene();scene.background=new T.Color(night?'#02040d':'#c3ccd2');scene.fog=new T.FogExp2(night?'#02040d':'#c3ccd2',night?.00024:.00083);
@@ -78,6 +78,8 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    sun.shadow.normalBias=extent===8?.0009:extent===22?.003:.025;
    sun.shadow.radius=extent===8?2:1;
   }
+  const chequered=race.phase==='finished'||(race.phase==='racing'&&race.laps!==undefined&&Math.max(race.cars.a.distance,race.cars.b.distance)>=race.laps*track.LENGTH);
+  circuit.people.update(elapsed,cars.a.root.position,cars.b.root.position,race.phase==='racing'&&race.cars.a.distance<track.LENGTH,race.phase==='racing'&&race.cars.b.distance<track.LENGTH,chequered);
   circuit.update(race.time,p);sparks?.update(race);
   if(night){
    // The exported fixtures are 45 m apart with a shorter span at the timing line.

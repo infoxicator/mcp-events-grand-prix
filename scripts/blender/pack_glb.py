@@ -8,11 +8,17 @@ from pathlib import Path
 def compress_circuit(data):
  # Smaller deflate blocks fit the changes of entropy between spatial chunks.
  # The decoded buffer and its glTF accessors stay byte-identical.
- encoder=zlib.compressobj(level=9,wbits=31,memLevel=7)
+ encoder=zlib.compressobj(level=9,wbits=31,memLevel=5)
  return encoder.compress(data)+encoder.flush()
 
 def pack(source,dest,positions=False):
- b=Path(source).read_bytes();n=struct.unpack_from('<I',b,12)[0];g=json.loads(b[20:20+n]);binary=b[28+n:];views=g['bufferViews'];accessors=g.get('accessors',[]);normal_indices={p['attributes']['NORMAL'] for m in g['meshes'] for p in m['primitives'] if 'NORMAL' in p['attributes']};instanced={n['mesh'] for n in g['nodes'] if 'EXT_mesh_gpu_instancing' in n.get('extensions',{})};position_mesh={p['attributes']['POSITION']:mi for mi,m in enumerate(g['meshes']) for p in m['primitives'] if mi not in instanced};transforms={};out=bytearray();quantized=False
+ b=Path(source).read_bytes();n=struct.unpack_from('<I',b,12)[0];g=json.loads(b[20:20+n]);binary=b[28+n:];views=g['bufferViews'];accessors=g.get('accessors',[]);normal_indices={p['attributes']['NORMAL'] for m in g['meshes'] for p in m['primitives'] if 'NORMAL' in p['attributes']};instanced={n['mesh'] for n in g['nodes'] if 'EXT_mesh_gpu_instancing' in n.get('extensions',{})}
+ # Actors rotate about pivots in Blender metres. Preserve that coordinate
+ # system even when the exporter emits a single official as an ordinary node.
+ actor_materials={'MarshalUniform','FinishUniform','PitCrewUniform'}
+ instanced.update(mi for mi,m in enumerate(g['meshes']) if any(
+  g['materials'][p['material']]['name'] in actor_materials for p in m['primitives'] if 'material' in p))
+ position_mesh={p['attributes']['POSITION']:mi for mi,m in enumerate(g['meshes']) for p in m['primitives'] if mi not in instanced};transforms={};out=bytearray();quantized=False
  # AO and decal UVs stay within a single tile. UNORM16 keeps their maximum
  # error below 0.008 texel on a 1K map, leaving room for venue artwork.
  unit_uvs={i for mesh in g['meshes'] for prim in mesh['primitives'] for key,i in prim['attributes'].items() if key.startswith('TEXCOORD_')}

@@ -7,6 +7,7 @@ from pathlib import Path
 from mathutils import Vector
 sys.path.insert(0,str(Path(__file__).parent))
 from pack_glb import pack
+from track_people import staff_mesh
 ROOT=Path(__file__).resolve().parents[2];OUT=ROOT/'src/race/assets/circuits'
 bpy.context.preferences.filepaths.save_version=0
 ROUND=int(sys.argv[sys.argv.index('--')+1]) if '--' in sys.argv else 1
@@ -54,7 +55,30 @@ def build(cid):
  mat('ImpactIvory',(.73,.72,.65),.72)
  mat('RescueOrange',(.94,.16,.018),.8)
  mat('RunoffPaint',(.046,.24,.137),.89)
+ mat('RepairCourse',(.15,.15,.16),.73,tex='asphalt-color');mat('TarSeam',(.045,.040,.037),.52)
  mat('SignalLens',(.084,.012,.009),.28,.15)
+ mat('SeatedSkin',(.43,.28,.19),.9);mat('SeatedDark',(.022,.027,.032))
+ for name in ('MarshalUniform','FinishUniform','PitCrewUniform'):
+  mat(name,(1,1,1),.85)
+  fabric=mats[name];vertex_colour=fabric.node_tree.nodes.new('ShaderNodeVertexColor')
+  vertex_colour.layer_name='Uniform and equipment'
+  fabric.node_tree.links.new(vertex_colour.outputs['Color'],fabric.node_tree.nodes.get('Principled BSDF').inputs['Base Color'])
+ # Soft contact under the two soles remains visible beneath the garage canopy.
+ mat('BootContact',(.012,.011,.01),1)
+ contact=mats['BootContact'];nodes=contact.node_tree.nodes
+ image=bpy.data.images.new('Boot contact',64,64,alpha=True);pixels=[]
+ for iy in range(64):
+  for ix in range(64):
+   x=(ix+.5)/64*.76-.38;z=(iy+.5)/64*.82-.41
+   alpha=0
+   for side in [-1,1]:
+    cz=(.072 if side<0 else -.07)+.055
+    r=((x-side*.133)/.118)**2+((z-cz)/.205)**2
+    alpha+=.47*math.exp(-1.38*r)+.11*math.exp(-.54*r)
+   pixels.extend((.016,.015,.014,min(.69,alpha)))
+ image.pixels.foreach_set(pixels);image.pack()
+ ink=nodes.new('ShaderNodeTexImage');ink.image=image
+ contact.node_tree.links.new(ink.outputs['Alpha'],nodes.get('Principled BSDF').inputs['Alpha'])
  mat('Skin',(.43,.28,.19),.9)
  mat('Hospitality',(.62,.68,.72),.31,.16,tex='hospitality-glass')
  mat('Balustrade',(.49,.60,.62),.17,.12)
@@ -153,11 +177,22 @@ def build(cid):
      co=mesh.vertices[mesh.loops[li].vertex_index].co;uv.data[li].uv=(math.atan2(co.y,co.x)/math.tau+.5,math.acos(max(-1,min(1,co.z)))/math.pi)
    prototypes[key]=mesh
   o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(p[0],-p[2],p[1]);o.scale=(scale[0],scale[2],scale[1]);o.rotation_euler.z=(seed*2.39996 if m.startswith('Canopy') else 0);instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+ def staff(role,p,yaw,kit=(.031,.09,.14)):
+  nonlocal instance_triangles
+  key=(role,kit)
+  if key not in prototypes:
+   prototypes[key]=staff_mesh(role,mats[{'marshal':'MarshalUniform','finish':'FinishUniform','crew':'PitCrewUniform','observer':'PitCrewUniform'}[role]],kit)
+  mesh=prototypes[key];o=bpy.data.objects.new('Instance_'+role,mesh)
+  bpy.context.collection.objects.link(o);o.parent=instanceRoot
+  x,y,z=p;o.location=(x,-z,y);o.rotation_euler.z=yaw
+  instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+  cs=math.cos(yaw);sn=math.sin(yaw)
+  face([(x+xx*cs+zz*sn,y+.003,z-xx*sn+zz*cs) for xx,zz in [(-.38,-.41),(.38,-.41),(.38,.41),(-.38,.41)]],'BootContact')
  def spectator(p,h,yaw,kit,pose):
   # Each seated silhouette faces the racing surface. Several welded lofts per
   # material make a shared person, including the negative space between limbs.
   nonlocal instance_triangles
-  for part,m in [('shirt',kit),('face','Skin'),('legs','Dark')]:
+  for part,m in [('shirt',kit),('face','SeatedSkin'),('legs','SeatedDark')]:
    key=('seated',m,pose)
    mesh=prototypes.get(key)
    if mesh is None:
@@ -194,11 +229,16 @@ def build(cid):
    o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot
    o.location=(p[0],-p[2],p[1]);o.scale=(h,h,h);o.rotation_euler.z=yaw
    instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+ pavement_profile=json.loads((ROOT/'data/pavement.json').read_text())[cid]
+ def pavement(d,offset):
+  a=d*math.tau/L;w=pavement_profile['waves'];amp=pavement_profile['amplitudes']
+  return amp[0]*math.sin(a*w[0])+amp[1]*math.sin(a*w[1]+.6)+offset*.00011*math.sin(a*w[0]+.9)
  def strip(start,end,left,right,m,y=.02,step=2,ys=None):
   count=math.ceil((end-start)/step)
   for i in range(count):
    a=start+(end-start)*i/count;b=start+(end-start)*(i+1)/count;l=left(a) if callable(left) else left;r=right(a) if callable(right) else right;lb=left(b) if callable(left) else left;rb=right(b) if callable(right) else right
-   face([pt(a,l,y),pt(b,lb,y),pt(b,rb,y+(ys or 0)),pt(a,r,y+(ys or 0))],m,[(l/3,a/3),(lb/3,b/3),(rb/3,b/3),(r/3,a/3)] if m not in ('Rubber',) else [(0,a/6),(0,b/6),(1,b/6),(1,a/6)])
+   levels=[y,y,y+(ys or 0),y+(ys or 0)];coords=[(a,l),(b,lb),(b,rb),(a,r)]
+   face([pt(q,x,h+(pavement(q,x) if m=='Asphalt' else 0)) for (q,x),h in zip(coords,levels)],m,[(l/3,a/3),(lb/3,b/3),(rb/3,b/3),(r/3,a/3)] if m not in ('Rubber',) else [(0,a/6),(0,b/6),(1,b/6),(1,a/6)])
  def atbox(d,off,y,size,m):
   s=sample(d);box(pt(d,off,y),size,m,math.atan2(s['tx'],s['tz']))
  def street_hardware(d,off,h,size,material):
@@ -225,6 +265,20 @@ def build(cid):
    face([(xx,ground(xx,zz)-2.0,zz) for xx,zz in corners],'CityGround' if night else 'Grass',[(xx/tile,zz/tile) for xx,zz in corners])
  if not night:strip(0,L,-38,38,'Grass',-.06,step=4)
  strip(0,L,lambda d:-sample(d)['width']-(2 if night else .7),lambda d:sample(d)['width']+(2 if night else .7),'Asphalt')
+ # Resurfacing patches share their crown and transition length with the tyre model.
+ for start,end,left,right,rise in pavement_profile['patches']:
+  span=end-start;steps=math.ceil((span-.8)/1.6)
+  stations=[start,start+.09]+[start+.4+(span-.8)*i/steps for i in range(steps+1)]+[end-.09,end]
+  across=[left,left+.09,left+.4,right-.4,right-.09,right]
+  def patch_vertex(d,x):
+   edge=min(d-start,end-d,x-left,right-x);t=min(1,edge/.4)
+   top=.0215+rise*t*t*(3-2*t)+.0022*math.exp(-(edge-.09)**2/.0025)
+   return pt(d,x,top+pavement(d,x))
+  for i,(a,b) in enumerate(zip(stations,stations[1:])):
+   for j,(l,r) in enumerate(zip(across,across[1:])):
+    coords=[(a,l),(b,l),(b,r),(a,r)]
+    seam=i in (0,len(stations)-2) or j in (0,len(across)-2)
+    face([patch_vertex(q,x) for q,x in coords],'TarSeam' if seam else 'RepairCourse',[(x/3,q/3) for q,x in coords])
  for side in [-1,1]:strip(0,L,lambda d:side*sample(d)['width']-.07,lambda d:side*sample(d)['width']+.07,'White',.035)
  strip(data['pitEntry'],L+data['pitExit'],lambda d:sample(d)['pit']-3.4,lambda d:sample(d)['pit']+3.4,'Asphalt',.025)
  strip(data['pitEntry'],L+data['pitExit'],lambda d:sample(d)['pit']-3.25,lambda d:sample(d)['pit']-3.12,'White',.04)
@@ -347,17 +401,12 @@ def build(cid):
   atbox(st,off-side*1.38,2.86,(.07,.19,4.64),'RescueOrange')
   atbox(st,off+side,1.04,(.09,1.6,3.7),'Cabinet')
   atbox(st-1.25,off-side*.20,.78,(.45,1.08,.66),'ServiceRed')
-  for j in [-.62,.68]:
-   def limb(d1,x1,y1,d2,x2,y2,r,m):
-    rod(pt(st+j+d1,off+x1,y1),pt(st+j+d2,off+x2,y2),r,m,7)
-   for leg in [-1,1]:
-    limb(leg*.14,0,.29,leg*.09,.01,1.03,.105,'RescueOrange')
-    limb(leg*.135,0,.47,leg*.133,0,.52,.106,'ImpactIvory')
-    limb(leg*.19,0,1.48,leg*.26,-side*.08,1.16,.08,'RescueOrange')
-   limb(0,0,.95,0,0,1.48,.195,'RescueOrange')
-   limb(0,0,1.24,0,0,1.30,.199,'ImpactIvory')
-   blob(pt(st+j,off,1.64),(.108,.143,.113),'Skin',8,5)
-   blob(pt(st+j,off,1.73),(.131,.084,.133),'ImpactIvory',8,4)
+  heading=sample(st);yaw=math.atan2(heading['tx'],heading['tz'])+side*math.pi/2
+  staff('marshal',pt(st-.54,off,.24),yaw)
+  staff('observer',pt(st+.78,off+.28*side,.24),yaw+.36,(.55,.12,.015))
+ # Finish official stands behind the pit wall, level with the timing line.
+ atbox(-2,-14.4,.62,(1.6,1.24,2.2),'Concrete')
+ v=sample(-2);staff('finish',pt(-2,-14.4,1.24),math.atan2(v['tx'],v['tz'])-math.pi/2)
  strip(L-405,L+45,-26,-8,'Asphalt',.026)
  # Separate protected pit wall, keeping entry/exit gaps open.
  for d in range(int(L)-390,int(L)-20,8):atbox(d,-12,.65,(.45,1.3,8),'Concrete')
@@ -410,6 +459,9 @@ def build(cid):
    for slat in range(5):atbox(d+j,-24.73,3.08+slat*.16,(.18,.115,7.12),'Steel')
    atbox(d+j,-24.65,.12,(.5,.16,7.2),'Concrete')
    for k in [-4.2,4.2]:atbox(d+j+k,-24.9,2.2,(.25,4.4,.22),'White')
+  heading=sample(d);yaw=math.atan2(heading['tx'],heading['tz'])-math.pi/2
+  staff('crew',pt(d,-26.3,.104),yaw+.24,(.33,.025,.038) if i%2 else (.025,.105,.125))
+  staff('crew',pt(d+1.25,-27.1,.104),yaw-.59)
   atbox(d,-24.9,5.8,(.1,2.1,27),'Hospitality')
   for j in range(-13,14,3):atbox(d+j,-24.75,5.8,(.17,2.2,.1),'Steel')
   for j in [-11,-4,3,10]:

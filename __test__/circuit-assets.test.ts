@@ -7,6 +7,16 @@ for(const id of ['monza','las-vegas'] as const)describe(id+' Blender circuit',()
  it('preserves GPU instances in the decoder-free MCP asset with millimetre-scale quantization',()=>{
   const bytes=gunzipSync(readFileSync(new URL(`../src/race/assets/circuits/${id}-mcp.glb.gz`,import.meta.url))),g=JSON.parse(bytes.toString('utf8',20,20+bytes.readUInt32LE(12)));
   expect(bytes.readUInt32LE(8)).toBe(bytes.length);expect(g.extensionsRequired??[]).not.toContain('KHR_draco_mesh_compression');expect(g.extensionsUsed).toContain('EXT_mesh_gpu_instancing');
+  for(const name of ['FinishUniform','MarshalUniform','PitCrewUniform']){
+   const parts=g.meshes.flatMap((mesh:any)=>mesh.primitives.filter((p:any)=>g.materials[p.material].name===name));
+   expect(parts.length).toBeGreaterThan(0);
+   for(const part of parts){
+    expect(part.attributes.TEXCOORD_0).toBeDefined();
+    expect(part.attributes.COLOR_0).toBeDefined();
+    // Arm and head pivots operate on local positions in metres.
+    expect(g.accessors[part.attributes.POSITION].componentType).toBe(5126);
+   }
+  }
   const instances=g.nodes.filter((n:any)=>n.extensions?.EXT_mesh_gpu_instancing);expect(instances.length).toBeGreaterThan(4);
   expect(instances.reduce((sum:number,n:any)=>sum+g.accessors[Object.values(n.extensions.EXT_mesh_gpu_instancing.attributes)[0] as number].count,0)).toBeGreaterThan(1000);
   for(const n of g.nodes.filter((n:any)=>n.mesh!==undefined&&n.scale&&n.name?.includes('_')&&!n.extensions?.EXT_mesh_gpu_instancing)){if(n.scale[0]===n.scale[1]&&n.scale[1]===n.scale[2])expect(2*n.scale[0]/65534).toBeLessThan(.02);}
