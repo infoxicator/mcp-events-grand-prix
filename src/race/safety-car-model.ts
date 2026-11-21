@@ -1,5 +1,7 @@
 import * as T from 'three';
 
+export const safetyWheelStations=[{x:-.93,z:1.49},{x:.93,z:1.49},{x:-.93,z:-1.49},{x:.93,z:-1.49}] as const;
+
 export function createSafetyCar(){
  const car=new T.Group();
  car.name='Safety car';
@@ -23,11 +25,10 @@ export function createSafetyCar(){
  for(const side of [-1,1]){
   box(lamps,.41,.12,.055,side*.61,.65,2.35);
   box(amber,.31,.09,.055,side*.66,.65,-2.35);
-  for(const axle of [-1.49,1.49]){
-   const tyre=new T.Mesh(wheel,rubber);
-   tyre.position.set(.93*side,.32,axle);
-   car.add(tyre);
-  }
+ }
+ for(const w of safetyWheelStations){
+  const tyre=new T.Mesh(wheel,rubber);
+  tyre.position.set(w.x,.32,w.z);car.add(tyre);
  }
  return {car,flash:(time:number)=>{beacon.visible=Math.floor(time*8)%4!==2;}};
 }

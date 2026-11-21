@@ -80,7 +80,7 @@ function serviceWheels(material:T.Material){
  };
  material.customProgramCacheKey=()=>key+'-service-wheels';
 }
-export function createField(track:Track,heightAt:(distance:number)=>number,paintSheet:T.Texture){
+export function createField(track:Track,heightAt:(distance:number)=>number,paintSheet:T.Texture,surfaceWater={value:0}){
  const root=new T.Group(),pose=new T.Object3D(),inkMap=sidewallInk();
  const gridBoxes=extraGridBoxes(track,heightAt);root.add(gridBoxes);
  const frustum=new T.Frustum(),projection=new T.Matrix4(),bounds=new T.Sphere(new T.Vector3(),3.6);
@@ -156,9 +156,9 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
      obj.geometry.setAttribute('wheelMotion',tier.wheels);
      material.color.set('#26272a');material.roughness=.91;material.metalness=0;
      material.onBeforeCompile=shader=>{
-      shader.uniforms.sidewallInk={value:inkMap};
+      shader.uniforms.sidewallInk={value:inkMap};shader.uniforms.surfaceWater=surfaceWater;
       shader.vertexShader='attribute vec2 wheelMotion; varying vec2 spin; varying vec3 tyrePoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntyrePoint=position;spin=wheelMotion;');
-      shader.fragmentShader='uniform sampler2D sidewallInk; varying vec2 spin; varying vec3 tyrePoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      shader.fragmentShader='uniform float surfaceWater; uniform sampler2D sidewallInk; varying vec2 spin; varying vec3 tyrePoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
        float radius=length(vec2(tyrePoint.y-.36,tyrePoint.z-(tyrePoint.z>0.?1.55:-2.05)));
        float ring=1.-smoothstep(.0015,.003+fwidth(radius),min(abs(radius-.287),abs(radius-.316)));
        diffuseColor.rgb*=.88+.22*smoothstep(.25,.36,radius)+.23*ring;
@@ -174,6 +174,10 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
         }
         diffuseColor.rgb=mix(diffuseColor.rgb,stamp.rgb,stamp.a*.90);
        }
+      `).replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+       float film=surfaceWater*(.26+.69*smoothstep(.343,.358,radius));
+       roughnessFactor=mix(roughnessFactor,.24,film);
+       diffuseColor.rgb*=1.-.30*film;
       `);
      };
     }

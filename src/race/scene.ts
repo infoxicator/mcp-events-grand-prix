@@ -8,6 +8,7 @@ import stripReflectionURL from './assets/strip-reflection.hdr.gz?url';
 import daylightURL from './assets/daylight.hdr.gz?url';
 import {getTrack,type Track} from './track';
 import {loadCircuit} from './circuit-model';
+import {createRaceWeather} from './race-weather';
 import {createSparks} from './sparks';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
@@ -32,6 +33,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const renderer=new T.WebGLRenderer({antialias:!embedded,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,embedded?1:1.5));renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.92;renderer.info.autoReset=false;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
  renderer.domElement.style.visibility='hidden';container.append(renderer.domElement);renderer.domElement.setAttribute('aria-label',`Live 3D ${track.name} ${night?'night ':''}circuit`);
  const camera=new T.PerspectiveCamera(45,1,.06,5000),sun=new T.DirectionalLight(night?'#c9dfff':'#fff0d8',night?1.25:2.7);sun.position.set(-80,120,-50);sun.castShadow=true;sun.shadow.mapSize.setScalar(embedded?1024:2048);sun.shadow.camera.left=-65;sun.shadow.camera.right=65;sun.shadow.camera.top=65;sun.shadow.camera.bottom=-65;sun.shadow.camera.near=1;sun.shadow.camera.far=350;sun.shadow.normalBias=.025;sun.shadow.bias=-.00005;
+ camera.layers.enable(2); // Exposed lens droplets are local to the main onboard camera.
  scene.add(sun,sun.target,new T.HemisphereLight(night?'#8a9fd0':'#dce6f0',night?'#101323':'#504c3e',night?.5:.65));
  const pmrem=new T.PMREMGenerator(renderer);let environment:T.WebGLRenderTarget|undefined,disposed=false;
  let reflectionError:string|null=null;
@@ -60,8 +62,13 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   scene.background=skyMap;scene.fog=new T.FogExp2('#363741',.00034);
  }
  const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
- const circuit=loadCircuit(scene,track,anisotropy),vegas=night?circuit:null;
+ const surfaceWater={value:0};
+ const circuit=loadCircuit(scene,track,anisotropy,surfaceWater),vegas=night?circuit:null;
  let crew=embedded?undefined:pitCrew(scene,track);
+ const weather=createRaceWeather(scene,track,circuit.heightAt,embedded);
+ const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+ const dryFog=scene.fog.color.clone(),rainFog=new T.Color(night?'#495365':'#a0abb3');
+ const dryDensity=scene.fog.density,drySun=sun.intensity;
  const sparks=night?createSparks(scene,track,circuit.heightAt):null;
  // Warm architectural spill is fixed to the two resort facades, independent of the car.
  if(night)for(const [lon,lat] of [[-115.1757,36.1127],[-115.1693,36.1212]]){const q=track.project(lon,lat);const light=new T.PointLight('#ffc584',6500,230,2);light.position.set(q.x,24,q.z);scene.add(light);}
@@ -69,11 +76,11 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const lights=night?Array.from({length:4},()=>{const l=new T.SpotLight('#f1f0e9',floodlightCandela,76,1.22,.76,2);scene.add(l,l.target);return l;}):[];
  const composer=night&&!embedded?new EffectComposer(renderer):null;let bloom:UnrealBloomPass|null=null;if(composer){composer.addPass(new RenderPass(scene,camera));bloom=new UnrealBloomPass(new T.Vector2(640,360),.11,.18,1.65);composer.addPass(bloom);composer.addPass(new OutputPass());}
  const paintSheet=liveryAtlas();
- const cars={a:createCar('a',track,paintSheet),b:createCar('b',track,paintSheet)};scene.add(cars.a.root,cars.b.root);
+ const cars={a:createCar('a',track,paintSheet,surfaceWater),b:createCar('b',track,paintSheet,surfaceWater)};scene.add(cars.a.root,cars.b.root);
  let safetyCar:ReturnType<typeof createSafetyCar>|undefined;
  const rearTarget=new T.WebGLRenderTarget(256,96),rearCamera=new T.PerspectiveCamera(58,256/96,.1,500);rearTarget.texture.wrapS=T.RepeatWrapping;rearTarget.texture.repeat.x=-1;let mirrorFrame=0;
  let studio:ReturnType<typeof createShowroom>|undefined;let finish:Finish='colour',turntable=true;const params=new URLSearchParams(location.search);
- const field=createField(track,circuit.heightAt,paintSheet);scene.add(field.root);
+ const field=createField(track,circuit.heightAt,paintSheet,surfaceWater);scene.add(field.root);
  const loading=document.createElement('div');loading.className='model-loading';loading.setAttribute('elementtiming','race-loading');loading.textContent='LOADING MCP GP';if(!embedded)container.append(loading);
  let assetsLoaded=false,presentationReady=false,mirrorMs=0,mainMs=0;
  let warmStep=0,warmSubmitted=false,warmFence:WebGLSync|null=null;
@@ -322,6 +329,15 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    const visible=visit&&camera.position.distanceToSquared(bounds.center)<300**2&&crewFrustum.intersectsSphere(bounds);
    crew.update(team,visible?visit.car:undefined,race.time);
   }
+  const rainfall=weather.update(race,camera,mode,elapsed,reducedMotion.matches);
+  surfaceWater.value=mode==='showroom'?0:race.control?.wetness??0;
+  sun.intensity=drySun*(1-rainfall*(night?.16:.78));
+  scene.fog!.color.copy(dryFog).lerp(rainFog,rainfall);
+  (scene.fog as T.FogExp2).density=dryDensity+rainfall*(night?.0032:.0046);
+  if(!night&&scene.background instanceof T.Texture){
+   scene.backgroundBlurriness=rainfall*.80;
+   scene.backgroundIntensity=.8-rainfall*.28;
+  }
   field.update(race.field,camera,p,onboard&&mirrorFrame%6===0);
   mirrorMs=0;
   if(onboard&&(!embedded||presentationReady)&&(warmMode||mirrorFrame++%(embedded?12:6)===0)){
@@ -348,5 +364,5 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   renderer.setSize(w,h,false);composer?.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
  }
  const resize=new ResizeObserver(sizeScene);resize.observe(container);sizeScene();
- return {render,get ready(){return presentationReady;},get startupError(){return cars.a.error??cars.b.error??circuit.error??(gl.isContextLost()?'WebGL context lost':null);},setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars.a.setFinish(next==='showroom'?finish:'colour');},setFinish:(next:Finish)=>{finish=next;cars.a.setFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(cameraDebug?{mirrorMs,mainMs,cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,safetyCarOnTrack:safetyCar?.car.visible??false,circuit:track.id,modelsReady:presentationReady,modelError:reflectionError??cars.a.error??cars.b.error??circuit.error??crew?.error??field.error,finish};},dispose:()=>{disposed=true;if(warmFence)gl.deleteSync(warmFence);paintSheet.dispose();rearTarget.dispose();crew?.dispose();field.dispose();circuit.dispose();loading.remove();cars.a.dispose();cars.b.dispose();scene.add(cars.a.root);studio?.dispose();resize.disconnect();sparks?.dispose();composer?.passes.forEach(p=>p.dispose());composer?.dispose();const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();scene.traverse(o=>{if(o instanceof T.DirectionalLight||o instanceof T.PointLight||o instanceof T.SpotLight)o.shadow.dispose();if(o instanceof T.Mesh||o instanceof T.Sprite){if(o instanceof T.Mesh)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);if(m instanceof T.ShaderMaterial)for(const u of Object.values(m.uniforms))if(u.value instanceof T.Texture)textures.add(u.value);for(const value of Object.values(m))if(value instanceof T.Texture)textures.add(value);}}});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());if(scene.background instanceof T.Texture)scene.background.dispose();environment?.dispose();pmrem.dispose();renderer.dispose();if(embedded&&!gl.isContextLost())renderer.forceContextLoss();renderer.domElement.remove();}};
+ return {render,get ready(){return presentationReady;},get startupError(){return cars.a.error??cars.b.error??circuit.error??(gl.isContextLost()?'WebGL context lost':null);},setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars.a.setFinish(next==='showroom'?finish:'colour');},setFinish:(next:Finish)=>{finish=next;cars.a.setFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(cameraDebug?{mirrorMs,mainMs,lensBeads:weather.beads,rainDrops:weather.drops,sprayPackets:weather.spray,cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,safetyCarOnTrack:safetyCar?.car.visible??false,circuit:track.id,modelsReady:presentationReady,modelError:reflectionError??cars.a.error??cars.b.error??circuit.error??crew?.error??field.error,finish};},dispose:()=>{disposed=true;if(warmFence)gl.deleteSync(warmFence);paintSheet.dispose();rearTarget.dispose();crew?.dispose();field.dispose();circuit.dispose();loading.remove();cars.a.dispose();cars.b.dispose();scene.add(cars.a.root);studio?.dispose();resize.disconnect();sparks?.dispose();weather.dispose();composer?.passes.forEach(p=>p.dispose());composer?.dispose();const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();scene.traverse(o=>{if(o instanceof T.DirectionalLight||o instanceof T.PointLight||o instanceof T.SpotLight)o.shadow.dispose();if(o instanceof T.Mesh||o instanceof T.Sprite){if(o instanceof T.Mesh)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);if(m instanceof T.ShaderMaterial)for(const u of Object.values(m.uniforms))if(u.value instanceof T.Texture)textures.add(u.value);for(const value of Object.values(m))if(value instanceof T.Texture)textures.add(value);}}});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());if(scene.background instanceof T.Texture)scene.background.dispose();environment?.dispose();pmrem.dispose();renderer.dispose();if(embedded&&!gl.isContextLost())renderer.forceContextLoss();renderer.domElement.remove();}};
 }

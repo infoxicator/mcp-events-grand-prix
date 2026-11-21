@@ -41,7 +41,7 @@ function lakeReflection(bounds:T.Box3){
  return water;
 }
 /** All geometry is authored/exported by Blender. This loader only configures PBR and culling. */
-export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
+export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceWater={value:0}){
  let ready=false,error:string|undefined,disposed=false;
  const heightAt=(d:number)=>circuitHeight(track.id,d);
  const people=tracksideMotion();
@@ -106,9 +106,11 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
      // Physical aggregate at the original survey UV scale, plus broad,
      // non-repeating binder variation between the racing line and the verge.
      m.onBeforeCompile=shader=>{
+      shader.uniforms.surfaceWater=surfaceWater;
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 pavementUV;')
        .replace('#include <begin_vertex>','#include <begin_vertex>\npavementUV=uv;');
       shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
+       uniform float surfaceWater;
        varying vec2 pavementUV;
        float pavementHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
        float pavementNoise(vec2 p){
@@ -135,6 +137,10 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
         diffuseColor.rgb*=(.86+.20*binder+.08*grit)*(1.-joint*aged*.38);
         roughnessFactor-=joint*aged*.10;
         roughnessFactor=clamp(roughnessFactor+.09*(binder-.5),.47,1.);
+        // Water settles unevenly across the existing course and binder texture.
+        float basin=resolvedNoise(metres*vec2(.43,.12))*.72+.28*binder;
+        float film=surfaceWater*(.46+.54*smoothstep(.60-surfaceWater*.38,.81-surfaceWater*.38,basin));
+        roughnessFactor=mix(roughnessFactor,.12+.15*(1.-basin),film);
        `);
       if(!track.night)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
        // Blender's glTF export flips the survey V coordinate.
@@ -159,6 +165,10 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
        float axial=exp(-lane);
        float lateral=exp(-pow((abs(metres.x)-7.5)/10.,2.));
        totalEmissiveRadiance+=diffuseColor.rgb*vec3(.52,.55,.59)*(.12+.88*axial)*lateral;
+      `);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <lights_physical_fragment>',`
+       diffuseColor.rgb*=1.-film*.51;
+       #include <lights_physical_fragment>
       `);
      };
     }

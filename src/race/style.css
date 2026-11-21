@@ -68,12 +68,6 @@
 .viewport[data-flag="yellow"] .tower-footer,.viewport[data-flag="safety-car"] .tower-footer{background:#e9b938;color:#17130a}
 #map-safety-car{fill:#ffd65c;stroke:#30230c;stroke-width:14px}
 .tyre-icon.intermediate{color:#68d781;border-color:#68d781}.tyre-icon.wet{color:#82bdff;border-color:#82bdff}
-.race-rain{display:none;position:absolute;inset:-36px;z-index:0;pointer-events:none;background:repeating-linear-gradient(108deg,transparent 0 13px,#e2f2ff4f 14px,transparent 16px 23px),#5784a22e;animation:rain-streaks .22s linear infinite}
-.viewport[data-rain="light"] .race-rain{display:block;opacity:.15}
-.viewport[data-rain="moderate"] .race-rain{display:block;opacity:.32}
-.viewport[data-rain="heavy"] .race-rain{display:block;opacity:.52}
-@keyframes rain-streaks{to{transform:translate(23px,36px)}}
-@media(prefers-reduced-motion:reduce){.race-rain{animation:none}}
 
 .viewport{container-type:inline-size}
 @font-face{font-family:Oxanium;src:url('./assets/radio-oxanium.woff2') format('woff2');font-weight:525;font-display:swap}

@@ -61,7 +61,7 @@ function drawTelemetry(ctx:CanvasRenderingContext2D,c:CarTelemetry){
  rect(357,190,144,50,c.drs?'#356d4d':'#2b3540');label('LEGACY DRS',367,209,17,'#bac2c5',true);label(c.drs?'OPEN':'CLOSED',367,232,20,c.drs?'#bde5c2':'#bbc3c6',true);
 }
 const compoundColors:Record<string,string>={soft:'#d63532',medium:'#d9ae37',hard:'#c7c6ba',intermediate:'#479655',wet:'#3f78b2'};
-export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture){
+export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceWater={value:0}){
  const suspension=new Suspension(),inverseBody=new T.Quaternion();
  const root=new T.Group(),chassis=new T.Group(),lod=new T.LOD();root.add(chassis);chassis.add(lod);
  const originals=new Map<T.Mesh,T.Material|T.Material[]>(),clay=new T.MeshStandardMaterial({color:'#deded9',roughness:.83,side:T.DoubleSide}),wire=new T.MeshBasicMaterial({color:'#15222b',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}),lineMaterial=new T.LineBasicMaterial({color:'#9ab8ca',transparent:true,opacity:.7,depthWrite:false}),wireLines:T.LineSegments[]=[];
@@ -145,11 +145,12 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture){
     const u={spin:{value:0},load:{value:.008},shutter:{value:0},wheel:wheelStations.findIndex(w=>w.name===o.parent!.name)};tyreUniforms.push(u);
     p.onBeforeCompile=shader=>{// Sidewall mould lines and circumferential tread scrub are anchored to
      // tyre space, so their finish rotates with the wheel and survives LOD changes.
+     shader.uniforms.surfaceWater=surfaceWater;
      shader.vertexShader=shader.vertexShader.replace('#include <common>',
       '#include <common>\nvarying vec3 tyrePoint;').replace('#include <begin_vertex>',
       '#include <begin_vertex>\ntyrePoint=position;');
      shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
-      '#include <common>\nvarying vec3 tyrePoint;').replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      '#include <common>\nuniform float surfaceWater; varying vec3 tyrePoint;').replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
        float r=length(tyrePoint.yz);
        float shoulder=smoothstep(.331,.359,r);
        float angle=atan(tyrePoint.z,tyrePoint.y);
@@ -161,6 +162,9 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture){
        // panel. The scuffed contact belt stays diffuse under a direct lamp.
        float tread=smoothstep(.343,.358,r);
        roughnessFactor=clamp(roughnessFactor-.16*shoulder+.18*tread+.065*(scrub-.5)*resolved,.70,.96);
+       float film=surfaceWater*(.26+.69*tread);
+       roughnessFactor=mix(roughnessFactor,.20+.09*scrub*resolved,film);
+       diffuseColor.rgb*=1.-.30*film;
        diffuseColor.rgb*=1.+.10*ring+shoulder*(.09+.13*(scrub-.5)*resolved);
       `);
      // Integrate the printed sidewall over a 1/240 s exposure. Only the
