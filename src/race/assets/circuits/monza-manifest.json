@@ -62,8 +62,8 @@
     -0.5497522403325945
   ],
   "source": "OpenTopoData Mapzen; median + Gaussian terrain smoothing; not survey grade",
-  "triangles": 5863262,
-  "chunks": 804,
+  "triangles": 5864762,
+  "chunks": 814,
   "sharedPrototypes": 28,
   "solidInstances": 44691,
   "round": 14,

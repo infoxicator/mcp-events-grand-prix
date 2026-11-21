@@ -21,7 +21,9 @@ test('owner switches day and night scenes without losing the shared room or reta
   for(const circuit of ['las-vegas','monza','las-vegas','monza']){
    await page.getByLabel('Circuit',{exact:true}).selectOption(circuit);
    for(const p of [page,spectator]){await expect(p.locator('body')).toHaveAttribute('data-circuit',circuit);await expect(p.locator('body')).toHaveAttribute('data-room',links.room);await expect(p.locator('#viewport canvas')).toHaveCount(1);await expect.poll(()=>p.evaluate(()=>(window as unknown as {__renderStats:{circuit:string}}).__renderStats.circuit)).toBe(circuit);await expect.poll(()=>p.evaluate(()=>(window as any).__renderStats?.modelsReady)).toBe(true);}
-   if(circuit==='las-vegas'){await expect(page.locator('#waiting')).toBeHidden();await expect(page.locator('#lights')).toBeHidden();await page.getByRole('button',{name:'◉ Sphere',exact:true}).click();}else await expect(page.locator('#camera-name')).not.toContainText('SPHERE');
+   await expect(page.getByRole('button',{name:'Start race',exact:true})).toBeEnabled();
+   await expect(page.locator('#lights')).toBeHidden();
+   if(circuit==='las-vegas'){await page.getByRole('button',{name:'◉ Sphere',exact:true}).click();}else await expect(page.locator('#camera-name')).not.toContainText('SPHERE');
   }
   expect(errors).toEqual([]);expect((await request.get(`/api/rooms/${links.room}/status`).then(r=>r.json())).paidCalls).toBe(0);
  }finally{await other.close();}

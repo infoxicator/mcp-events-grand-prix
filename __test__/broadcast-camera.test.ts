@@ -9,7 +9,7 @@ describe('broadcast camera direction',()=>{
    now+=shot.seconds*1000;
   }
   expect(director.update(now)).toBe('side');
-  expect(new Set(BROADCAST_SHOTS.map(s=>s.mode))).toEqual(new Set(['side','chase','helicopter','tcam-a','tcam-b','cockpit-a','cockpit-b']));
+  expect(new Set(BROADCAST_SHOTS.map(s=>s.mode))).toEqual(new Set(['side','trackside','chase','helicopter','tcam-a','tcam-b','cockpit-a','cockpit-b']));
  });
  it('restarts with a full side hold when Broadcast is selected again',()=>{
   const d=new BroadcastDirector();d.update(0);expect(d.update(8000)).toBe('tcam-a');

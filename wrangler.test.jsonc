@@ -1,7 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "jev-grand-prix-test",
-  "main": "worker/index.ts",
+  "main": "e2e-worker/test-entry.ts",
+  "vars": {
+    "ACCESS_ISSUER": "https://grand-prix-test.cloudflareaccess.com",
+    "ACCESS_AUD": "grand-prix-fixture",
+    "ACCESS_OWNER_EMAIL": "owner@example.test",
+    "TYPESAFE_API_KEY": "fixture-only",
+    "AI_GATEWAY_API_KEY": "fixture-only",
+    "OPENAI_API_KEY": "fixture-only"
+  },
   "compatibility_date": "2026-11-13",
   "assets": {
     "directory": "./dist",

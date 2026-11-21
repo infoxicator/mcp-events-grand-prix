@@ -2,7 +2,7 @@ import type {Race, Team} from './types';
 
 // Race entries for Las Vegas, 18 November 2026. Source: formula1.com/en/drivers.
 // Starting positions are arranged for the game, independently of qualifying.
-const constructors = {
+export const constructors = {
  Ferrari:['#dc1029','#f2ece5'], Mercedes:['#a6b4bb','#00c9b4'], McLaren:['#ff8018','#25282b'],
  'Red Bull Racing':['#192746','#f2b52b'], 'Racing Bulls':['#f3f4fc','#2545bb'],
  Alpine:['#1688d3','#fa9cc2'], Haas:['#f0eeec','#bc1729'], Audi:['#babec1','#ff4525'],
@@ -42,8 +42,9 @@ export const gridSlot=(entry:GridEntry)=>{
  // front of the 5.62 m car just behind it.
  return {distance:-8-slot*8-3,offset:slot%2?3:-3};
 };
-export interface FieldCar {distance:number;offset:number;speed:number;finishTime:number|null}
-export interface OpponentCar extends FieldCar {service:number}
+export const FIELD_STEP_TICKS=4;
+export interface FieldCar {distance:number;offset:number;speed:number;finishTime:number|null;pitHeading?:number;pit?:'none'|'entry'|'stopped'|'exit';service?:number}
+export interface OpponentCar extends FieldCar {service:number;lateralVelocity?:number;impactSideSpeed?:number;compound?:import('./types').Compound;weatherPit?:number}
 export function startingField():OpponentCar[]{
  return opponents.map(entry=>({...gridSlot(entry),speed:0,finishTime:null,service:0}));
 }

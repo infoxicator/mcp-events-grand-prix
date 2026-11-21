@@ -1,18 +1,51 @@
+import {cornerService,jackLift} from './pit-service';
+import {sidewallInk} from './tyre-lettering';
+import {applyLivery} from './liveries';
 import * as T from 'three';
+import {constructorKit,trimMesh} from './constructor-trim';
 import {embeddedGLB} from './embedded-glb';
 import {grid, gridSlot, opponents, paints, type FieldCar} from './grid';
 import type {Track} from './track';
-import fieldURL from './assets/field.glb.gz?url&inline';
+import nearURL from './assets/field-near.glb.gz?url';
+import fieldURL from './assets/field.glb.gz?url';
 
-function numberAtlas(){
- const canvas=document.createElement('canvas');canvas.width=128*opponents.length;canvas.height=128;
- const ctx=canvas.getContext('2d')!;ctx.font='italic bold 82px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
- opponents.forEach((entry,i)=>{
-  ctx.lineWidth=8;ctx.strokeStyle='#25262a';ctx.fillStyle='#faf9f3';
-  ctx.strokeText(String(entry.number),128*i+64,67);ctx.fillText(String(entry.number),128*i+64,67);
- });
- const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=4;return map;
+// Keep the wing, endplates and supports together as the same car crosses LODs.
+// The transform is in chassis space, so wheel contacts and stance stay fixed.
+function prepareAero(geometry:T.BufferGeometry,fixedProfile?:number){
+ if(fixedProfile===0)return;
+ const positions=geometry.getAttribute('position'),smooth=T.MathUtils.smoothstep;
+ const deltas=fixedProfile===undefined?new Int16Array(positions.count*3):null;
+ for(let i=0;i<positions.count;i++){
+  const x=positions.getX(i),y=positions.getY(i),z=positions.getZ(i),width=Math.abs(x);
+  const onWheel=width>.54&&(y-.36)**2+(z+2.05)**2<.375**2;
+  const tail=onWheel?0:smooth(-z,2.09,2.22)*smooth(y,.43,.77);
+  const tip=smooth(width,.58,.77);
+  const flap=smooth(width,.42,.95)*smooth(z,2.02,2.22)*smooth(y,.115,.26);
+  const pod=smooth(width,.38,.69)*smooth(y,.26,.53)*(1-smooth(z,.63,.94))*smooth(z,-1.69,-.64);
+  const nose=smooth(z,.54,1.18)*(1-smooth(z,2.48,2.72))*(1-smooth(width,.19,.32))*smooth(y,.20,.37);
+  // A dished span, level span and crowned span share the same mounting
+  // points. Carry the profile into the end fence and its aft corner.
+  const span=smooth(width,.17,.76);
+  const cover=smooth(y,.79,1.02)*smooth(z,-2.16,-1.64)*(1-smooth(z,-.61,-.43))*(1-smooth(width,.2,.38));
+  const dx=x*.48*cover-Math.sign(x)*pod*.054-x*nose*.21+Math.sign(x)*tail*span*.043;
+  const dy=.084*cover+tail*(.035+.15*span*span)+flap*.077+pod*.047+nose*.037;
+  const dz=.080*cover+tail*(.055-.23*tip*smooth(y,.60,.98))-flap*.126;
+  if(deltas){
+   deltas[i*3]=Math.round(dx*32767);deltas[i*3+1]=Math.round(dy*32767);deltas[i*3+2]=Math.round(dz*32767);
+  }else positions.setXYZ(i,x+dx*fixedProfile!,y+dy*fixedProfile!,z+dz*fixedProfile!);
+ }
+ if(deltas)geometry.setAttribute('aeroDelta',new T.Int16BufferAttribute(deltas,3,true));
 }
+function shapeAero(material:T.Material){
+ const existing=material.onBeforeCompile,key=material.customProgramCacheKey();
+ material.onBeforeCompile=(shader,renderer)=>{
+  existing.call(material,shader,renderer);
+  shader.vertexShader='attribute float rearProfile; attribute vec3 aeroDelta;\n'+shader.vertexShader
+   .replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed+=rearProfile*aeroDelta;');
+ };
+ material.customProgramCacheKey=()=>key+'-aero-profile';
+}
+
 // The two Blender circuits contain the original twenty painted boxes.
 function extraGridBoxes(track:Track,heightAt:(distance:number)=>number){
  const vertices:number[]=[];
@@ -29,50 +62,160 @@ function extraGridBoxes(track:Track,heightAt:(distance:number)=>number){
  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();
  return new T.Mesh(geometry,new T.MeshStandardMaterial({color:'#dddeda',roughness:.9,side:T.DoubleSide}));
 }
-export function createField(track:Track,heightAt:(distance:number)=>number){
- const root=new T.Group(),batches:T.InstancedMesh[]=[],pose=new T.Object3D(),numbers=numberAtlas();
+// The close field asset batches each material across all four wheels. Mask
+// a corner in both passes while its mechanics carry the wheel off the axle.
+function serviceWheels(material:T.Material){
+ const original=material.onBeforeCompile,key=material.customProgramCacheKey();
+ material.onBeforeCompile=(shader,renderer)=>{
+  original.call(material,shader,renderer);
+  shader.vertexShader='attribute float removedWheels; varying vec3 servicePoint; flat varying int removed;\n'+shader.vertexShader
+   .replace('#include <begin_vertex>','#include <begin_vertex>\nservicePoint=position;removed=int(removedWheels);');
+  shader.fragmentShader='varying vec3 servicePoint; flat varying int removed;\n'+shader.fragmentShader
+   .replace('#include <clipping_planes_fragment>',`#include <clipping_planes_fragment>
+    if(removed!=0){
+     int corner=(servicePoint.z>0.?0:2)+(servicePoint.x>0.?1:0);
+     float radial=length(servicePoint.yz-vec2(.36,servicePoint.z>0.?1.55:-2.05));
+     if((removed & (1<<corner))!=0 && abs(servicePoint.x)>.64 && radial<.38)discard;
+    }`);
+ };
+ material.customProgramCacheKey=()=>key+'-service-wheels';
+}
+export function createField(track:Track,heightAt:(distance:number)=>number,paintSheet:T.Texture){
+ const root=new T.Group(),pose=new T.Object3D(),inkMap=sidewallInk();
  const gridBoxes=extraGridBoxes(track,heightAt);root.add(gridBoxes);
  const frustum=new T.Frustum(),projection=new T.Matrix4(),bounds=new T.Sphere(new T.Vector3(),3.6);
- const entries=new Int16Array(opponents.length).fill(-1),palettes:T.Color[][]=[];
- const numbersBySlot=new T.InstancedBufferAttribute(new Float32Array(opponents.length),1);
+ const level=()=>({batches:[] as T.InstancedMesh[],palettes:[] as T.Color[][],
+  entries:new Int16Array(opponents.length).fill(-1),
+  wheels:new T.InstancedBufferAttribute(new Float32Array(opponents.length*2),2),
+  forms:new T.InstancedBufferAttribute(new Float32Array(opponents.length),1),
+  rows:new T.InstancedBufferAttribute(new Float32Array(opponents.length),1),
+  count:0,dirty:false});
+ const removedWheels=new T.InstancedBufferAttribute(new Float32Array(opponents.length),1);
+ const far=level(),close=level(),wasClose=new Uint8Array(opponents.length);
  let disposed=false,ready=false,error:string|null=null;
- const loaded=embeddedGLB(fieldURL,true).then(({scene})=>{
-  scene.traverse(obj=>{
+ const rows=opponents.map(entry=>grid.indexOf(entry));
+ const profiles=opponents.map(e=>'Field'+e.team.replaceAll(' ',''));
+ const farModules=profiles.map(name=>name.replace('Field','Far'));
+ // Signed airbox and wing families, shared by the base mesh, trim and shadow at either LOD.
+ const shapes:Record<(typeof grid)[number]['team'],number>={Mercedes:.82,'Aston Martin':.68,Williams:.90,Alpine:1,Ferrari:-.82,Haas:-.68,Audi:-1,Cadillac:-.9,McLaren:.18,'Red Bull Racing':-.18,'Racing Bulls':0};
+ const strengths=opponents.map(e=>shapes[e.team]),modules=new Map<string,T.InstancedMesh>();
+ const loaded=Promise.all([embeddedGLB(fieldURL,true),embeddedGLB(nearURL,true),constructorKit()]).then(([{scene},{scene:nearScene},kit])=>{
+  if(!disposed){
+   const art=document.createElement('canvas');art.width=256;art.height=144;
+   const ctx=art.getContext('2d')!;ctx.fillStyle='#dfded1';ctx.fillRect(0,0,256,144);
+   ctx.fillStyle='#192126';ctx.textAlign='center';ctx.font='bold 30px Arial';ctx.fillText('LEGACY',128,42);
+   ctx.font='bold 86px Arial';ctx.fillText('DRS',128,123);
+   const map=new T.CanvasTexture(art);map.colorSpace=T.SRGBColorSpace;map.anisotropy=4;
+   const geometry=(kit.getObjectByName('RulesBoard') as T.Mesh).geometry.clone();
+   const boards=new T.InstancedMesh(geometry,new T.MeshStandardMaterial({map,vertexColors:true,roughness:.94,side:T.DoubleSide}),track.DRS_ZONES.length);
+   for(const [i,zone] of track.DRS_ZONES.entries()){
+    const d=zone.start,p=track.pointAt(d,track.trackHalfWidth(d)+2.4),t=track.tangentAt(d);
+    pose.position.set(p.x,heightAt(d)+.04,p.z);pose.rotation.set(0,Math.atan2(t.x,t.z),0);pose.updateMatrix();boards.setMatrixAt(i,pose.matrix);
+   }
+   boards.name='Legacy DRS activation';root.add(boards);
+  }
+  if(!disposed)for(const type of [...new Set([...profiles,...farModules]),'Contact','BrightWheelFaces']){
+   const mesh=trimMesh(kit,type,'#ffffff'),batch=new T.InstancedMesh(mesh.geometry,mesh.material,opponents.length);
+   if(type!=='Contact'&&type!=='BrightWheelFaces'){
+    batch.geometry.setAttribute('liveryRow',new T.InstancedBufferAttribute(new Float32Array(opponents.length),1));
+    applyLivery(mesh.material as T.MeshStandardMaterial,paintSheet,true,0,false,true);
+    prepareAero(mesh.geometry,strengths[profiles.indexOf(type.replace(/^Far/,'Field'))]);
+   }
+   batch.frustumCulled=false;batch.count=0;batch.receiveShadow=type!=='Contact';modules.set(type,batch);root.add(batch);
+  }
+  for(const [source,tier] of [[scene,far],[nearScene,close]] as const)source.traverse(obj=>{
+   const near=tier===close;
    if(!(obj instanceof T.Mesh))return;
    const old=obj.material as T.Material;
    if(disposed){obj.geometry.dispose();old.dispose();return;}
    const trim=obj.name==='Trim',paint=obj.name==='Paint';
-   const material=new T.MeshStandardMaterial({vertexColors:trim,metalness:trim?.17:.28,roughness:trim?.65:.35});
-   if(paint){
-    obj.geometry.setAttribute('raceNumberSlot',numbersBySlot);
-    material.onBeforeCompile=shader=>{
-     shader.uniforms.gridNumbers={value:numbers};
-     shader.vertexShader='attribute float raceNumberSlot; varying vec3 panel; varying float slot;\n'+shader.vertexShader;
-     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\npanel=position;slot=raceNumberSlot;');
-     shader.fragmentShader='uniform sampler2D gridNumbers; varying vec3 panel; varying float slot;\n'+shader.fragmentShader;
-     shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-      vec2 mark=vec2(panel.x/.35+.5,(panel.z-1.42)/.46+.5);
-      if(panel.y>.26 && all(greaterThan(mark,vec2(0.))) && all(lessThan(mark,vec2(1.)))){
-       vec4 ink=texture2D(gridNumbers,vec2((slot+mark.x)/${opponents.length.toFixed(1)},mark.y));
-       diffuseColor.rgb=mix(diffuseColor.rgb,ink.rgb,ink.a);
-      }`);
-    };
+   const shadow=obj.name==='UndertrayShadow';
+   const material=near&&paint?new T.MeshPhysicalMaterial({clearcoat:.38,clearcoatRoughness:.24,specularIntensity:.60}):
+    new T.MeshStandardMaterial({vertexColors:trim||obj.name==='WheelMetal'||shadow,metalness:trim?.10:.17,roughness:trim?.79:.46});
+   if(shadow){material.transparent=true;material.depthWrite=false;material.polygonOffset=true;material.polygonOffsetFactor=-2;}
+   if(near){
+    // The Blender skin and thin foil returns have visible front and back faces.
+    material.side=T.DoubleSide;
+    if(paint){material.metalness=.48;material.roughness=.37;}
+    if(obj.name==='Carbon'){material.color.set('#363d43');material.roughness=.50;material.metalness=.12;}
+    if(obj.name==='WheelMetal'){
+     material.roughness=.33;material.metalness=.64;
+     obj.geometry.setAttribute('wheelMotion',tier.wheels);
+     material.onBeforeCompile=shader=>{
+      shader.vertexShader='attribute vec2 wheelMotion;\n'+shader.vertexShader.replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
+       vec2 axle=vec2(.36,position.z>0.?1.55:-2.05);
+       vec2 radial=position.yz-axle;
+       bool rim=abs(position.x)>.90 && length(radial)<.236;
+       float a=wheelMotion.x;
+       mat2 turn=mat2(cos(a),sin(a),-sin(a),cos(a));
+       if(rim)objectNormal.yz=turn*objectNormal.yz;`).replace('#include <begin_vertex>',`#include <begin_vertex>
+        if(rim)transformed.yz=axle+turn*radial;`);
+     };
+    }
+    if(obj.name==='Tyre'){
+     obj.geometry.setAttribute('wheelMotion',tier.wheels);
+     material.color.set('#26272a');material.roughness=.91;material.metalness=0;
+     material.onBeforeCompile=shader=>{
+      shader.uniforms.sidewallInk={value:inkMap};
+      shader.vertexShader='attribute vec2 wheelMotion; varying vec2 spin; varying vec3 tyrePoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntyrePoint=position;spin=wheelMotion;');
+      shader.fragmentShader='uniform sampler2D sidewallInk; varying vec2 spin; varying vec3 tyrePoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+       float radius=length(vec2(tyrePoint.y-.36,tyrePoint.z-(tyrePoint.z>0.?1.55:-2.05)));
+       float ring=1.-smoothstep(.0015,.003+fwidth(radius),min(abs(radius-.287),abs(radius-.316)));
+       diffuseColor.rgb*=.88+.22*smoothstep(.25,.36,radius)+.23*ring;
+       if(radius>.235 && abs(tyrePoint.x)>.91){
+        vec2 radial=vec2((tyrePoint.z-(tyrePoint.z>0.?1.55:-2.05))*-sign(tyrePoint.x),tyrePoint.y-.36)/.72;
+        float a=spin.x*-sign(tyrePoint.x),cs=cos(a),sn=sin(a);
+        vec2 uv=mat2(cs,sn,-sn,cs)*radial;
+        float arc=min(.43,spin.y/100.);
+        vec4 stamp=vec4(0.);
+        for(int tap=-2;tap<=2;tap++){
+         float t=float(tap)*arc*.25;
+         stamp+=texture2D(sidewallInk,.5+mat2(cos(t),sin(t),-sin(t),cos(t))*uv)*.2;
+        }
+        diffuseColor.rgb=mix(diffuseColor.rgb,stamp.rgb,stamp.a*.90);
+       }
+      `);
+     };
+    }
+   }
+   // The distance mesh batches carbon, wheels and suspension into Trim. Only
+   // its endplate faces receive print, using the same atlas UVs as the close car.
+   const printedEndplates=near?obj.name==='Carbon':trim;
+   if(paint||obj.name==='Accent'||printedEndplates){
+    obj.geometry.setAttribute('liveryRow',tier.rows);
+    applyLivery(material,paintSheet,true,0,printedEndplates);
    }
    const batch=new T.InstancedMesh(obj.geometry,material,opponents.length),color=new T.Color();
+   if(near&&(obj.name==='WheelMetal'||obj.name==='Tyre')){
+    obj.geometry.setAttribute('removedWheels',removedWheels);serviceWheels(material);
+    const depth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking});
+    serviceWheels(depth);batch.customDepthMaterial=depth;
+   }
+   // Allocate the final attribute layout before precompiling. Its presence
+   // changes the Three.js program key even when the batch currently has no cars.
+   batch.setColorAt(0,color.set('#ffffff'));
+   if(['Trim','Carbon','Paint','Accent'].includes(obj.name)){
+    prepareAero(obj.geometry);
+    obj.geometry.setAttribute('rearProfile',tier.forms);
+    shapeAero(material);
+    const depth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking});
+    shapeAero(depth);batch.customDepthMaterial=depth;
+   }
    old.dispose();batch.name='Field '+obj.name;batch.frustumCulled=false;
-   batch.castShadow=true;batch.receiveShadow=true;batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
+   batch.castShadow=!shadow;batch.receiveShadow=!shadow;batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
    const palette=opponents.map(entry=>{
     const [primary,accent]=paints(entry);
-    const tint=obj.name==='HelmetTint'?new T.Color().setHSL(entry.number*.137%1,.78,.49):color.set(trim?'#ffffff':paint?primary:accent);
+    const tint=obj.name==='HelmetTint'?new T.Color().setHSL(entry.number*.137%1,.78,.49):color.set(entry.team==='Mercedes'&&paint?'#637278':entry.team==='Mercedes'&&obj.name==='Accent'?'#263439':obj.name==='Accent'?accent:paint?primary:'#ffffff');
     return tint.clone();
    });
-   palettes.push(palette);root.add(batch);batches.push(batch);
+   tier.palettes.push(palette);root.add(batch);tier.batches.push(batch);
   });ready=!disposed;
  }).catch(e=>{error=String(e);});
  return {root,loaded,get ready(){return ready;},get error(){return error;},update(field:readonly FieldCar[]|undefined,camera:T.PerspectiveCamera,focus:T.Vector3,mirror:boolean){
   root.visible=!!field?.length;if(!ready||!field)return;
   camera.updateMatrixWorld();frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
-  let count=0,changed=false;
+  for(const batch of modules.values())batch.count=0;
+  for(const tier of [far,close]){tier.count=0;tier.dirty=false;}
   for(let i=0;i<field.length;i++){
    const c=field[i];if(c.finishTime!==null)continue;
    const p=track.pointAt(c.distance,c.offset);bounds.center.set(p.x,heightAt(c.distance)+.55,p.z);
@@ -80,15 +223,36 @@ export function createField(track:Track,heightAt:(distance:number)=>number){
    // that corridor submit only the cars visible to the active camera.
    if(bounds.center.distanceToSquared(focus)>(mirror?500:60)**2&&!frustum.intersectsSphere(bounds))continue;
    const t=track.tangentAt(c.distance);pose.position.copy(bounds.center);pose.position.y-=.524;
-   pose.rotation.set(Math.atan2(heightAt(c.distance-3)-heightAt(c.distance+3),6),Math.atan2(t.x,t.z),0,'YXZ');pose.updateMatrix();
-   for(let j=0;j<batches.length;j++){
-    batches[j].setMatrixAt(count,pose.matrix);
-    if(entries[count]!==i)batches[j].setColorAt(count,palettes[j][i]);
+   pose.rotation.set(Math.atan2(heightAt(c.distance-3)-heightAt(c.distance+3),6),Math.atan2(t.x,t.z)+(c.pitHeading??0),0,'YXZ');pose.updateMatrix();
+   const distanceSq=bounds.center.distanceToSquared(camera.position);
+   const stopped=c.pit==='stopped',seconds=track.PIT_STOP_SECONDS-(c.service??0);
+   const near=distanceSq<(stopped?65:wasClose[i]?38:32)**2;wasClose[i]=Number(near);
+   const tier=near?close:far,slot=tier.count++;
+   let off=0;
+   if(near){
+    tier.wheels.setXY(slot,(c.distance/.36)%(2*Math.PI),c.speed);
+    if(stopped)for(let w=0;w<4;w++)if(cornerService(seconds,w).off)off|=1<<w;
+    removedWheels.setX(slot,off);
    }
-   if(entries[count]!==i){entries[count]=i;numbersBySlot.setX(count,i);changed=true;}
-   count++;
+   const module=modules.get(near?profiles[i]:farModules[i])!,contact=modules.get('Contact')!;
+   contact.setMatrixAt(contact.count++,pose.matrix);
+   if(stopped){pose.position.y+=jackLift({distance:c.distance,pit:c.pit,pitTime:seconds});pose.updateMatrix();}
+   module.geometry.getAttribute('liveryRow').setX(module.count,rows[i]);module.setMatrixAt(module.count++,pose.matrix);
+   if(!off&&(opponents[i].team==='Cadillac'||opponents[i].team==='Racing Bulls')){
+    const faces=modules.get('BrightWheelFaces')!;faces.setMatrixAt(faces.count++,pose.matrix);
+   }
+   for(const [j,batch] of tier.batches.entries()){
+    batch.setMatrixAt(slot,pose.matrix);
+    if(tier.entries[slot]!==i)batch.setColorAt(slot,tier.palettes[j][i]);
+   }
+   if(tier.entries[slot]!==i){tier.entries[slot]=i;tier.rows.setX(slot,rows[i]);
+    tier.forms.setX(slot,strengths[i]);tier.dirty=true;}
   }
-  if(changed)numbersBySlot.needsUpdate=true;
-  for(const batch of batches){batch.count=count;batch.instanceMatrix.needsUpdate=true;if(changed)batch.instanceColor!.needsUpdate=true;}
- },dispose(){disposed=true;numbers.dispose();for(const mesh of batches)mesh.dispose();}};
+  removedWheels.needsUpdate=true;close.wheels.needsUpdate=true;
+  for(const m of modules.values()){const row=m.geometry.getAttribute('liveryRow');if(row)row.needsUpdate=true;m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;}
+  for(const tier of [far,close]){
+   if(tier.dirty){tier.rows.needsUpdate=true;tier.forms.needsUpdate=true;}
+   for(const batch of tier.batches){batch.count=tier.count;batch.instanceMatrix.needsUpdate=true;if(tier.dirty)batch.instanceColor!.needsUpdate=true;}
+  }
+ },dispose(){disposed=true;inkMap.dispose();for(const mesh of [...far.batches,...close.batches,...modules.values()]){mesh.customDepthMaterial?.dispose();mesh.dispose();}}};
 }

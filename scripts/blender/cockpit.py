@@ -23,6 +23,8 @@ def rounded(value, power):
 def build_halo(mesh, interp, carbon, titanium, cavity, rod):
     # An oval aerodynamic shroud follows the wishbone in plan. Its long axis
     # turns into the surface normal of the side rail as it dives into the mount.
+    shroud = carbon.copy()
+    shroud.name = 'HaloComposite'
     rails = [[-.316,.603,-.537,.042,.052],[-.332,.686,-.505,.038,.050],
              [-.354,.815,-.409,.033,.041],[-.354,.884,-.19,.027,.039],
              [-.324,.913,.102,.022,.043],[-.259,.914,.32,.019,.044],
@@ -38,7 +40,7 @@ def build_halo(mesh, interp, carbon, titanium, cavity, rod):
         up = across.cross(tangent).normalized()
         rings.append([centre + across * (row[4]*math.cos(k*math.tau/24)) +
                       up * (row[3]*math.sin(k*math.tau/24)) for k in range(24)])
-    mesh('Halo', *closed_rings(rings), carbon)
+    mesh('Halo', *closed_rings(rings), shroud)
 
     # A narrow spoiler is bonded to the upper, outer edge of the titanium
     # shroud. Each side tapers back into the swept wishbone before the centre.
@@ -63,7 +65,17 @@ def build_halo(mesh, interp, carbon, titanium, cavity, rod):
                        [.887,.552,.059,.029]], 5)
     rings = [[(width*math.cos(a)*(1+.22*math.sin(a)), h, z+depth*math.sin(a))
               for a in [k*math.tau/32 for k in range(32)]] for h,z,width,depth in stations]
-    mesh('Faired centre leg', *closed_rings(rings), carbon)
+    mesh('Faired centre leg', *closed_rings(rings), shroud)
+    # Moulded landing pads follow the load path as it spreads into the tub.
+    for side in (-1, 0, 1):
+        rear = side != 0
+        rings = []
+        for h,scale in [(0,1),(.008,.97),(.016,.80),(.025,.62)]:
+            rings.append([(side*.318+scale*(.058 if rear else .073)*math.cos(a),
+                           (.641 if rear else .619)+h,
+                           (-.535 if rear else .675)+scale*(.091 if rear else .102)*math.sin(a))
+                          for a in (i*math.tau/32 for i in range(32))])
+        mesh('Halo mounting collar',*closed_rings(rings), carbon)
     for side in [-1,1]:
         for z in [-.570,-.498]:
             x = side*.322
@@ -178,6 +190,12 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
         # A smooth bend through the wrist. The entire gauntlet mouth follows
         # the forearm. Finger contact surfaces remain attached to the wheel.
         cuff=(1-mix)*(1-smooth(-.091,-.048,vertex.co.z))
+        # Flare the gauntlet mouth over the sleeve; keep wrist weights on the
+        # existing pivot so the fingers and grip are unaffected at full lock.
+        hem=(1-smooth(-.105,-.087,vertex.co.z))*cuff
+        vertex.co.x+=(vertex.co.x-side*.215)*.10*hem
+        vertex.co.y+=(vertex.co.y+.062)*.10*hem
+        vertex.co.z-=.012*hem
         if cuff>0:gauntlet.add([vertex.index],cuff,'REPLACE')
         if 1-mix-cuff>1e-6:palm.add([vertex.index],1-mix-cuff,'REPLACE')
         if mix>0:joints[digit].add([vertex.index],mix,'REPLACE')

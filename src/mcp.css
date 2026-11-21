@@ -1,1 +1,21 @@
-.mcp-toolbar{background:#1d2725;border-bottom:1px solid #42523c;color:#cedeb8;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;font:9px 'Space Mono',monospace}.mcp-toolbar>div{display:flex;gap:5px}.mcp-toolbar button{font-size:9px;padding:6px 9px}.mcp-toolbar button:disabled{opacity:.4}#mcp-sharing{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#242e25;border-bottom:1px solid #45553c;flex-wrap:wrap;font-size:10px}#mcp-sharing label{display:flex;align-items:center;gap:8px;flex:1;min-width:280px}#mcp-invite{width:100%;background:#131c19;color:#deebc2;border:1px solid #4c6042;border-radius:3px;padding:8px;font:8px monospace}#mcp-sharing button{font-size:9px}#mcp-sharing small{width:100%;color:#90a57b;font-size:8px}#mcp-sharing a{color:#d6ef83;font-size:9px}[data-mcp-app=true] .topbar{height:65px}[data-mcp-app=true] .topbar nav{display:none}[data-mcp-app=true] main{padding-top:18px}[data-mcp-app=true] .race-heading{margin-bottom:18px}[data-mcp-app=true] h1{font-size:23px}[data-mcp-hidden=true] canvas{visibility:hidden}@media(max-width:700px){.mcp-toolbar{font-size:7px;flex-wrap:wrap}.mcp-toolbar button{font-size:8px}}
+.mcp-toolbar,.mcp-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:8px 14px;background:#1d2725;border-bottom:1px solid #42523c;color:#cedeb8;font:12px/1.4 system-ui}
+.mcp-toolbar{justify-content:space-between}
+.mcp-toolbar>div,.mcp-row label{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.mcp-row[hidden]{display:none}
+.mcp-row input{width:clamp(130px,37vw,340px);padding:6px 8px;border:1px solid #576b53;border-radius:4px;background:#111715;color:#f3f6ea}
+.mcp-toolbar button,.mcp-row button{background:#cfebad;color:#182017;font:inherit;font-weight:700;border:0;border-radius:4px;padding:6px 10px;cursor:pointer}
+.mcp-toolbar button:disabled,.mcp-row button:disabled{opacity:.55;cursor:default}
+.mcp-row a{color:#d6ef83}
+.mcp-row [role=alert]{color:#ffbfaa}
+/* Hosts can paint the iframe body independently of the game palette. */
+[data-mcp-app=true] #app{
+ display:flow-root;
+ background:#101214;
+ color:#efeee8;
+ color-scheme:dark;
+}
+[data-mcp-app=true] .topbar{height:65px}
+[data-mcp-app=true] .topbar nav{display:none}
+[data-mcp-app=true] main{padding-top:18px}
+[data-mcp-app=true] .race-heading{margin-bottom:18px}
+[data-mcp-hidden=true] canvas{visibility:hidden}

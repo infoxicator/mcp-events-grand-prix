@@ -1,4 +1,7 @@
+import {damageLevel} from '../src/race/crashes';
 import {CIRCUITS} from '../src/race/track';
+import {raceControlTelemetry} from '../src/race/race-control';
+import {grip} from '../src/race/physics';
 /** Adapted from Jev Pong's OpenAI Decisions driver. Keys and HTTP stay server-side. */
 import {mockDriver} from '../src/race/brains';
 import {nearbyRival} from '../src/race/grid';
@@ -18,7 +21,7 @@ export function lunaRequest(s:Race,team:Team){
  const question=(name:string,instructions:string,choices:Record<string,string>)=>({type:'choice' as const,name,instructions,choices:Object.entries(choices).map(([value,description])=>({value,description}))});
  return {model:LUNA_MODEL,input:[{role:'user' as const,content:[
   {type:'input_text' as const,text:`F1 at ${CIRCUITS[s.circuit??'monza'].name}. Follow engineer strategy; local control handles corners and smooths intent. Team ${team}: ${team==='a'?'calm Ferrari':'aggressive Mercedes'}. Pick independent driving choices.`},
-  {type:'input_json' as const,data:{team,tick:s.tick,metres:Math.round(c.distance),speedKmh:Math.round(c.speed*3.6),gapMetres:Math.round(r.distance-c.distance),rivalOffset:Math.round(r.offset*10)/10,wear:Number(c.wear.toFixed(2)),battery:Math.round(c.ers),instruction:{...c.instruction}}},
+  {type:'input_json' as const,data:{team,tick:s.tick,metres:Math.round(c.distance),speedKmh:Math.round(c.speed*3.6),gapMetres:Math.round(r.distance-c.distance),rivalOffset:Math.round(r.offset*10)/10,wear:Number(c.wear.toFixed(2)),damagePercent:Math.round(damageLevel(c.damage)*100),battery:Math.round(c.ers),grip:grip(c,s.control?.wetness),raceControl:raceControlTelemetry(s),rain:s.control?.rain,instruction:{...c.instruction}}},
  ]}],questions:[
   question('line','Racing line. Pass beside, not through the rival.',{left:'Offset -3m',hold:'Racing line',right:'Offset +3m'}),
   question('pace','Speed bias in addition to safe cornering.',{cautious:'-2m/s',normal:'0m/s',attack:'+2m/s'}),

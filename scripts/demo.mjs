@@ -36,8 +36,9 @@ try{
     if(index===0&&!headless){const size=await page.evaluate(()=>({width:screen.availWidth,height:screen.availHeight}));screenWidth=size.width;screenHeight=size.height;}
     if(!headless){try{const cdp=await context.newCDPSession(page);const {windowId}=await cdp.send('Browser.getWindowForTarget');await cdp.send('Browser.setWindowBounds',{windowId,bounds:{left:index*Math.floor(screenWidth/3),top:0,width:Math.max(410,Math.floor(screenWidth/3)),height:screenHeight,windowState:'normal'}});await cdp.detach();}catch{console.log(`Opened ${seat}; window positioning is unavailable on this desktop.`);}}
   }
-  console.log('\nThree independent Chromium windows are connected: FERRARI | SPECTATOR | MERCEDES.\nRecord the spectator view; use Title sequence for the intro. Ctrl+C closes everything.\n');
+  console.log('\nThree independent Chromium windows are connected: FERRARI | SPECTATOR | MERCEDES.\nClick Start race when ready. Use Title sequence for the intro. Ctrl+C closes everything.\n');
   if(smoke){
+    await pages[1].getByRole('button',{name:'Start race',exact:true}).click();
     await pages[1].waitForFunction(()=>document.body.dataset.phase==='racing');
     await pages[1].waitForFunction(()=>window.__raceState?.intents.a>0&&window.__raceState?.intents.b>0);
     const health=await fetch(`${origin}/health`).then(r=>r.json());

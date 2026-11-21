@@ -6,7 +6,7 @@ for(const circuit of ['monza','las-vegas'] as const)test(`manual side camera hol
  const out=`artifacts/${process.env.SIDE_REVIEW_DIR||'steady-side/recordings'}`;await mkdir(out,{recursive:true});
  const links=await request.get('/api/default').then(r=>r.json());
  const fixture:RaceState=await request.get(`/api/rooms/${links.room}/status`).then(r=>r.json());
- fixture.race.circuit=circuit;fixture.connected={a:true,b:true};fixture.race.phase='racing';fixture.race.events=[];fixture.mode='mock';fixture.paidCalls=0;
+ fixture.speed=1;fixture.race.circuit=circuit;fixture.connected={a:true,b:true};fixture.race.phase='racing';fixture.race.events=[];fixture.mode='mock';fixture.paidCalls=0;
  const context=await browser.newContext({viewport:{width:1280,height:800},recordVideo:{dir:out,size:{width:1280,height:800}}});
  const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  let start=0,timer:ReturnType<typeof setInterval>|undefined;

@@ -15,6 +15,7 @@ export function kerbHeight(track:Track,station:number,offset:number){
  const edge=Math.abs(offset)-track.trackHalfWidth(station);
  if(edge<=0||edge>=width)return 0;
  const d=track.wrap(station);
+ if(offset<0&&track.pitOpenings.some(([a,b])=>d>=a&&d<=b))return 0;
  for(const corner of track.CORNERS){
   if(corner.speed>78)continue;
   const parabolica=corner.name==='Parabolica';

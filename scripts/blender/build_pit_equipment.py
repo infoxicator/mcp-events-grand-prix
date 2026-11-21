@@ -47,15 +47,45 @@ def make(name):
     obj=bpy.data.objects.new(name,mesh);bpy.context.collection.objects.link(obj);parts.append(obj)
     verts.clear();faces.clear();cols.clear();uvs.clear()
 verts=[];cols=[];faces=[];uvs=[]
-# Torso is relative to the hips. Pleats are narrow at the waist and open over the ribs.
-rows=[]
-for i in range(25):
-    y=.57*i/24
-    width=.175+.044*math.exp(-((y-.43)/.13)**2)-.093*max(0,(y-.48)/.09)
-    r=.122+.028*math.sin(math.pi*y/.57)+.006*math.sin(94*y)*math.exp(-((y-.19)/.10)**2)
-    rows.append((0,y,0,width,r))
-rings(rows,white,cloth=True)
-rings([(0,.095,0,.178,.137),(0,.132,0,.178,.140)],dark)
+# Closed fabric skins. The renderer bends each sleeve and trouser leg about
+# its bind joint. The bias folds cross that joint uninterrupted.
+def tailored(profile,col,n,fold,panel):
+    previous=None
+    for j,(y,rx,rz,z) in enumerate(profile):
+        row=[]
+        for i in range(n):
+            a=-math.tau*i/n
+            crease=fold*math.sin(82*y+2.7*math.cos(a)+.65*math.sin(3*a))
+            radius=1+crease+.025*math.cos(3*a-.6)
+            # Reinforced flex panels and inset seams break up the silhouette at
+            # the waist, knee and elbow. Edges taper with the garment pattern.
+            panel_edge=abs(math.cos(a))
+            if panel=='jacket':
+                inset=panel_edge>.89+.055*math.cos(8*y) and .065<y<.43
+            elif panel=='trouser':
+                inset=(math.sin(a)<-.42 and .34<y<.50) or (panel_edge>.94 and .12<y<.79)
+            else:
+                inset=(math.sin(a)<-.57 and .235<y<.40) or (panel_edge>.9 and .13<y<.52)
+            shade=(1+.45*crease)*(.18 if inset else 1)
+            row.append(vertex((rx*math.cos(a)*radius,y,z+rz*math.sin(a)*radius),
+                tuple(c*shade for c in col),(.613+.352*i/n,1-(533+209*j/(len(profile)-1))/768)))
+        if previous:
+            for i in range(n):faces.append((previous[i],previous[(i+1)%n],row[(i+1)%n],row[i]))
+        else:faces.append(tuple(reversed(row)))
+        previous=row
+    faces.append(tuple(previous))
+def section(rows,steps=3):
+    profile=[]
+    for a,b in zip(rows,rows[1:]):
+        for i in range(steps):
+            t=i/steps;profile.append(tuple(x+(y-x)*t for x,y in zip(a,b)))
+    return profile+[rows[-1]]
+# Tucked seat, natural waist, rib cage, shoulder yoke and padded collar.
+tailored(section([(-.086,.11,.084,-.018),(-.03,.173,.126,-.025),(.052,.186,.139,-.024),
+    (.13,.159,.111,-.008),(.21,.171,.121,0),(.32,.199,.146,.004),(.42,.204,.148,.003),
+    (.475,.180,.128,-.004),(.51,.104,.090,0)]),white,40,.023,'jacket')
+rings([(0,.114,0,.161,.116),(0,.134,0,.16,.115)],(.08,.09,.10),28)
+rings([(0,.491,0,.109,.094),(0,.537,-.006,.095,.083)],dark,24)
 for side in (-1,1):
     rod((side*.045,.437,.147),(side*.175,.442,.09),.005,dark)
     rod((side*.069,.2,.129),(side*.142,.235,.098),.004,dark)
@@ -83,36 +113,102 @@ for side in (-1,1):
 rod((0,.14,.139),(0,.495,.124),.004,dark);make('Torso')
 # Fireproof balaclava, mirrored visor, shell and hinge hardware.
 rings([(0,0,.004,.074,.077),(0,.061,.015,.083,.09)],dark)
-rings([(0,.04,.022,.084,.101),(0,.073,.021,.104,.122),(0,.157,.009,.117,.123),(0,.224,-.003,.104,.107),(0,.266,-.008,.065,.070),(0,.277,-.008,.027,.035)],(.18,.205,.235))
-for j in range(5):
-    a=.085+j*.017;rr=[]
-    for y in [a,a+.017]:
-        rr.append([vertex((.113*math.sin(t*.075),y,.022+.113*math.cos(t*.075)),(.026+.013*j,.042+.015*j,.057+.016*j)) for t in range(-18,19)])
-    for i in range(36):faces.append((rr[0][i],rr[0][i+1],rr[1][i+1],rr[1][i]))
-# Recessed rear vent strip and shell ribs catch the garage light.
-for j in range(4):rod((-.042,.102+j*.010,-.106),(.042,.102+j*.010,-.106),.003,dark)
-for side in (-1,1):rod((side*.11,.126,.019),(side*.121,.126,.019),.017,metal)
-make('Helmet')
-for name,length,r0,r1 in [('Sleeve',.31,.080,.065),('Forearm',.27,.067,.045),('Thigh',.43,.105,.081),('Shin',.43,.082,.061)]:
+rings([(0,.037,.036,.065,.098),(0,.058,.029,.095,.119),(0,.094,.025,.104,.134),
+       (0,.151,.011,.118,.136),(0,.207,-.004,.117,.124),(0,.244,-.013,.095,.103),
+       (0,.267,-.010,.064,.076),(0,.279,-.007,.022,.030)],(.08,.106,.145),32)
+# Continuous wraparound visor and brow gasket, with shaped chin opening.
+for bottom,top,col in [(.113,.202,(.012,.015,.021)),(.119,.193,(.025,.069,.098)),
+                       (.186,.192,(.125,.18,.21)),(.073,.087,(.024,.028,.035))]:
     rows=[]
-    for i in range(13):
-        t=i/12;r=(r0*(1-t)+r1*t)*(1+.085*math.sin(28*t+.3)*math.exp(-((t-.78)/.24)**2))
-        rows.append((0,t*length,0,r,r*.93))
-    rings(rows,white,16,cloth=True)
-    rings([(0,length*.86,0,r1*1.13,r1*1.06),(0,length*.92,0,r1*1.11,r1*1.04)],dark,16)
-    make(name)
-rings([(0,-.04,.026,.041,.045),(0,.003,.029,.051,.050),(0,.045,.022,.042,.041)],dark,14);make('Glove')
-rings([(0,0,.034,.076,.133),(0,.027,.037,.082,.140),(0,.061,.027,.076,.125),(0,.114,-.015,.067,.074)],dark);make('Boot')
-rod((0,0,0),(0,0,.18),.055,red,.060);rod((0,0,.18),(0,0,.31),.032,metal,.025)
-rod((0,-.104,.045),(0,-.018,.024),.026,dark);rod((0,.014,-.044),(0,.014,.002),.045,dark);make('SocketGun')
+    for j in range(4):
+        ring=[]
+        for i in range(37):
+            a=(i-18)*.078;t=j/3;y=bottom+(top-bottom)*t-.022*(abs(a)/1.42)**1.8
+            ring.append(vertex((.116*math.sin(a),y,.017+(.138+.003*math.sin(t*math.pi))*math.cos(a)),col))
+        rows.append(ring)
+    for a,b in zip(rows,rows[1:]):
+        for i in range(36):faces.append((a[i],a[i+1],b[i+1],b[i]))
+# Stack tear-offs along the visor edge and mould a ridge into the helmet shell.
+for side in [-1,1]:
+    for j in range(2):
+        rod((side*.094,.153+j*.012,.096),(side*.108,.150+j*.012,.084),.004,(.51,.52,.48),n=8)
+    rod((side*.077,.239,.052),(side*.076,.249,-.049),.008,(.042,.047,.053))
+for j in range(4):rod((-.042,.102+j*.010,-.119),(.042,.102+j*.010,-.119),.003,dark)
+for side in (-1,1):
+    rod((side*.104,.155,.030),(side*.12,.155,.030),.015,metal)
+    rod((side*.10,.119,-.045),(side*.113,.119,-.045),.029,dark)
+make('Helmet')
+tailored(section([(-.054,.018,.023,0),(-.028,.069,.066,0),(.022,.086,.077,.004),
+    (.095,.084,.080,.005),(.178,.075,.069,0),(.252,.063,.063,-.005),(.31,.059,.061,-.008),
+    (.354,.065,.064,-.005),(.405,.066,.060,0),(.494,.050,.047,0),(.575,.039,.039,0)]),
+    white,24,.034,'sleeve')
+rings([(0,.547,0,.044,.043),(0,.581,0,.041,.041)],(.10,.11,.13),18);make('Arm')
+tailored(section([(-.062,.056,.060,0),(-.025,.095,.101,-.012),(.045,.114,.111,-.011),
+    (.128,.111,.109,0),(.228,.102,.097,.007),(.334,.084,.085,.003),(.43,.078,.078,-.003),
+    (.51,.078,.083,0),(.587,.079,.088,.012),(.714,.060,.065,.009),(.836,.054,.058,0),
+    (.858,.051,.055,0)]),white,28,.033,'trouser');make('Leg')
+# Pre-curled fingers and a separate thumb form a grasp around a tyre or tool.
+rings([(0,-.023,0,.032,.034),(0,.012,.009,.046,.040),(0,.045,.013,.043,.033)],dark,18)
+for i in range(4):
+    x=(i-1.5)*.019;reach=.064-.009*abs(i-1)
+    rod((x,.028,.016),(x,.042,reach),.012,dark,.011)
+    rod((x,.042,reach),(x,.022,reach+.016),.011,dark,.009)
+rod((-.030,.009,.009),(-.050,.014,.040),.015,dark,.012)
+make('Glove')
+rings([(0,-.004,.046,.062,.131),(0,.016,.049,.072,.142),
+       (0,.035,.052,.074,.139),(0,.054,.039,.070,.126),
+       (0,.075,.003,.062,.083),(0,.117,-.017,.052,.061)],dark,28)
+rings([(0,-.005,.048,.062,.134),(0,.004,.049,.073,.143),(0,.011,.05,.071,.143)],(.013,.014,.015),28)
+for side in [-1,1]:
+    rod((side*.072,.036,.066),(side*.065,.048,-.006),.0038,(.35,.35,.33))
+for i in range(3):
+    rod((-.035,.061+i*.006,.066-i*.017),(.035,.061+i*.006,.061-i*.017),.0028,(.27,.28,.27))
+make('Boot')
+rod((0,0,-.046),(0,0,.136),.054,(.21,.23,.24),.060,20)
+rod((0,0,.128),(0,0,.202),.050,dark,.045)
+rod((0,0,.197),(0,0,.265),.032,metal,.026)
+rod((0,0,.260),(0,0,.310),.037,(.13,.15,.15),.030)
+rod((0,-.119,.017),(0,-.018,.038),.028,dark)
+rod((0,-.092,.053),(0,-.044,.069),.011,red)
+# Air coupling, impact-head retaining ring and recessed drive socket.
+rod((0,0,.28),(0,0,.305),.042,metal,.041,20)
+rod((0,0,.305),(0,0,.312),.029,dark,.029,6)
+rod((0,-.118,.018),(0,-.148,.018),.016,metal,.014,12)
+for j in range(4):
+    rod((-.039,.031,-.019+j*.027),(.039,.031,-.019+j*.027),.007,dark)
+make('SocketGun')
+# A one-metre hose section, instanced along the hanging lines.
+rod((0,0,0),(0,1,0),.011,(.044,.048,.052),n=10);make('AirHose')
+rod((0,.07,0),(0,2.86,0),.054,(.11,.12,.13))
+rod((0,2.85,0),(-5.4,2.85,0),.041,(.16,.17,.18))
+rod((0,2.15,0),(-1.15,2.85,0),.034,(.13,.14,.15))
+for x in [-1.35,-4.45]:
+    rod((x,2.85,-.10),(x,2.85,.10),.049,metal)
+make('HoseBoom')
+rod((0,0,0),(0,0,-.076),.112,(.024,.027,.031),n=28)
+rod((0,0,-.075),(0,0,-.091),.088,(.11,.12,.13),n=28)
+rod((0,.22,-.038),(0,.083,-.038),.019,metal,n=10)
+rod((0,0,.004),(0,0,.014),.085,metal,n=28)
+make('ReleaseHousing')
+rod((0,0,-.093),(0,0,-.098),.073,(.92,.92,.88),n=28)
+rod((0,0,.015),(0,0,.020),.072,(.92,.92,.88),n=28);make('ReleaseLens')
 rubber=(.034,.033,.031)
 tyre_ring([(-.15,.224),(-.166,.261),(-.159,.310),(-.128,.349),(-.082,.36),(.082,.36),(.128,.349),(.159,.310),(.166,.261),(.15,.224)],rubber)
 for sign in [-1,1]:
     tyre_ring([(sign*.151,.23),(sign*.153,.219),(sign*.135,.201),(sign*.112,.097),(sign*.12,.046),(sign*.132,.04)],dark)
     tyre_ring([(sign*.151,.232),(sign*.155,.229),(sign*.153,.225)],metal)
-    for i in range(7):
-        a=math.tau*i/7
-        rod((sign*.12,.089*math.cos(a),.089*math.sin(a)),(sign*.137,.205*math.cos(a+.20),.205*math.sin(a+.20)),.005,(.11,.12,.13))
+    from wheel_trim import spoke_faces
+    points,polys,alloy=spoke_faces()
+    start=len(verts)
+    for (x,y,z),shade in zip(points,alloy):
+        vertex((sign*(.154+x),y,z),shade[:3])
+    for poly in polys:faces.append(tuple(start+i for i in (poly if sign>0 else reversed(poly))))
+    # Captive centre lock, recessed hex and screw circle on the off-car rim.
+    rod((sign*.123,0,0),(sign*.149,0,0),.047,metal,.041,6)
+    rod((sign*.150,0,0),(sign*.152,0,0),.023,dark,n=6)
+    for j in range(12):
+        a=j*math.tau/12
+        rod((sign*.139,.209*math.cos(a),.209*math.sin(a)),(sign*.147,.209*math.cos(a),.209*math.sin(a)),.004,metal,n=6)
 make('SpareWheel')
 for sign in [-1,1]:tyre_ring([(sign*.161,.292),(sign*.162,.297)],white)
 make('CompoundBand')
@@ -122,6 +218,23 @@ for side in [-1,1]:
     rod((side*.20,.070,-.13),(side*.245,.070,-.13),.071,dark)
 rod((-.2,.09,-.15),(.2,.09,-.15),.031,metal);rod((-.113,.155,.345),(.113,.155,.345),.038,dark);make('JackFoot')
 rod((0,.09,-.13),(0,.91,-.82),.029,metal);rod((-.21,.91,-.82),(.21,.91,-.82),.028,dark);make('JackHandle')
+# Soft occlusion under an individual planted sole. The renderer follows each
+# boot so the contact opens out and fades as its weight shifts to the other leg.
+contact=bpy.data.materials.new('Sole contact');contact.use_nodes=True
+nodes=contact.node_tree.nodes;bs=nodes.get('Principled BSDF')
+bs.inputs['Base Color'].default_value=(.009,.008,.008,1)
+im=bpy.data.images.new('Service sole occlusion',32,32,alpha=True)
+pixels=[]
+for iz in range(32):
+    for ix in range(32):
+        x=(ix+.5)/16-1;z=(iz+.5)/16-1
+        pixels.extend((1,1,1,.58*max(0,1-x*x-z*z)**2))
+im.pixels.foreach_set(pixels);im.pack()
+tex=nodes.new('ShaderNodeTexImage');tex.image=im
+contact.node_tree.links.new(tex.outputs['Alpha'],bs.inputs['Alpha'])
+for x,z,u,v in [(-.17,-.19,0,0),(-.17,.29,0,1),(.17,.29,1,1),(.17,-.19,1,0)]:
+    vertex((x,0,z),white,(u,v))
+faces.append((0,1,2,3));make('SoleContact');parts[-1].data.materials[0]=contact
 # Each mesh can be inspected individually in the native file.
 for i,o in enumerate(parts):o.location.x=i*.65
 bpy.ops.wm.save_as_mainfile(filepath=str(root/'scripts/blender/pit-equipment.blend'))

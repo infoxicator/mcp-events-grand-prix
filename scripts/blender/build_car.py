@@ -341,15 +341,15 @@ aero=mat('AeroLaminate','11141a',.52,.05)
 front_elements=[]
 front_elements.append(wing('Front mainplane',1.956,2.715,.100,.395,aero,sweep=.116,lift=.025))
 for side in [-1,1]:
- for index,(z,y,chord) in enumerate([(2.562,.142,.244),(2.425,.184,.233),(2.305,.235,.212)]):
+ for index,(z,y,chord) in enumerate([(2.562,.151,.233),(2.425,.202,.220),(2.305,.257,.205)]):
   front_elements.append(wing('Front flap '+str(index),1.956,z,y,chord,aero,
                              sweep=.131+index*.012,lift=.037+index*.008,side=side,root_width=.068+index*.035))
  # Slot-gap separators tie neighbouring flaps together at two span stations.
  for distance in [.40,.76]:
   for j in range(3):
    z=2.56-j*.123-.12*distance*distance
-   panel('Flap slot bridge',[(side*distance,.101+j*.034,z+.035),(side*distance,.134+j*.034,z-.014),
-         (side*distance,.148+j*.034,z-.022),(side*distance,.132+j*.034,z+.041)],.006,aero)
+   panel('Flap slot bridge',[(side*distance,.110+j*.047,z+.035),(side*distance,.145+j*.047,z-.014),
+         (side*distance,.161+j*.047,z-.022),(side*distance,.139+j*.047,z+.041)],.006,aero)
 for s in [-1,1]:
  # The outboard return curls from the deck through a quarter-round
  # into the vertical end fence; its silhouette changes along the chord.
@@ -451,7 +451,7 @@ shell=ellipsoid('Helmet shell',(0,.772,-.315),(.158,.178,.19),helmetpaint,helmet
 for v in shell.data.vertices:
  if v.co.y<-.45:v.co.z+=.16*(-v.co.y-.45)
  if v.co.z<-.3:v.co.z*=.94
-def helmet_band(name,lo,hi,material,start=-math.pi,end=math.pi):
+def helmet_band(name,lo,hi,material,start=-math.pi,end=math.pi,relief=0):
  vs=[];fs=[];N=96
  rows=max(1,math.ceil((hi-lo)/.009))
  for row in range(rows+1):
@@ -459,14 +459,15 @@ def helmet_band(name,lo,hi,material,start=-math.pi,end=math.pi):
   r=math.sqrt(max(0,1-((y-.772)/.178)**2))
   for i in range(N+1):
    a=start+(end-start)*i/N
-   vs.append((.1605*r*math.sin(a),y,-.315+.194*r*math.cos(a)))
+   vs.append(((.1605+relief)*r*math.sin(a),y,-.315+(.194+relief)*r*math.cos(a)))
  for row in range(rows):
   for i in range(N):
    k=row*(N+1)+i;fs.append((k,k+1,k+N+2,k+N+1))
  return mesh(name,vs,fs,material,helmet)
-helmet_band('Curved visor glazing',.744,.829,visor,-1.42,1.42)
-helmet_band('Visor upper seal',.829,.835,black,-1.44,1.44)
-helmet_band('Visor lower seal',.739,.744,black,-1.44,1.44)
+helmet_band('Recessed visor gasket',.737,.839,black,-1.46,1.46,.002)
+helmet_band('Curved visor glazing',.747,.827,visor,-1.405,1.405,.0055)
+helmet_band('Visor upper seal',.827,.836,black,-1.435,1.435,.004)
+helmet_band('Visor lower seal',.739,.747,black,-1.435,1.435,.004)
 helmet_band('Lower shell binding',.650,.661,black)
 helmet_band('Crown red pinline',.858,.864,paint)
 helmet_band('Crown ivory pinline',.866,.870,silver)

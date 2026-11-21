@@ -1,6 +1,6 @@
 // Geometry: bacinger/f1-circuits, MIT © 2019–2025 Tomislav Bacinger.
-import monzaGeo from '../../data/monza.json';
-import vegasGeo from '../../data/las-vegas.json';
+import monzaGeo from '../../data/monza.json' with {type:'json'};
+import vegasGeo from '../../data/las-vegas.json' with {type:'json'};
 export type CircuitId='monza'|'las-vegas';
 export const isCircuit=(v:unknown):v is CircuitId=>v==='monza'||v==='las-vegas';
 export const CIRCUITS={monza:{name:'Monza',grandPrix:'ITALIAN GRAND PRIX',country:'ITALY',corners:11,night:false,temperature:28,coordinates:'45.6189° N / 9.2812° E'},'las-vegas':{name:'Las Vegas',grandPrix:'LAS VEGAS GRAND PRIX',country:'NEVADA / USA',corners:17,night:true,temperature:18,coordinates:'36.1099° N / 115.1612° W'}} as const;
@@ -75,9 +75,11 @@ function inZone(d:number,start:number,end:number){d=wrap(d);return start<end?d>=
 const isDrsZone=(d:number)=>DRS_ZONES.some(z=>inZone(d,z.start,z.end));
 function cornerName(d:number){return CORNERS.reduce((a,b)=>Math.abs(wrap(b.d-d+LENGTH/2)-LENGTH/2)<Math.abs(wrap(a.d-d+LENGTH/2)-LENGTH/2)?b:a).name;}
 const PIT_ENTRY=LENGTH-420,PIT_EXIT=id==='las-vegas'?480:300,PIT_STOP=LENGTH-180,PIT_LIMIT=80/3.6,PIT_STOP_SECONDS=2.6;
-function pitOffset(d:number){if(!inZone(d,PIT_ENTRY,PIT_EXIT))return 0;const start=wrap(d-PIT_ENTRY),total=LENGTH-PIT_ENTRY+PIT_EXIT;return -18*Math.min(1,start/90,(total-start)/90);}
+const PIT_WALL_START=PIT_ENTRY+108;
+const pitOpenings=[[PIT_EXIT-90,PIT_EXIT-12],[PIT_ENTRY+12,PIT_ENTRY+90]] as const;
+function pitOffset(d:number){if(!inZone(d,PIT_ENTRY,PIT_EXIT))return 0;const start=wrap(d-PIT_ENTRY),total=LENGTH-PIT_ENTRY+PIT_EXIT;const u=Math.min(1,start/90,(total-start)/90);return -18*u*u*(3-2*u);}
 
-return {id,...CIRCUITS[id],OFFICIAL_LENGTH,LENGTH,centreline,cumulative,START_OFFSET,project,wrap,pointAt,tangentAt,signedCurvatureAt,curvatureAt,trackHalfWidth,racingLineOffset,racingCurvature,CORNERS,SECTORS,SPEED_TRAP,DRS_ZONES,inZone,isDrsZone,cornerName,PIT_ENTRY,PIT_EXIT,PIT_STOP,PIT_LIMIT,PIT_STOP_SECONDS,pitOffset};
+return {id,...CIRCUITS[id],OFFICIAL_LENGTH,LENGTH,centreline,cumulative,START_OFFSET,project,wrap,pointAt,tangentAt,signedCurvatureAt,curvatureAt,trackHalfWidth,racingLineOffset,racingCurvature,CORNERS,SECTORS,SPEED_TRAP,DRS_ZONES,inZone,isDrsZone,cornerName,PIT_ENTRY,PIT_EXIT,PIT_STOP,PIT_LIMIT,PIT_STOP_SECONDS,PIT_WALL_START,pitOpenings,pitOffset};
 }
 export type Track=ReturnType<typeof buildTrack>;
 const cache=new Map<CircuitId,Track>();

@@ -1,20 +1,23 @@
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {TextureLoader} from 'three';
-/** Decode embedded assets without fetch(data:), blob workers or eval: strict MCP CSP. */
+/** Decode data URIs without fetch(data:), which may be blocked by the host CSP. */
 export async function assetBytes(url:string):Promise<ArrayBuffer>{
  if(!url.startsWith('data:'))return fetch(url).then(r=>{if(!r.ok)throw new Error(`Asset ${r.status}`);return r.arrayBuffer();});
  const raw=atob(url.slice(url.indexOf(',')+1)),bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return bytes.buffer;
 }
+// Normal web servers may serve a precompressed asset with Content-Encoding.
+export async function gzipBytes(url:string){
+ const bytes=await assetBytes(url);
+ const signature=new Uint8Array(bytes,0,2);
+ if(signature[0]!==0x1f||signature[1]!==0x8b)return bytes;
+ return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+}
 function base64(bytes:Uint8Array){const parts:string[]=[];for(let i=0;i<bytes.length;i+=32768)parts.push(String.fromCharCode(...bytes.subarray(i,i+32768)));return btoa(parts.join(''));}
 export async function embeddedGLB(url:string,gzip=false){
- let bytes=await assetBytes(url);if(gzip)bytes=await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
- const view=new DataView(bytes),jsonSize=view.getUint32(12,true),json=JSON.parse(new TextDecoder().decode(new Uint8Array(bytes,20,jsonSize))),binStart=20+jsonSize+8;
- for(const view of json.bufferViews??[]){
-  const stride=view.extras?.byteLanes;if(!stride)continue;
-  const data=new Uint8Array(bytes,binStart+(view.byteOffset??0),view.byteLength),packed=data.slice();let at=0;
-  for(let lane=0;lane<stride;lane++){let last=0;for(let j=lane;j<data.length;j+=stride){last=(last+packed[at++])&255;data[j]=last;}}
-  delete view.extras.byteLanes;
- }
+ const bytes=await (gzip?gzipBytes(url):assetBytes(url));
+ if(import.meta.env.MCP_APP!=='true')return new GLTFLoader().parseAsync(bytes,'');
+ const view=new DataView(bytes),jsonSize=view.getUint32(12,true);
+ const json=JSON.parse(new TextDecoder().decode(new Uint8Array(bytes,20,jsonSize))),binStart=20+jsonSize+8;
  // Replace embedded image buffer views with img-src data: images. GLTFLoader's
  // default ImageBitmapLoader fetches blob: URLs, which strict MCP hosts forbid.
  for(const img of json.images??[])if(img.bufferView!==undefined){const b=json.bufferViews[img.bufferView];img.uri=`data:${img.mimeType};base64,${base64(new Uint8Array(bytes,binStart+(b.byteOffset??0),b.byteLength))}`;delete img.bufferView;}

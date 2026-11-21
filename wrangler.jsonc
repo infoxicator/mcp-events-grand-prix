@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "jev-grand-prix",
+  "account_id": "06a4713985a56e5369e4618960cf5b70",
+  "preview_urls": false,
+  "keep_vars": true,
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-13",
   "assets": {

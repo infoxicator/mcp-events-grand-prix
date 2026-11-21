@@ -1,4 +1,45 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jev Grand Prix · MCP App</title></head><body>
-<div class="mcp-toolbar"><span id="mcp-status" role="status">Connecting to MCP host…</span><div><button id="mcp-play" disabled>Start AI players</button><button id="mcp-fullscreen" hidden>Expand</button><button id="mcp-web" disabled>Open web app ↗</button></div></div>
-<div id="mcp-sharing" hidden><label>Invite for <span id="mcp-invite-side">other</span> player <input id="mcp-invite" readonly aria-label="Player invitation"></label><button id="mcp-copy">Copy invitation</button><a id="mcp-join-web" href="#" hidden>Open invited player in browser ↗</a><small>Paste this invitation into the other MCP host. Copying frees the invited seat if this app runs both players. Both views must stay open.</small></div>
-<div id="app"></div><script type="module" src="/src/mcp-app.ts"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MCP Grand Prix · MCP App</title>
+</head>
+<body>
+<div class="mcp-toolbar">
+ <span id="mcp-status" role="status">Connecting to MCP host…</span>
+ <div>
+  <button id="mcp-play" disabled>Ready to race</button>
+  <button id="mcp-solo" hidden>Open solo lobby</button>
+  <button id="mcp-chat-strategy" hidden>Open ChatGPT Work strategy lobby</button>
+  <button id="mcp-fullscreen" hidden>Expand</button>
+  <button id="mcp-strategy" hidden>Strategy replays ↗</button>
+  <button id="mcp-web" disabled>Open spectator ↗</button>
+  <button id="mcp-live" hidden>Start live race</button>
+  <button id="mcp-owner" hidden>Stop live race ↗</button>
+ </div>
+</div>
+<div id="mcp-pairing" class="mcp-row" hidden>
+ <span id="mcp-pair-status" role="status"></span>
+ <button id="mcp-pair-open">Open owner sign-in ↗</button>
+ <button id="mcp-pair-cancel">Dismiss</button>
+</div>
+<p id="mcp-crew" class="mcp-row" role="status" hidden></p>
+<div id="mcp-sharing" class="mcp-row" hidden>
+ <label><span id="mcp-invite-label">Invite a player</span> <input id="mcp-invite" readonly aria-label="Race invitation"></label>
+ <button id="mcp-copy">Copy invitation</button>
+ <a id="mcp-join-web" href="#" hidden>Open invited seat in browser ↗</a>
+</div>
+<div id="mcp-guest-sharing" class="mcp-row" hidden>
+ <label>Mercedes strategy invitation <input id="mcp-guest-invite" readonly></label>
+ <button id="mcp-guest-copy">Copy Mercedes invitation</button>
+</div>
+<form id="mcp-join-form" class="mcp-row">
+ <label>Join an existing race <input id="mcp-join" name="invite" placeholder="Paste an invitation" autocomplete="off" maxlength="2048" required></label>
+ <button>Join race</button>
+ <span id="mcp-join-error" role="alert"></span>
+</form>
+<div id="app"></div>
+<script type="module" src="/src/mcp-app.ts"></script>
+</body>
+</html>

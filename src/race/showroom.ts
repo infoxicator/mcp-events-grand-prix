@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {Reflector} from 'three/addons/objects/Reflector.js';
 import {RectAreaLightUniformsLib} from 'three/addons/lights/RectAreaLightUniformsLib.js';
-import contactURL from './assets/jgp26-contact.png?url&inline';
+import contactURL from './assets/jgp26-contact.png?url';
 /** Neutral studio rig, independent of circuit daylight/night lighting. */
 export function createShowroom(renderer:T.WebGLRenderer){
  const scene=new T.Scene();scene.background=new T.Color('#101318');scene.fog=new T.Fog('#101318',18,65);

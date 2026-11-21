@@ -18,6 +18,7 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true
   },
+  "exclude": ["e2e-worker/test-entry.ts"],
   "include": [
     "src",
     "server",
