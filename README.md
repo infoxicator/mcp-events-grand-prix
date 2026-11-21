@@ -107,7 +107,7 @@ As in Pong, live Luna defaults to **600 ms after each response**, paced further 
 
 ## MCP Apps: two hosts, one race
 
-The local server exposes **Streamable HTTP at `/mcp`**. The linked `ui://jev-grand-prix/pit-wall-v24.html` resource serves a small HTML template using the official MCP Apps SDK. The sandbox loads versioned game assets from the same server over HTTPS in production. The included host uses `AppBridge` through a separate-origin double-iframe sandbox.
+The local server exposes **Streamable HTTP at `/mcp`**. The linked `ui://jev-grand-prix/pit-wall-v25.html` resource serves a small HTML template using the official MCP Apps SDK. The sandbox loads versioned game assets from the same server over HTTPS in production. The included host uses `AppBridge` through a separate-origin double-iframe sandbox.
 
 ```sh
 npm run demo:mcp
