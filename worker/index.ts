@@ -9,7 +9,7 @@ import {isCircuit,type CircuitId} from '../src/race/track';
 import {isMatchup,type Matchup} from '../src/race/matchup';
 import {TEAMS,type Team,type Race,type ClientMessage,type RaceState} from '../src/race/types';
 import {isLiveKey,isRoomId,newLiveKey,LIVE_CALL_LIMIT,LIVE_DRIVER_INTERVAL_MS,LIVE_PAIR_PATH,LIVE_TIME_MS,OWNER_LIVE_PATH,
- CHAT_STRATEGY_LAPS,CHAT_STRATEGY_TIME_MS,PAIR_TTL_MS,ROOM_EXPIRED_CLOSE_CODE,FINISHED_GRACE_MS,STRATEGY_LOBBY_TTL_MS,STRATEGY_IDLE_STOP_MS,STRATEGY_MAX_CONSECUTIVE_FAILURES,type LivePhase} from '../src/race/live';
+ CHAT_STRATEGY_LAPS,CHAT_STRATEGY_MAX_LAPS,CHAT_STRATEGY_TIME_MS,strategyTimeBudgetMs,PAIR_TTL_MS,ROOM_EXPIRED_CLOSE_CODE,FINISHED_GRACE_MS,STRATEGY_LOBBY_TTL_MS,STRATEGY_IDLE_STOP_MS,STRATEGY_MAX_CONSECUTIVE_FAILURES,type LivePhase} from '../src/race/live';
 import {handleOwnerLive,handlePairing,roomStub,type LiveControls} from './owner-live';
 import {liveAvailable,livePairingAvailable,raceProviders,type LiveBindings} from './live-providers';
 import {json,privateHeaders} from './http';
@@ -25,9 +25,9 @@ export interface Env extends LiveBindings {
  MCP_ROOM_CREATION?: RateLimit;
 }
 
-async function create(env:Env,origin:string,matchup:Matchup='jev-vs-jev',circuit:CircuitId='monza',clock=4,solo=false,drive=false,laps=3):Promise<McpRoom>{
+async function create(env:Env,origin:string,matchup:Matchup='jev-vs-jev',circuit:CircuitId='monza',clock=4,solo=false,drive=false,laps=3,watchMode=false):Promise<McpRoom>{
  const id=crypto.randomUUID();
- const response=await roomStub(env,id).fetch(new Request(`${origin}/internal-create?room=${id}&matchup=${matchup}&circuit=${circuit}&clock=${clock}&solo=${solo}&drive=${drive}&laps=${laps}`,{method:'POST'}));
+ const response=await roomStub(env,id).fetch(new Request(`${origin}/internal-create?room=${id}&matchup=${matchup}&circuit=${circuit}&clock=${clock}&solo=${solo}&drive=${drive}&laps=${laps}&watch=${watchMode}`,{method:'POST'}));
  if(!response.ok)throw new Error('Unable to create race');
  return response.json();
 }
@@ -71,7 +71,7 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
    if(!(await allowCreate()).success)return json({error:'Room creation limit'},429);
    const circuit=searchParams.get('circuit')??'monza';
    if(!isCircuit(circuit))return json({error:'Invalid circuit'},400);
-   const isDrive=path==='/api/rooms'&&searchParams.has('drive');const lapsParam=Number(searchParams.get('laps'));const laps=Number.isFinite(lapsParam)&&lapsParam>=1&&lapsParam<=20?Math.round(lapsParam):3;const created=await create(env,origin,'jev-vs-jev',circuit,path==='/api/rooms'&&(searchParams.has('watch')||isDrive)?1:4,path==='/api/rooms'&&(searchParams.has('solo')||(isDrive&&!searchParams.has('multiplayer'))),isDrive,laps);expiredRooms.delete(created.links.room);return json(created.links);
+   const isDrive=path==='/api/rooms'&&searchParams.has('drive');const isWatch=path==='/api/rooms'&&searchParams.has('watch')&&!isDrive;const lapsParam=Number(searchParams.get('laps'));const laps=Number.isFinite(lapsParam)&&lapsParam>=1&&lapsParam<=20?Math.round(lapsParam):3;const created=await create(env,origin,'jev-vs-jev',circuit,isWatch||isDrive?1:4,path==='/api/rooms'&&(searchParams.has('solo')||(isDrive&&!searchParams.has('multiplayer'))),isDrive,laps,isWatch);expiredRooms.delete(created.links.room);return json(created.links);
   }
 
   if(path==='/mcp'){
@@ -200,7 +200,7 @@ interface StrategySeat extends SavedStrategySeat {
 }
 
 interface Saved {
- speed?:number;solo?:boolean;drive?:boolean;driverMode?:RaceRoom['driverMode'];engineerMode?:RaceRoom['engineerMode'];matchup?:Matchup;id:string;origin:string;race:Race;tokens:RaceRoom['tokens'];mcpToken:string;expiresAt:number;
+ speed?:number;solo?:boolean;drive?:boolean;watchMode?:boolean;driverMode?:RaceRoom['driverMode'];engineerMode?:RaceRoom['engineerMode'];matchup?:Matchup;id:string;origin:string;race:Race;tokens:RaceRoom['tokens'];mcpToken:string;expiresAt:number;
  intents:RaceState['intents'];engineerCalls:RaceState['engineerCalls'];
  live?:{phase:LivePhase;key:string;deadline:number;lobbyDeadline?:number;strategyPractice?:boolean;guestInviteKey?:string;subscriptionKey?:string;webhook?:StrategyWebhook;strategySeats?:Partial<Record<Team,SavedStrategySeat>>;
   state:Pick<RaceState,'players'|'mode'|'paidCalls'|'driverStats'|'decisions'|'latestChatRadio'|'guestChatStrategy'>};
@@ -237,7 +237,7 @@ export class GameRoom extends DurableObject<Env> {
    const paidLobby=waiting&&!saved.live?.strategyPractice&&saved.solo===true&&saved.live?.strategySeats?.a?.subscriptionKey&&
     liveAvailable(this.env,'jev-vs-jev','chatgpt');
    const room=this.room=paidLobby?this.createPaidRace(saved.id,saved.origin,'jev-vs-jev',saved.race.circuit,true)
-    :new RaceRoom(saved.id,saved.origin,{JEV_MOCK:'1'},saved.speed??4,saved.matchup??'jev-vs-jev',{},saved.race.circuit??'monza',saved.solo??false,saved.race.laps??3,saved.drive??false);
+    :new RaceRoom(saved.id,saved.origin,{JEV_MOCK:'1'},saved.speed??4,saved.matchup??'jev-vs-jev',{},saved.race.circuit??'monza',saved.solo??false,saved.race.laps??3,saved.drive??false,saved.watchMode??false);
    Object.assign(room.tokens,saved.tokens);
    room.mcpToken=saved.mcpToken;
    room.race={...saved.race,field:saved.race.field??(saved.race.phase==='lobby'?room.race.field:[]),circuit:saved.race.circuit??'monza'};
@@ -305,7 +305,7 @@ export class GameRoom extends DurableObject<Env> {
    if(seat)strategySeats[team]={key:seat.key,subscriptionKey:seat.subscriptionKey,webhook:seat.webhook};
   }
   const saved:Saved={
-   speed:room.speed,solo:room.solo,drive:room.drive,driverMode:room.driverMode,engineerMode:room.engineerMode,matchup:room.matchup,id:room.id,origin:room.origin,race:room.race,tokens:room.tokens,
+   speed:room.speed,solo:room.solo,drive:room.drive,watchMode:room.watchMode,driverMode:room.driverMode,engineerMode:room.engineerMode,matchup:room.matchup,id:room.id,origin:room.origin,race:room.race,tokens:room.tokens,
    mcpToken:room.mcpToken,expiresAt:room.expiresAt,intents:room.intents,engineerCalls:room.engineerCalls,
    live:room.live?{phase:room.live,key:room.viewerKey!,deadline:this.liveDeadline,lobbyDeadline:this.lobbyDeadline||undefined,strategyPractice:room.strategyPractice,guestInviteKey:this.guestInviteKey,
     strategySeats,state:{
@@ -363,7 +363,7 @@ export class GameRoom extends DurableObject<Env> {
   const room=this.room;
   if(this.timer||!room||room.race.phase==='lobby'||room.race.phase==='finished'||(room.live&&(!confirmed||room.live!=='running')))return;
   const seats=room.connected();
-  if(!seats.a||!seats.b)return;
+  if(!seats.a||!seats.b||(!room.live&&this.peers.size===0))return;
   this.prev=Date.now();
   this.timer=setInterval(()=>{
    const now=Date.now();
@@ -402,7 +402,7 @@ export class GameRoom extends DurableObject<Env> {
     this.broadcastAt=now;
    }
    const connected=room.connected();
-   if(!connected.a||!connected.b||room.race.phase==='lobby'||room.race.phase==='finished'){
+   if(!connected.a||!connected.b||(!room.live&&this.peers.size===0)||room.race.phase==='lobby'||room.race.phase==='finished'){
     this.stopClock();
     if(room.live)this.finishLive('finished');
     else if(room.race.phase==='finished')this.tightenFinishedExpiry();
@@ -463,7 +463,7 @@ export class GameRoom extends DurableObject<Env> {
   room.live='running';
   room.viewerKey=newLiveKey();
   const now=Date.now();
-  this.liveDeadline=now+(room.strategyPractice?CHAT_STRATEGY_TIME_MS:LIVE_TIME_MS);
+  this.liveDeadline=now+(room.strategyPractice?strategyTimeBudgetMs(room.race.laps):LIVE_TIME_MS);
   this.lobbyDeadline=!start&&room.strategyPractice?now+STRATEGY_LOBBY_TTL_MS:0;
   room.expiresAt=this.liveDeadline+FINISHED_GRACE_MS;
   if(start)room.start();
@@ -483,7 +483,7 @@ export class GameRoom extends DurableObject<Env> {
   if(this.room||this.paired()||!isRoomId(id)||!isCircuit(circuit))return json({error:'Invalid strategy race'},400);
   // This path never reads provider bindings or installs paid transports.
   const lapsParam=Number(url.searchParams.get('laps'));
-  const laps=Number.isFinite(lapsParam)&&lapsParam>=3&&lapsParam<=CHAT_STRATEGY_LAPS?Math.round(lapsParam):CHAT_STRATEGY_LAPS;
+  const laps=Number.isFinite(lapsParam)&&lapsParam>=3&&lapsParam<=CHAT_STRATEGY_MAX_LAPS?Math.round(lapsParam):CHAT_STRATEGY_LAPS;
   const room=this.room=new RaceRoom(id,url.origin,{JEV_MOCK:'1'},1,'jev-vs-jev',{},circuit,true,laps);
   room.strategyPractice=true;
   this.guestInviteKey=newLiveKey();
@@ -579,7 +579,7 @@ export class GameRoom extends DurableObject<Env> {
   }
   const verification=seat.webhookVerification={url};
   try{
-   const expiresAt=Math.min(this.liveDeadline,Date.now()+(input.ttlMs??CHAT_STRATEGY_TIME_MS));
+   const expiresAt=Math.min(this.liveDeadline,Date.now()+(input.ttlMs??strategyTimeBudgetMs(room.race.laps)));
    const refreshing=current?.url===url&&current.secret===input.delivery.secret&&current.expiresAt>Date.now();
    const subscription=refreshing?current:{id:await webhookId(room.id,url,team),url,secret:input.delivery.secret,expiresAt};
    if(!refreshing){
@@ -637,7 +637,7 @@ export class GameRoom extends DurableObject<Env> {
   if(!room&&path==='/internal-create'&&req.method==='POST'){
    const id=url.searchParams.get('room'),matchup=url.searchParams.get('matchup'),circuit=url.searchParams.get('circuit');
    if(this.paired()||!isRoomId(id)||!isCircuit(circuit)||!isMatchup(matchup))return json({error:'Invalid room'},400);
-   const lapsParam=Number(url.searchParams.get('laps'));const laps=Number.isFinite(lapsParam)&&lapsParam>=1&&lapsParam<=20?Math.round(lapsParam):3;this.room=new RaceRoom(id,url.origin,{JEV_MOCK:'1'},url.searchParams.get('clock')==='1'?1:4,matchup,{},circuit,url.searchParams.get('solo')==='true',laps,url.searchParams.get('drive')==='true');
+   const lapsParam=Number(url.searchParams.get('laps'));const laps=Number.isFinite(lapsParam)&&lapsParam>=1&&lapsParam<=20?Math.round(lapsParam):3;this.room=new RaceRoom(id,url.origin,{JEV_MOCK:'1'},url.searchParams.get('clock')==='1'?1:4,matchup,{},circuit,url.searchParams.get('solo')==='true',laps,url.searchParams.get('drive')==='true',url.searchParams.get('watch')==='true');
    this.room.expiresAt=Date.now()+15*60_000;
    await this.ctx.storage.setAlarm(this.room.expiresAt);
    await this.save();
@@ -724,7 +724,7 @@ export class GameRoom extends DurableObject<Env> {
      this.lobbyDeadline=0;
      this.lastStrategyRadioAt=now;
      this.emptyViewersSince=null;
-     this.liveDeadline=now+(room.strategyPractice?CHAT_STRATEGY_TIME_MS:LIVE_TIME_MS);
+     this.liveDeadline=now+(room.strategyPractice?strategyTimeBudgetMs(room.race.laps):LIVE_TIME_MS);
      room.expiresAt=this.liveDeadline+FINISHED_GRACE_MS;
      await this.ctx.storage.setAlarm(this.liveDeadline);
      await this.save();
@@ -743,7 +743,11 @@ export class GameRoom extends DurableObject<Env> {
   const peer=this.peers.get(ws);
   if(peer)this.room?.remove(peer);
   this.peers.delete(ws);
-  if(this.room)this.ctx.waitUntil(this.save());
+  const room=this.room;
+  if(!room)return;
+  const wasRunning=Boolean(this.timer);
+  if(!room.live&&this.peers.size===0)this.stopClock();
+  if(wasRunning||(room.race.phase!=='lobby'&&room.race.phase!=='finished'))this.ctx.waitUntil(this.save());
  }
  webSocketError(ws:WebSocket){this.webSocketClose(ws);}
 

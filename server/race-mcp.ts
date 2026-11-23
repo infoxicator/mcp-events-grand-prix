@@ -77,7 +77,7 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
   registerAppTool(server,'open_grand_prix_strategy',{
    title:'Start ChatGPT Work race strategy subscription',
    description:'Open a native MCP Events strategy seat in ChatGPT Work. Start as Ferrari or pass a Mercedes strategy invitation to join the same race. Subscribe to grand_prix.strategy_required using this seat’s event_filter.',
-   inputSchema:z.object({circuit:z.enum(['monza','las-vegas']).default('monza'),laps:z.number().int().min(3).max(20).optional().describe('Optional race distance (3-20 laps, default 20). Shorter races finish faster.'),invite:z.string().max(2048).optional()}),
+   inputSchema:z.object({circuit:z.enum(['monza','las-vegas']).default('monza'),laps:z.number().int().min(3).max(20).optional().describe('Optional race distance (3-20 laps, default 10). Shorter races finish faster.'),invite:z.string().max(2048).optional()}),
    _meta:{ui:{resourceUri:RACE_RESOURCE},'openai/outputTemplate':RACE_RESOURCE},
    annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
   },({circuit,laps,invite})=>{

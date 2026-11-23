@@ -21,6 +21,7 @@ import {
  type HumanControlInput,
  type Race,
  type RaceState,
+ type RoomLinks,
  type Team,
 } from './types';
 import type {RacingLineMode} from './racing-line';
@@ -100,10 +101,12 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
  let lastStandingsHtml = '';
  let lastResultsHtml = '';
 
- const conn = connect(seat, room, {
+ let conn = connect(seat, room, {
   role: 'driver',
   shouldDecide: (s) => (s.driverMode?.[seat] ?? 'jev') === 'jev',
  });
+ let promotingRoom: Promise<HostedRoom> | null = null;
+ let promotedPending: {driverMode: DriverControlMode; engineerMode: EngineerControlMode; start: boolean} | null = null;
  const interpolate = createInterpolator(0.045);
 
  const engineerUrl = () => {
@@ -603,12 +606,69 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
   const label = mode === 'human' ? 'YOU ARE DRIVING' : mode === 'jev' ? 'JEV TAKING CONTROL' : 'AUTOPILOT ENGAGED';
   showAlert(label, mode === 'human' ? 'green' : mode === 'jev' ? 'red' : 'info', 2500);
  }
+ function syncRoomLinks() {
+  const engHref = engineerUrl();
+  const bcHref = broadcastUrl();
+  for (const id of ['mfd-pitwall-link', 'lobby-open-pitwall']) {
+   const a = document.getElementById(id) as HTMLAnchorElement | null;
+   if (a) a.href = engHref;
+  }
+  for (const id of ['mfd-broadcast-link', 'lobby-broadcast-link']) {
+   const a = document.getElementById(id) as HTMLAnchorElement | null;
+   if (a) a.href = bcHref;
+  }
+ }
+
+ async function ensureOnlineRoom(startIfActive = false): Promise<HostedRoom> {
+  if (!room.local) return room;
+  if (promotingRoom) return promotingRoom;
+  const localCfg = room.local;
+  const desiredDriver = currentDriverMode(conn.state);
+  const wasActive = startIfActive && prevPhase !== undefined && prevPhase !== 'lobby' && prevPhase !== 'finished';
+  promotingRoom = (async () => {
+   showAlert('OPENING LIVE ROOM FOR PIT WALL…', 'info', 2500);
+   const createParams = new URLSearchParams({drive: '', circuit: currentCircuit, laps: String(localCfg.laps)});
+   const res = await fetch('/api/rooms?' + createParams.toString(), {method: 'POST'});
+   if (!res.ok) throw new Error('Could not open online room (' + res.status + ').');
+   const links: RoomLinks = await res.json();
+   const ownerUrl = new URL(links.owner);
+   const token = new URLSearchParams(ownerUrl.hash.slice(1)).get('token') ?? '';
+   ownerUrl.searchParams.set('drive', '');
+   ownerUrl.searchParams.set('team', seat);
+   ownerUrl.searchParams.set('engineer', 'joined');
+   history.replaceState(null, '', ownerUrl.pathname + ownerUrl.search + ownerUrl.hash);
+   room = {room: links.room, token, links};
+   promotedPending = {driverMode: desiredDriver, engineerMode: 'joined', start: wasActive};
+   lastRadioId = 0;
+   lastEventId = 0;
+   prevPhase = undefined;
+   const oldConn = conn;
+   const nextConn = connect(seat, room, {
+    role: 'driver',
+    shouldDecide: (s) => (s.driverMode?.[seat] ?? 'jev') === 'jev',
+   });
+   attachConnection(nextConn);
+   conn = nextConn;
+   oldConn.close();
+   syncRoomLinks();
+   return room;
+  })().finally(() => { promotingRoom = null; });
+  return promotingRoom;
+ }
+
  function setEngineerMode(mode: EngineerControlMode) {
+  if (mode === 'joined' && room.local) {
+   void ensureOnlineRoom(true).catch(() => showAlert('COULD NOT OPEN LIVE ROOM', 'red', 3000));
+   return;
+  }
   conn.send({type: 'engineer-mode', mode});
   showAlert(mode === 'joined' ? 'STRATEGY ENGINEER: LIVE PIT WALL' : 'STRATEGY ENGINEER: MOCKED AUTO', 'info', 2500);
  }
 
  async function copyEngineerLink(btn: HTMLButtonElement) {
+  if (room.local) {
+   try { await ensureOnlineRoom(true); } catch { showAlert('COULD NOT OPEN LIVE ROOM', 'red', 3000); return; }
+  }
   const url = engineerUrl();
   try {
    await navigator.clipboard.writeText(url);
@@ -661,6 +721,13 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
  el('lobby-copy-eng').onclick = () => void copyEngineerLink(el('lobby-copy-eng') as HTMLButtonElement);
  el('pause-copy-eng').onclick = () => void copyEngineerLink(el('pause-copy-eng') as HTMLButtonElement);
  el('mfd-copy-eng').onclick = () => void copyEngineerLink(el('mfd-copy-eng') as HTMLButtonElement);
+ for (const [id, getUrl] of [['mfd-pitwall-link', engineerUrl], ['lobby-open-pitwall', engineerUrl], ['mfd-broadcast-link', broadcastUrl], ['lobby-broadcast-link', broadcastUrl]] as const) {
+  el(id).onclick = (ev) => {
+   if (!room.local) return;
+   ev.preventDefault();
+   void ensureOnlineRoom(true).then(() => window.open(getUrl(), '_blank')).catch(() => showAlert('COULD NOT OPEN LIVE ROOM', 'red', 3000));
+  };
+ }
 
  // Circuit switcher (owner)
  bindSeg('lobby-circuit-seg', (val) => {
@@ -806,8 +873,8 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
   el('touch-drs').addEventListener('pointerdown', (ev) => { ev.preventDefault(); controls.touch.drsPulse = true; });
  }
 
- // Replay handler
- conn.onReplay = (frames) => {
+ function attachConnection(target: typeof conn) {
+ target.onReplay = (frames) => {
   if (!frames.length) return;
   replayFrames = frames;
   replayActive = true;
@@ -817,12 +884,19 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
  };
 
  // Snapshot handler
- conn.onSnapshot = (s, received) => {
+ target.onSnapshot = (s, received) => {
   if (disposed) return;
   interpolate.push(s, received);
 
+  if (promotedPending && target.team) {
+   const p = promotedPending;
+   promotedPending = null;
+   if (currentDriverMode(s) !== p.driverMode) target.send({type: 'driver-mode', mode: p.driverMode});
+   if (currentEngineerMode(s) !== p.engineerMode) target.send({type: 'engineer-mode', mode: p.engineerMode});
+   if (p.start && s.race.phase === 'lobby' && s.connected.a && s.connected.b) target.send({type: 'start'});
+  }
   // Apply URL-requested initial modes once connected
-  if (!initialModesSent && conn.team) {
+  if (!initialModesSent && target.team) {
    initialModesSent = true;
    if (initialDriverParam === 'human' || initialDriverParam === 'jev' || initialDriverParam === 'autopilot') {
     if (currentDriverMode(s) !== initialDriverParam) conn.send({type: 'driver-mode', mode: initialDriverParam});
@@ -890,6 +964,8 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
    showAlert(latestEvent.message, tone, 3000);
   }
  };
+ }
+ attachConnection(conn);
 
  function resolveSceneCamera(): CameraMode {
   if (cameraKind === 'tcam') return seat === 'a' ? 'tcam-a' : 'tcam-b';
@@ -910,6 +986,7 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
    racingLine: racingLineMode,
    seat,
    room: room.room,
+   local: Boolean(room.local),
    engineerUrl: engineerUrl(),
   }),
   setDriverMode,
@@ -1000,11 +1077,11 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
     ? 'Connecting seats…'
     : `START ${track.name.toUpperCase()} GRAND PRIX (${r.laps} LAPS) ↗`;
    const padInfo = latestGamepadName ? ` · Gamepad: ${latestGamepadName}` : '';
-   el('lobby-pad-badge').textContent = `Room ${s.room.slice(0, 8)} · ${conn.status} (${conn.latency}ms)${padInfo}`;
+   el('lobby-pad-badge').textContent = room.local ? `Local Race · 0ms${padInfo}` : `Room ${s.room.slice(0, 8)} · ${conn.status} (${conn.latency}ms)${padInfo}`;
   }
 
   // Topbar pills
-  el('drive-conn-pill').textContent = `${conn.status} · ${conn.latency}MS`;
+  el('drive-conn-pill').textContent = room.local ? 'LOCAL · 0MS' : `${conn.status} · ${conn.latency}MS`;
   el('drive-circuit-tag').textContent = track.name.toUpperCase();
   el('drive-corner-name').textContent = track.cornerName(car.distance);
 

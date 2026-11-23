@@ -1,30 +1,36 @@
 import {test, expect} from '@playwright/test';
 
-test.describe('Unified Room-Backed Drive Mode', () => {
- test('lets you drive manually, switch to Jev or Autopilot live, and receive live radio from a joined Strategy Engineer', async ({page, context}) => {
+test.describe('Local-First Drive Mode with On-Demand Room Promotion', () => {
+ test('runs solo drive locally with zero server calls, switches to Jev/Autopilot, then promotes on-demand for a joined Strategy Engineer', async ({page, context}) => {
   const errors: string[] = [];
+  let roomPosts = 0;
+  let wsOpens = 0;
   page.on('pageerror', (e) => errors.push(e.message));
+  page.on('request', (req) => { if (req.url().includes('/api/rooms') && req.method() === 'POST') roomPosts++; });
+  page.on('websocket', () => { wsOpens++; });
 
   await page.setViewportSize({width: 1440, height: 900});
   await page.goto('/?drive&circuit=monza');
 
-  // Should auto-create a real room and rewrite URL with room & drive params
-  await expect.poll(() => new URL(page.url()).searchParams.get('room')).toBeTruthy();
   await expect(page.locator('#drive-lobby')).toBeVisible();
+  await expect(page.locator('#lobby-pad-badge')).toContainText('Local Race · 0ms');
   await expect(page.locator('#lobby-driver-seg button[data-dmode="human"]')).toHaveClass(/selected/);
   await expect(page.locator('#lobby-eng-seg button[data-emode="mock"]')).toHaveClass(/selected/);
 
   const startBtn = page.locator('#drive-start-btn');
   await expect(startBtn).toBeEnabled({timeout: 15_000});
+  expect(roomPosts).toBe(0);
+  expect(wsOpens).toBe(0);
 
   if (process.env.CAPTURE_DRIVE_SHOTS) {
    await page.screenshot({path: 'test-results/drive-lobby.png'});
   }
 
-  // Start the race from the room lobby
+  // Start the local race
   await startBtn.click();
   await expect(page.locator('#drive-lobby')).toBeHidden();
   await expect(page.locator('#drive-hud')).toBeVisible();
+  await expect(page.locator('#drive-conn-pill')).toHaveText('LOCAL · 0MS');
 
   // Wait for 5-second lights sequence to complete and racing to start
   await expect.poll(
@@ -32,7 +38,7 @@ test.describe('Unified Room-Backed Drive Mode', () => {
    {timeout: 15_000},
   ).toBe('racing');
 
-  // 1) Drive manually with W + D
+  // 1) Drive manually with W + D (0ms local physics)
   await page.keyboard.down('KeyW');
   await page.waitForTimeout(1600);
   await page.keyboard.down('KeyD');
@@ -65,7 +71,7 @@ test.describe('Unified Room-Backed Drive Mode', () => {
    await page.screenshot({path: 'test-results/drive-jev.png'});
   }
 
-  // 3) Switch live to Autopilot
+  // 3) Switch live to Autopilot (still 0 server calls / 0 WS)
   await page.locator('#drive-mode-switcher button[data-dmode="autopilot"]').click();
   await expect.poll(
    () => page.evaluate(() => (window as unknown as {__raceState?: {driverMode?: {a: string}}}).__raceState?.driverMode?.a),
@@ -74,8 +80,26 @@ test.describe('Unified Room-Backed Drive Mode', () => {
    () => page.evaluate(() => (window as unknown as {__raceState?: {race: {cars: {a: {intent: {reply: string}}}}}}).__raceState?.race.cars.a.intent.reply ?? ''),
    {timeout: 8000},
   ).toContain('Autopilot');
+  expect(roomPosts).toBe(0);
+  expect(wsOpens).toBe(0);
 
-  // 4) Open a second tab as the Joined Strategy Engineer on the SAME room
+  // 4) Click ENG: MOCKED -> switches to ENG: JOIN and transparently promotes to a live room
+  await page.locator('#drive-eng-pill').click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('room'), {timeout: 10_000}).toBeTruthy();
+  await expect.poll(
+   () => page.evaluate(() => (window as unknown as {__driveDebug: {getMode: () => {local: boolean; engineerMode: string}}}).__driveDebug.getMode()),
+   {timeout: 10_000},
+  ).toMatchObject({local: false, engineerMode: 'joined'});
+  expect(roomPosts).toBe(1);
+  expect(wsOpens).toBe(1);
+
+  // Wait for promoted online room to enter racing
+  await expect.poll(
+   () => page.evaluate(() => (window as unknown as {__raceState?: {race: {phase: string}}}).__raceState?.race.phase),
+   {timeout: 15_000},
+  ).toBe('racing');
+
+  // Open a second tab as the Joined Strategy Engineer on the promoted room
   const engineerUrl = await page.evaluate(
    () => (window as unknown as {__driveDebug: {getMode: () => {engineerUrl: string}}}).__driveDebug.getMode().engineerUrl,
   );

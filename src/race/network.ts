@@ -1,4 +1,5 @@
 import {isLiveKey,isRoomId,ROOM_EXPIRED_CLOSE_CODE} from './live';
+import {createLocalConnection} from './local-room';
 import type {HostedRoom,Team,RaceState,ClientMessage,ServerMessage,Race,PeerRole} from './types';
 import type {RaceLogUpdate} from './event-log';
 
@@ -33,6 +34,7 @@ function isRaceEnded(state:RaceState|null){
 }
 
 export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):Connection{
+ if(room.local)return createLocalConnection(team,room,options);
  const pingMs = options?.pingIntervalMs ?? PING_INTERVAL_MS;
  const decideMs = options?.decideIntervalMs ?? DECIDE_INTERVAL_MS;
  const hiddenCloseMs = options?.hiddenDisconnectMs ?? HIDDEN_DISCONNECT_MS;

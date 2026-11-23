@@ -6,7 +6,7 @@ import {createRace,stepRace} from '../src/race/physics';
 import {mockDriver,mockEngineer} from '../src/race/brains';
 import {createRaceDriver,createRaceEngineer,providerConfig} from '../server/race-brains';
 import {parseInvitation,playerURL} from '../src/race/invitation';
-import {CHAT_STRATEGY_LAPS,CHAT_STRATEGY_TIME_MS,LIVE_TIME_MS} from '../src/race/live';
+import {CHAT_STRATEGY_LAPS,CHAT_STRATEGY_MAX_LAPS,CHAT_STRATEGY_TIME_MS,strategyTimeBudgetMs,LIVE_TIME_MS} from '../src/race/live';
 it('an early undercut beats staying out on worn soft tyres',()=>{
  const finishes:number[]=[];for(const stop of [true,false]){const s=createRace();s.field=[];Object.assign(s.cars.a,{distance:0,offset:-2});Object.assign(s.cars.b,{distance:-12,offset:2});s.phase='racing';for(let i=0;i<60000&&(s.phase as string)!=='finished';i++){if(i%24===0)for(const t of ['a','b'] as const){if(i%1440===0){s.cars[t].instruction=mockEngineer(s,t);if(t==='a'&&!stop)s.cars[t].instruction.box=false;}s.cars[t].intent=mockDriver(s,t);}stepRace(s);}expect(s.phase).toBe('finished');finishes.push(s.cars.a.finishTime!);}expect(finishes[1]-finishes[0]).toBeGreaterThan(10);
 });
@@ -112,7 +112,7 @@ it('both multiplayer seats complete their planned stop and reach the flag',async
  }
 });
 
-it.each(['monza','las-vegas'] as const)('the public strategy race reaches the 20-lap flag with fuel at %s',async circuit=>{
+it.each(['monza','las-vegas'] as const)('the public strategy race reaches the default 10-lap flag with fuel at %s',async circuit=>{
  const start=Date.now(),now=vi.spyOn(Date,'now');
  const room=new RaceRoom(crypto.randomUUID(),'http://localhost:5307',{JEV_MOCK:'1'},1,'jev-vs-jev',{},circuit,true,CHAT_STRATEGY_LAPS);
  room.live='running';
@@ -132,7 +132,7 @@ it.each(['monza','las-vegas'] as const)('the public strategy race reaches the 20
   expect(room.race.time*1000).toBeGreaterThan(LIVE_TIME_MS);
   expect(room.race.time*1000).toBeLessThan(CHAT_STRATEGY_TIME_MS);
   for(const car of Object.values(room.race.cars)){
-   expect(car.lapTimes).toHaveLength(20);
+   expect(car.lapTimes).toHaveLength(CHAT_STRATEGY_LAPS);
    expect(car.fuel).toBeGreaterThan(0);
   }
   expect(room.paidCalls).toBe(0);

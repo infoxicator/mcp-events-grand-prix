@@ -1,10 +1,34 @@
 import {test,expect} from '@playwright/test';
 import type {RaceState} from '../src/race/types';
 
-test('one browser hosts both mock seats at 1x and preserves the watch circuit and room on reload',async({page,browser})=>{
+test('default private watch runs 100% locally at 1x with zero server rooms or WebSockets',async({page})=>{
+ let roomPosts=0,wsOpens=0;
+ page.on('request',req=>{if(req.url().includes('/api/rooms')&&req.method()==='POST')roomPosts++;});
+ page.on('websocket',()=>{wsOpens++;});
  await page.goto('/?watch&circuit=las-vegas');
  await page.waitForFunction(()=>document.body.dataset.connected==='true');
  expect(await page.evaluate(()=>(window as Window&{__raceState?:RaceState}).__raceState?.speed)).toBe(1);
+ expect(roomPosts).toBe(0);
+ expect(wsOpens).toBe(0);
+ await expect(page.locator('#race-phase')).toHaveText('LOBBY');
+ await expect(page.locator('.private-watch')).toHaveAttribute('href',/circuit=las-vegas/);
+ await page.keyboard.press('Escape');await expect(page.locator('#clean-broadcast')).toBeVisible();
+ await expect(page.locator('#country-flag')).toHaveAttribute('aria-label','United States');await page.keyboard.press('b');
+ await page.keyboard.press('c');await page.locator('.audio-toggle').click();await expect(page.locator('.audio-toggle')).toHaveText('Mute sound');
+ await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Start race',exact:true}).click();
+ await expect(page.locator('#lights')).toBeVisible();
+ expect(roomPosts).toBe(0);
+ expect(wsOpens).toBe(0);
+});
+
+test('online watch uses a single WebSocket, preserves the watch circuit and room on reload, and shares broadcast audio',async({page,browser})=>{
+ let wsOpens=0;
+ page.on('websocket',()=>{wsOpens++;});
+ await page.goto('/?watch&online&circuit=las-vegas');
+ await page.waitForFunction(()=>document.body.dataset.connected==='true');
+ expect(await page.evaluate(()=>(window as Window&{__raceState?:RaceState}).__raceState?.speed)).toBe(1);
+ expect(wsOpens).toBe(1);
  const room=new URL(page.url()).searchParams.get('room');
  await expect(page.locator('.private-watch')).toHaveAttribute('href',/circuit=las-vegas/);
  await page.reload();await page.waitForFunction(()=>document.body.dataset.connected==='true');
@@ -20,7 +44,6 @@ test('one browser hosts both mock seats at 1x and preserves the watch circuit an
  await page.keyboard.press('c');await page.locator('.audio-toggle').click();await expect(page.locator('.audio-toggle')).toHaveText('Mute sound');
  const peer=await page.context().newPage();await peer.goto('/?room='+room+'&broadcast');
  await expect(peer.getByRole('button',{name:'Start race',exact:true})).toBeHidden();
- // The shell finishes navigation before the asynchronous room mount binds C.
  await expect(peer.locator('.broadcast-menu summary')).toBeVisible();
  await peer.keyboard.press('c');await expect(peer.locator('.broadcast-menu')).toHaveAttribute('open','');
  await peer.locator('.audio-toggle').click();await expect(peer.locator('.audio-toggle')).toHaveText('Sound in another tab');
@@ -63,7 +86,7 @@ test('provisional classification, replay completion and onboard cuts keep the wo
 });
 
 for(const hostname of ['localhost','127.0.0.1'])test('private watch boot stays on '+hostname,async({page,baseURL})=>{
- const url=new URL(baseURL!);url.hostname=hostname;url.search='?watch&circuit=las-vegas';
+ const url=new URL(baseURL!);url.hostname=hostname;url.search='?watch&online&circuit=las-vegas';
  // A night join should allocate just the displayed WebGL scene.
  await page.addInitScript(()=>{
   const canvases=new Set<HTMLCanvasElement>(),get=HTMLCanvasElement.prototype.getContext;

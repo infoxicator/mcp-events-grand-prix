@@ -47,7 +47,7 @@ export class RaceRoom {
  driverMode:Record<Team,DriverControlMode>={a:'jev',b:'jev'};
  engineerMode:Record<Team,EngineerControlMode>={a:'mock',b:'mock'};
  private humanInputs:Partial<Record<Team,{input:HumanControlInput;at:number}>>={};
- constructor(readonly id:string,readonly origin:string,private readonly env:Record<string,string|undefined>={},readonly speed=4,public matchup:Matchup='jev-vs-jev',transports:{luna?:typeof fetch;engineer?:typeof fetch;jev?:Parameters<typeof createRaceDriver>[1]}={},circuit:CircuitId='monza',readonly solo=false,laps=3,readonly drive=false){
+ constructor(readonly id:string,readonly origin:string,private readonly env:Record<string,string|undefined>={},readonly speed=4,public matchup:Matchup='jev-vs-jev',transports:{luna?:typeof fetch;engineer?:typeof fetch;jev?:Parameters<typeof createRaceDriver>[1]}={},circuit:CircuitId='monza',readonly solo=false,laps=3,readonly drive=false,readonly watchMode=false){
   this.race=createRace(laps,circuit);const roster=driverRoster(env,matchup);this.mode=roster.mode;this.players=roster.players;this.jevDriver=createRaceDriver(providerConfig(env),transports.jev);this.engineer=createRaceEngineer(env,transports.engineer);if(matchup==='jev-vs-luna')this.lunaDriver=createLunaDriver(lunaConfig(env),transports.luna);
   if(solo&&!this.players.b.mock){
    this.players.b={...this.players.b,mock:true,provider:'mock',intervalMs:200};
@@ -57,7 +57,7 @@ export class RaceRoom {
  }
  private reset(){this.generation++;this.race=createRace(this.race.laps,this.race.circuit);this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerWindow={};this.gapHistory={a:[],b:[]};this.observedFieldStops={a:new Map(),b:new Map()};this.lastSector={};this.pendingBox={};this.radioRevision={a:0,b:0};this.awaitingChatReply.clear();this.latestChatRadio=undefined;this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.humanInputs={};this.captureUntil=0;this.clearEventLog();this.broadcast();}
 
- connected(){if(this.live)return {a:true,b:true};let a=false,b=this.solo;for(const p of this.peers){if(p.role==='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;if(a&&b)break;}return {a,b};}
+ connected(){if(this.live||this.watchMode)return {a:true,b:true};let a=false,b=this.solo;for(const p of this.peers){if(p.role==='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;if(a&&b)break;}return {a,b};}
  engineerConnected(){let a=false,b=false;for(const p of this.peers){if(p.role!=='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;}return {a,b};}
  state():RaceState{return {type:'state',room:this.id,race:this.race,connected:this.connected(),decisions:this.decisions,intents:this.intents,engineerCalls:this.engineerCalls,driverStats:this.driverStats,matchup:this.matchup,players:this.players,mode:this.mode,serverTime:Date.now(),physicsHz:120,snapshotHz:30,speed:this.speed,paidCalls:this.paidCalls,...(this.solo?{solo:true}:{}),...(this.drive||this.driverMode.a!=='jev'||this.driverMode.b!=='jev'||this.engineerMode.a!=='mock'||this.engineerMode.b!=='mock'||this.engineerConnected().a||this.engineerConnected().b?{drive:this.drive,driverMode:{...this.driverMode},engineerMode:{...this.engineerMode},engineerConnected:this.engineerConnected()}:{}),live:this.live,strategyPractice:this.strategyPractice,strategyWebhook:this.strategyWebhook,chatStrategy:this.chatStrategy,latestChatRadio:this.latestChatRadio,guestChatStrategy:this.guestChatStrategy,guestStrategyWebhook:this.guestStrategyWebhook};}
  links():RoomLinks{const root=`${this.origin}/?room=${this.id}`;return {room:this.id,expiresAt:this.expiresAt,owner:`${root}#token=${this.tokens.owner}`,a:`${root}&team=a#token=${this.tokens.a}`,b:this.solo?'':`${root}&team=b#token=${this.tokens.b}`,spectator:`${root}&spectate`};}
@@ -228,8 +228,8 @@ export class RaceRoom {
         :previous.lap!==car.lap?'New lap'
          :'Tyre, fuel or traffic changed'
   );
-  if(this.solo&&team==='b'&&!strategyEvents){
-   this.engineerWindow.b=window;
+  if(((this.solo&&team==='b')||this.watchMode)&&!strategyEvents){
+   this.engineerWindow[team]=window;
    const instruction=mockEngineer(this.race,team,true,this.gapHistory[team]);
    if(this.hasChatStrategy())this.applyInstruction(team,instruction,'mock');
    else this.radio(team,instruction,'mock');
@@ -444,10 +444,10 @@ export class RaceRoom {
        const decision:Decision={sequence:this.race.tick,responseMs:0,source:'mock',intent:autopilotIntent(this.race,team)};
        this.decisions[team]=decision;
        this.applyIntent(team,decision);
-      }else if(this.solo&&team==='b'){
-       const decision:Decision={sequence:this.race.tick,responseMs:0,source:'mock',intent:mockDriver(this.race,'b')};
-       this.decisions.b=decision;
-       this.applyIntent('b',decision);
+      }else if((this.solo&&team==='b')||this.watchMode){
+       const decision:Decision={sequence:this.race.tick,responseMs:0,source:'mock',intent:mockDriver(this.race,team)};
+       this.decisions[team]=decision;
+       this.applyIntent(team,decision);
       }
      }
     }

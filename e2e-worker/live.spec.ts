@@ -327,7 +327,7 @@ test('the MCP race menu fits a narrow host and opens lobbies with the selected o
  await menu.getByRole('radio',{name:'ChatGPT strategy',exact:true}).check();
  await expect(menu.getByLabel('Seat',{exact:true})).toBeHidden();
  await menu.getByRole('button',{name:'Open ChatGPT strategy lobby',exact:true}).click();
- await expect(app.locator('#mcp-session-details')).toHaveText('Las Vegas · 20 laps · Jev vs Jev');
+ await expect(app.locator('#mcp-session-details')).toHaveText('Las Vegas · 10 laps · Jev vs Jev');
  await expect(menu.getByLabel('Mercedes strategy invitation')).toBeVisible();
  await expect(start).toBeDisabled();
  await expect(page.locator('body')).toHaveAttribute('data-strategy-context',/event_filter/);
@@ -438,7 +438,7 @@ test('native MCP Events verifies the subscription, starts a race and delivers si
   expect(event.eventId).toBe(event.data.event_id);
   const args={room:invite.room,event_id:event.eventId};
   const telemetry=await client.callTool({name:'get_grand_prix_strategy_event',arguments:args});
-  expect(telemetry.structuredContent).toMatchObject({observation:{lapsRemaining:20,tyres:expect.any(Object)}});
+  expect(telemetry.structuredContent).toMatchObject({observation:{lapsRemaining:10,tyres:expect.any(Object)}});
   const order={...args,action:'manage',radio:'Manage the tyres on the opening stint.'};
   expect((await client.callTool({name:'submit_grand_prix_radio',arguments:order})).isError).toBeFalsy();
   expect((await client.callTool({name:'submit_grand_prix_radio',arguments:order})).isError).toBe(true);
@@ -456,7 +456,7 @@ test('native MCP Events verifies the subscription, starts a race and delivers si
   await log.getByRole('button',{name:'Strategist',exact:true}).click();
   const telemetryRow=log.locator('li').filter({hasText:'Strategy requested'}).filter({hasText:'Opening strategy'});
   await telemetryRow.locator('summary').click();
-  await expect(telemetryRow.locator('pre')).toContainText('"lapsRemaining": 20');
+  await expect(telemetryRow.locator('pre')).toContainText('"lapsRemaining": 10');
   await expect(telemetryRow.locator('pre')).toContainText('"projectedFuelKg"');
   await expect(log).toContainText('Telemetry read');
   await expect(log).toContainText('Event delivered');
