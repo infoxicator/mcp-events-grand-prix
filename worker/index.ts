@@ -9,7 +9,7 @@ import {isCircuit,type CircuitId} from '../src/race/track';
 import {isMatchup,type Matchup} from '../src/race/matchup';
 import {TEAMS,type Team,type Race,type ClientMessage,type RaceState} from '../src/race/types';
 import {isLiveKey,isRoomId,newLiveKey,LIVE_CALL_LIMIT,LIVE_DRIVER_INTERVAL_MS,LIVE_PAIR_PATH,LIVE_TIME_MS,OWNER_LIVE_PATH,
- CHAT_STRATEGY_LAPS,CHAT_STRATEGY_TIME_MS,PAIR_TTL_MS,ROOM_EXPIRED_CLOSE_CODE,FINISHED_GRACE_MS,type LivePhase} from '../src/race/live';
+ CHAT_STRATEGY_LAPS,CHAT_STRATEGY_TIME_MS,PAIR_TTL_MS,ROOM_EXPIRED_CLOSE_CODE,FINISHED_GRACE_MS,STRATEGY_LOBBY_TTL_MS,STRATEGY_IDLE_STOP_MS,STRATEGY_MAX_CONSECUTIVE_FAILURES,type LivePhase} from '../src/race/live';
 import {handleOwnerLive,handlePairing,roomStub,type LiveControls} from './owner-live';
 import {liveAvailable,livePairingAvailable,raceProviders,type LiveBindings} from './live-providers';
 import {json,privateHeaders} from './http';
@@ -22,6 +22,7 @@ export interface Env extends LiveBindings {
  ASSETS: Fetcher;
  ROOMS: DurableObjectNamespace<GameRoom>;
  ROOM_CREATION: RateLimit;
+ MCP_ROOM_CREATION?: RateLimit;
 }
 
 async function create(env:Env,origin:string,matchup:Matchup='jev-vs-jev',circuit:CircuitId='monza',clock=4,solo=false,drive=false,laps=3):Promise<McpRoom>{
@@ -60,6 +61,11 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
   if(path===LIVE_PAIR_PATH||path===`${LIVE_PAIR_PATH}/claim`)return handlePairing(req,env,id=>expiredRooms.delete(id));
 
   const allowCreate=()=>env.ROOM_CREATION.limit({key:req.headers.get('CF-Connecting-IP')??'local'});
+  const allowMcpCreate=()=>{
+   const limiter=env.MCP_ROOM_CREATION??env.ROOM_CREATION;
+   const key=req.headers.get('Mcp-Session-Id')||req.headers.get('CF-Connecting-IP')||'local';
+   return limiter.limit({key});
+  };
   if(path==='/api/default'||path==='/api/rooms'&&req.method==='POST'){
    if(path==='/api/rooms'&&req.headers.get('Origin')!==origin)return json({error:'Same-origin required'},403);
    if(!(await allowCreate()).success)return json({error:'Room creation limit'},429);
@@ -93,7 +99,7 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
    }
    const factory=()=>createRaceMcp(origin,{
     create:async (matchup,circuit,solo)=>{
-     if(!(await allowCreate()).success)throw new Error('Room creation limit');
+     if(!(await allowMcpCreate()).success)throw new Error('Room creation limit');
      const created=await create(env,origin,matchup,circuit,4,solo);
      expiredRooms.delete(created.links.room);
      return created;
@@ -101,11 +107,12 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
     get:id=>get(env,origin,id),
     liveAvailable:livePairingAvailable(env),
     liveOptions:{provider:liveAvailable(env),chatgpt:liveAvailable(env,'jev-vs-jev','chatgpt'),luna:liveAvailable(env,'jev-vs-luna')},
-    startChatPractice:async circuit=>{
-     if(!(await allowCreate()).success)throw new Error('Room creation limit');
+    startChatPractice:async (circuit,laps)=>{
+     if(!(await allowMcpCreate()).success)throw new Error('Room creation limit');
      const room=crypto.randomUUID();
      expiredRooms.delete(room);
-     const started=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice?room=${room}&circuit=${circuit}`,{method:'POST'}));
+     const lapQuery=laps!==undefined?`&laps=${laps}`:'';
+     const started=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice?room=${room}&circuit=${circuit}${lapQuery}`,{method:'POST'}));
      if(!started.ok)throw new Error('Unable to create a ChatGPT strategy race');
      return started.json<StrategySeatAccess>();
     },
@@ -195,7 +202,7 @@ interface StrategySeat extends SavedStrategySeat {
 interface Saved {
  speed?:number;solo?:boolean;drive?:boolean;driverMode?:RaceRoom['driverMode'];engineerMode?:RaceRoom['engineerMode'];matchup?:Matchup;id:string;origin:string;race:Race;tokens:RaceRoom['tokens'];mcpToken:string;expiresAt:number;
  intents:RaceState['intents'];engineerCalls:RaceState['engineerCalls'];
- live?:{phase:LivePhase;key:string;deadline:number;strategyPractice?:boolean;guestInviteKey?:string;subscriptionKey?:string;webhook?:StrategyWebhook;strategySeats?:Partial<Record<Team,SavedStrategySeat>>;
+ live?:{phase:LivePhase;key:string;deadline:number;lobbyDeadline?:number;strategyPractice?:boolean;guestInviteKey?:string;subscriptionKey?:string;webhook?:StrategyWebhook;strategySeats?:Partial<Record<Team,SavedStrategySeat>>;
   state:Pick<RaceState,'players'|'mode'|'paidCalls'|'driverStats'|'decisions'|'latestChatRadio'|'guestChatStrategy'>};
 }
 
@@ -212,10 +219,17 @@ export class GameRoom extends DurableObject<Env> {
  private strategyDeliveries:Partial<Record<Team,string>>={};
  private guestInviteKey?:string;
  private liveDeadline=0;
+ private lobbyDeadline=0;
+ private emptyViewersSince:number|null=null;
+ private lastStrategyRadioAt=0;
+ private consecutiveWebhookFailures:Partial<Record<Team,number>>={};
  private liveAbort?:AbortController;
 
  constructor(ctx:DurableObjectState,env:Env){
   super(ctx,env);
+  if(typeof ctx.setWebSocketAutoResponse==='function'&&typeof WebSocketRequestResponsePair==='function'){
+   ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}','{"type":"pong"}'));
+  }
   void ctx.blockConcurrencyWhile(async()=>{
    const saved=await ctx.storage.get<Saved>('race');
    if(!saved)return;
@@ -251,6 +265,7 @@ export class GameRoom extends DurableObject<Env> {
     room.decisions=state.decisions;
     room.latestChatRadio=state.latestChatRadio;
     this.liveDeadline=deadline;
+    this.lobbyDeadline=saved.live.lobbyDeadline??0;
     if(restoreLobby)for(const team of TEAMS){
      const seat=this.strategySeats[team];
      if(!seat||(team==='b'&&!seat.webhook))continue;
@@ -278,6 +293,7 @@ export class GameRoom extends DurableObject<Env> {
   const peer=this.room!.add((message,raw)=>{try{ws.send(raw??JSON.stringify(message));}catch{/* closed */}});
   if(meta)Object.assign(peer,meta);
   this.peers.set(ws,peer);
+  this.emptyViewersSince=null;
   return peer;
  }
 
@@ -291,7 +307,7 @@ export class GameRoom extends DurableObject<Env> {
   const saved:Saved={
    speed:room.speed,solo:room.solo,drive:room.drive,driverMode:room.driverMode,engineerMode:room.engineerMode,matchup:room.matchup,id:room.id,origin:room.origin,race:room.race,tokens:room.tokens,
    mcpToken:room.mcpToken,expiresAt:room.expiresAt,intents:room.intents,engineerCalls:room.engineerCalls,
-   live:room.live?{phase:room.live,key:room.viewerKey!,deadline:this.liveDeadline,strategyPractice:room.strategyPractice,guestInviteKey:this.guestInviteKey,
+   live:room.live?{phase:room.live,key:room.viewerKey!,deadline:this.liveDeadline,lobbyDeadline:this.lobbyDeadline||undefined,strategyPractice:room.strategyPractice,guestInviteKey:this.guestInviteKey,
     strategySeats,state:{
     players:room.players,mode:room.mode,paidCalls:room.paidCalls,driverStats:room.driverStats,decisions:room.decisions,
     latestChatRadio:room.latestChatRadio,guestChatStrategy:room.guestChatStrategy,
@@ -362,13 +378,26 @@ export class GameRoom extends DurableObject<Env> {
     guest.webhook=undefined;
     room.releaseGuestStrategy();
    }
+   if(room.strategyPractice&&room.live==='running'){
+    const hasActiveWebhook=TEAMS.some(t=>{const w=this.strategySeats[t]?.webhook;return Boolean(w&&w.expiresAt>now);});
+    if(this.peers.size===0){
+     if(this.emptyViewersSince===null)this.emptyViewersSince=now;
+     if(!hasActiveWebhook||(now-this.emptyViewersSince>=STRATEGY_IDLE_STOP_MS&&now-this.lastStrategyRadioAt>=STRATEGY_IDLE_STOP_MS)){
+      this.finishLive('stopped');
+      this.ctx.waitUntil(this.save());
+      return;
+     }
+    }else{
+     this.emptyViewersSince=null;
+    }
+   }
    this.accumulator+=Math.min(.25,(now-this.prev)/1000)*room.speed;
    this.prev=now;
    const steps=Math.min(120,Math.floor(this.accumulator*120));
    this.accumulator-=steps/120;
    room.advance(steps);
    room.driveLive(now);
-   if(now-this.broadcastAt>33){
+   if(now-this.broadcastAt>=30){
     room.broadcast();
     this.broadcastAt=now;
    }
@@ -378,11 +407,11 @@ export class GameRoom extends DurableObject<Env> {
     if(room.live)this.finishLive('finished');
     else if(room.race.phase==='finished')this.tightenFinishedExpiry();
     this.ctx.waitUntil(this.save());
-   }else if(now-this.checkpointAt>3000){
+   }else if(now-this.checkpointAt>15_000){
     this.ctx.waitUntil(this.save().catch(()=>{}));
     this.checkpointAt=now;
    }
-  },8);
+  },33);
  }
 
  private controls():LiveControls{
@@ -433,11 +462,13 @@ export class GameRoom extends DurableObject<Env> {
  private async prepareLiveRace(room:RaceRoom,{start=false}={}){
   room.live='running';
   room.viewerKey=newLiveKey();
-  this.liveDeadline=Date.now()+(room.strategyPractice?CHAT_STRATEGY_TIME_MS:LIVE_TIME_MS);
-  room.expiresAt=this.liveDeadline+15*60_000;
+  const now=Date.now();
+  this.liveDeadline=now+(room.strategyPractice?CHAT_STRATEGY_TIME_MS:LIVE_TIME_MS);
+  this.lobbyDeadline=!start&&room.strategyPractice?now+STRATEGY_LOBBY_TTL_MS:0;
+  room.expiresAt=this.liveDeadline+FINISHED_GRACE_MS;
   if(start)room.start();
   try{
-   await this.ctx.storage.setAlarm(this.liveDeadline);
+   await this.ctx.storage.setAlarm(this.lobbyDeadline?Math.min(this.liveDeadline,this.lobbyDeadline):this.liveDeadline);
    await this.save();
   }catch{
    this.finishLive('interrupted');
@@ -451,7 +482,9 @@ export class GameRoom extends DurableObject<Env> {
   const id=url.searchParams.get('room'),circuit=url.searchParams.get('circuit');
   if(this.room||this.paired()||!isRoomId(id)||!isCircuit(circuit))return json({error:'Invalid strategy race'},400);
   // This path never reads provider bindings or installs paid transports.
-  const room=this.room=new RaceRoom(id,url.origin,{JEV_MOCK:'1'},1,'jev-vs-jev',{},circuit,true,CHAT_STRATEGY_LAPS);
+  const lapsParam=Number(url.searchParams.get('laps'));
+  const laps=Number.isFinite(lapsParam)&&lapsParam>=3&&lapsParam<=CHAT_STRATEGY_LAPS?Math.round(lapsParam):CHAT_STRATEGY_LAPS;
+  const room=this.room=new RaceRoom(id,url.origin,{JEV_MOCK:'1'},1,'jev-vs-jev',{},circuit,true,laps);
   room.strategyPractice=true;
   this.guestInviteKey=newLiveKey();
   this.strategySeats.a=this.newStrategySeat();
@@ -497,10 +530,22 @@ export class GameRoom extends DurableObject<Env> {
   if(signal.aborted||seat.webhook!==subscription||room.live!=='running'||this.strategyDeliveries[team]!==event.event_id)return;
   this.setWebhookStatus(team,status==='delivered'?'delivered':'failed');
   room.logStrategyDelivery(event,status==='delivered');
-  if(status==='gone'){
+  if(status==='delivered'){
+   this.consecutiveWebhookFailures[team]=0;
+  }else if(status==='gone'){
    seat.webhook=undefined;
    if(team==='b')room.releaseGuestStrategy();
+   if(room.strategyPractice&&team==='a'&&this.peers.size===0&&!(this.strategySeats.b?.webhook&&this.strategySeats.b.webhook.expiresAt>Date.now())){
+    this.finishLive('stopped');
+   }
    await this.save();
+  }else{
+   const fails=(this.consecutiveWebhookFailures[team]??0)+1;
+   this.consecutiveWebhookFailures[team]=fails;
+   if(room.strategyPractice&&team==='a'&&this.peers.size===0&&fails>=STRATEGY_MAX_CONSECUTIVE_FAILURES){
+    this.finishLive('stopped');
+    await this.save();
+   }
   }
   room.broadcast();
  }
@@ -619,7 +664,7 @@ export class GameRoom extends DurableObject<Env> {
     const parsed=radioInput.safeParse(await req.json());
     if(!parsed.success)return json({error:'Invalid strategy order.'},400);
     const result=current.submitStrategyEvent(parsed.data);
-    if('line' in result)await this.save();
+    if('line' in result&&result.team){this.lastStrategyRadioAt=Date.now();this.consecutiveWebhookFailures[result.team]=0;await this.save();}
     return json(result);
    }
    if(path==='/internal-watch'&&req.method==='POST'&&await req.text()===current.viewerKey)return json(current.state());
@@ -675,6 +720,13 @@ export class GameRoom extends DurableObject<Env> {
    if(room.live&&message.type==='start'){
     const host=this.strategySeats.a;
     if(peer.joined&&host?.webhook&&host.webhook.expiresAt>Date.now()&&message.startKey===host.key&&Date.now()<this.liveDeadline&&room.start()){
+     const now=Date.now();
+     this.lobbyDeadline=0;
+     this.lastStrategyRadioAt=now;
+     this.emptyViewersSince=null;
+     this.liveDeadline=now+(room.strategyPractice?CHAT_STRATEGY_TIME_MS:LIVE_TIME_MS);
+     room.expiresAt=this.liveDeadline+FINISHED_GRACE_MS;
+     await this.ctx.storage.setAlarm(this.liveDeadline);
      await this.save();
      this.activate(true);
     }
@@ -701,8 +753,13 @@ export class GameRoom extends DurableObject<Env> {
    await this.expireNow();
    return;
   }
-  if(Date.now()<room.expiresAt){
-   if(room.live==='running'){
+  const now=Date.now();
+  if(room.race.phase==='lobby'&&this.lobbyDeadline&&now>=this.lobbyDeadline){
+   await this.expireNow();
+   return;
+  }
+  if(now<room.expiresAt){
+   if(room.live==='running'&&now>=this.liveDeadline){
     this.finishLive('time-limit');
     await this.save();
    }

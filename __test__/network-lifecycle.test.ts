@@ -300,6 +300,21 @@ describe('network lifecycle and rate limiting', () => {
   expect(ws1.readyState).toBe(FakeWebSocket.CLOSED);
   void conn;
  });
+
+ it('sends static {type:ping} compatible with Cloudflare WebSocket auto-response and computes latency on {type:pong}', () => {
+  const conn = connect(null, makeRoom({room: '44444444-4444-4444-8444-444444444444', token: ''}));
+  const ws = FakeWebSocket.instances[0];
+  ws.open();
+  ws.sent.length = 0;
+
+  vi.advanceTimersByTime(PING_INTERVAL_MS);
+  expect(ws.sent).toEqual(['{"type":"ping"}']);
+
+  vi.advanceTimersByTime(42);
+  ws.receive({type: 'pong'});
+  expect(conn.latency).toBeGreaterThanOrEqual(40);
+  conn.close();
+ });
 });
 
 describe('worker DO protection', () => {
@@ -362,5 +377,55 @@ describe('worker DO protection', () => {
   const liveWs = await worker.fetch(new Request(`https://example.test/api/rooms/${liveRoomId}/ws`, {headers: {Upgrade: 'websocket'}}), env, {});
   expect(liveWs.status).toBe(200);
   expect(doCalls).toBe(3);
+ });
+
+ it('uses dedicated MCP_ROOM_CREATION limiter keyed by Mcp-Session-Id for /mcp tool calls', async () => {
+  const workerModulePath = '../worker/' + 'index';
+  const {createWorker} = await import(/* @vite-ignore */ workerModulePath) as {createWorker: () => {fetch: (req: Request, env: unknown, ctx: unknown) => Promise<Response>}};
+  const browserKeys: string[] = [];
+  const mcpKeys: string[] = [];
+  const stub = {
+   fetch: vi.fn(async (req: Request) => {
+    const u = new URL(req.url);
+    if (u.pathname === '/internal-chat-practice') {
+     return Response.json({
+      room: u.searchParams.get('room'),
+      key: 'a'.repeat(64),
+      phase: 'running',
+      strategyKey: 'b'.repeat(64),
+      subscriptionKey: 'c'.repeat(64),
+      guestInviteKey: 'd'.repeat(64),
+     });
+    }
+    return Response.json({error: 'Not found'}, {status: 404});
+   }),
+  };
+  const env = {
+   ROOMS: {idFromName: (id: string) => id, get: () => stub},
+   ROOM_CREATION: {limit: async ({key}: {key: string}) => { browserKeys.push(key); return {success: false}; }},
+   MCP_ROOM_CREATION: {limit: async ({key}: {key: string}) => { mcpKeys.push(key); return {success: true}; }},
+   ASSETS: {fetch: async () => new Response('ok')},
+  };
+  const worker = createWorker();
+  const res = await worker.fetch(new Request('https://example.test/mcp', {
+   method: 'POST',
+   headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/event-stream',
+    'CF-Connecting-IP': '203.0.113.10',
+    'Mcp-Session-Id': 'session-xyz',
+   },
+   body: JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: {name: 'open_grand_prix_strategy', arguments: {circuit: 'monza', laps: 5}},
+   }),
+  }), env, {});
+  expect(res.status).toBe(200);
+  expect(mcpKeys).toEqual(['session-xyz']);
+  expect(browserKeys).toEqual([]);
+  const calls = stub.fetch.mock.calls.map(c => String((c[0] as Request).url));
+  expect(calls.some(u => u.includes('/internal-chat-practice') && u.includes('laps=5'))).toBe(true);
  });
 });

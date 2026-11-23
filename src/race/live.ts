@@ -8,6 +8,9 @@ export const LIVE_CALL_LIMIT = 240;
 export const LIVE_DRIVER_INTERVAL_MS = 1200;
 export const ROOM_EXPIRED_CLOSE_CODE = 4410;
 export const FINISHED_GRACE_MS = 5 * 60_000;
+export const STRATEGY_LOBBY_TTL_MS = 15 * 60_000;
+export const STRATEGY_IDLE_STOP_MS = 3 * 60_000;
+export const STRATEGY_MAX_CONSECUTIVE_FAILURES = 3;
 
 export type LivePhase = 'running' | 'finished' | 'stopped' | 'time-limit' | 'call-limit' | 'interrupted';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;

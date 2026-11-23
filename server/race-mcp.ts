@@ -20,7 +20,7 @@ export interface RaceGateway {
  html:()=>Promise<string>;
  liveAvailable?:boolean;
  liveOptions?:{provider:boolean;chatgpt:boolean;luna:boolean};
- startChatPractice?:(circuit:CircuitId)=>Promise<StrategySeatAccess>;
+ startChatPractice?:(circuit:CircuitId,laps?:number)=>Promise<StrategySeatAccess>;
  joinChatPractice?:(invite:LiveInvitation)=>Promise<(StrategySeatAccess&{circuit:CircuitId})|null>;
  stopChatPractice?:(room:string,key:string)=>Promise<boolean>;
  strategyEvent?:(room:string,eventId:string)=>Promise<StrategyEvent|null>;
@@ -57,11 +57,11 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
   });
  }
 
- async function strategyRace(circuit:CircuitId,invite?:LiveInvitation){
+ async function strategyRace(circuit:CircuitId,invite?:LiveInvitation,laps?:number){
   if(!gateway.startChatPractice)return {isError:true,content:[{type:'text' as const,text:'ChatGPT strategy races are unavailable on this server.'}]};
   const joined=invite?await gateway.joinChatPractice?.(invite):null;
   if(invite&&!joined)return invalidInvite();
-  const {room,key,phase,strategyKey,subscriptionKey,guestInviteKey}=joined??await gateway.startChatPractice(circuit);
+  const {room,key,phase,strategyKey,subscriptionKey,guestInviteKey}=joined??await gateway.startChatPractice(circuit,laps);
   const team=joined?'b':'a',car=PERSONAS[team].name;
   const eventFilter={room,subscription_key:subscriptionKey};
   const start=joined?'':" Use the widget's Start race control when shown.";
@@ -77,11 +77,11 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
   registerAppTool(server,'open_grand_prix_strategy',{
    title:'Start ChatGPT Work race strategy subscription',
    description:'Open a native MCP Events strategy seat in ChatGPT Work. Start as Ferrari or pass a Mercedes strategy invitation to join the same race. Subscribe to grand_prix.strategy_required using this seat’s event_filter.',
-   inputSchema:z.object({circuit:z.enum(['monza','las-vegas']).default('monza'),invite:z.string().max(2048).optional()}),
+   inputSchema:z.object({circuit:z.enum(['monza','las-vegas']).default('monza'),laps:z.number().int().min(3).max(20).optional().describe('Optional race distance (3-20 laps, default 20). Shorter races finish faster.'),invite:z.string().max(2048).optional()}),
    _meta:{ui:{resourceUri:RACE_RESOURCE},'openai/outputTemplate':RACE_RESOURCE},
    annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
-  },({circuit,invite})=>{
-   if(!invite)return strategyRace(circuit);
+  },({circuit,laps,invite})=>{
+   if(!invite)return strategyRace(circuit,undefined,laps);
    try{
     const seat=parseStrategySeatInvitation(invite);
     return seat?strategyRace(circuit,seat):invalidInvite();

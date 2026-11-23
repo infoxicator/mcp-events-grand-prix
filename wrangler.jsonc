@@ -36,6 +36,15 @@
         "period": 60
       }
     }
+  ,
+    {
+      "name": "MCP_ROOM_CREATION",
+      "namespace_id": "1794564602",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
   ],
   "observability": {
     "enabled": true,

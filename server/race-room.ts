@@ -472,7 +472,7 @@ export class RaceRoom {
    }else if(this.audible===p)this.audible=null;
    return;
   }
-  if(msg.type==='ping'){p.send({type:'pong',sent:msg.sent});return;}if(msg.type==='replay'){p.send({type:'replay',frames:this.replay.length?this.replay:this.history});return;}
+  if(msg.type==='ping'){p.send(msg.sent===undefined?{type:'pong'}:{type:'pong',sent:msg.sent});return;}if(msg.type==='replay'){p.send({type:'replay',frames:this.replay.length?this.replay:this.history});return;}
   if(msg.type==='race-control'){
    const hazard=parseHazard(msg.hazard);
    if((this.live==='running'||(this.drive&&(p.owner||p.role==='engineer')))&&hazard&&applyHazard(this.race,getTrack(this.race.circuit),hazard)){

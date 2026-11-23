@@ -45,7 +45,7 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
  let closed=false,terminal=false,pausedHidden=false,pausedFinished=false,claimingSeat=false;
  let opened=false,joined=false,eventLog=false,reconcileOnJoin=false,waitingForSeat=false;
  let retry=baseRetryMs,attempts=0,handshakeFailures=0;
- let awaiting=false,lastRequest=0,lastDecide=0,nextDecisionAt=0;
+ let awaiting=false,lastRequest=0,lastDecide=0,nextDecisionAt=0,lastPingSent=0;
  let reconnect:ReturnType<typeof setTimeout>|undefined;
  let hiddenTimer:ReturnType<typeof setTimeout>|undefined;
  let finishTimer:ReturnType<typeof setTimeout>|undefined;
@@ -61,6 +61,11 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
  }
  function transmit(message:ClientMessage){
   if(ws?.readyState===WebSocket.OPEN)ws.send(JSON.stringify(message));
+ }
+ function sendPing(){
+  if(ws?.readyState!==WebSocket.OPEN)return;
+  lastPingSent=performance.now();
+  ws.send('{"type":"ping"}');
  }
  function send(message:ClientMessage){
   if(closed||terminal)return;
@@ -223,7 +228,7 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
     requestDecision();
    }
    if(m.type==='decision'){awaiting=false;nextDecisionAt=performance.now()+(m.decision.retryAfterMs??0);c.send({type:'intent',sequence:m.decision.sequence});}
-   if(m.type==='pong')c.latency=Math.round(performance.now()-m.sent);
+   if(m.type==='pong'){const sent=m.sent??lastPingSent;if(sent>0)c.latency=Math.round(performance.now()-sent);}
    if(m.type==='replay')c.onReplay(m.frames);
    if(m.type==='event-log'&&eventLog)c.onEventLog?.(m);
    if(m.type==='error'){
@@ -278,7 +283,7 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
  const agent=team&&options?.role!=='engineer'?setInterval(requestDecision,100):undefined;
  const ping=setInterval(()=>{
   if(closed||terminal||pausedHidden||pausedFinished||isHidden()||isRaceEnded(c.state))return;
-  transmit({type:'ping',sent:performance.now()});
+  sendPing();
  },pingMs);
  const onVisibility=()=>{
   if(closed||terminal)return;
@@ -296,7 +301,7 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
    return;
   }
   if(!pausedFinished&&!isRaceEnded(c.state)){
-   transmit({type:'ping',sent:performance.now()});
+   sendPing();
    requestDecision();
   }
  };
