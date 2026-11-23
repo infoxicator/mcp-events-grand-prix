@@ -1,0 +1,194 @@
+{
+  "frames": [
+    "rear-quarter-colour",
+    "rear-quarter-colour",
+    "hero-colour",
+    "hero-colour",
+    "hero-clay",
+    {
+      "left": "hero-wireframe",
+      "right": "hero-clay",
+      "split": 262
+    },
+    "hero-wireframe",
+    "hero-wireframe",
+    {
+      "left": "front-corner-colour",
+      "right": "hero-wireframe",
+      "split": 1262
+    },
+    "front-corner-colour",
+    "front-corner-colour",
+    "steering-colour",
+    "steering-colour",
+    "steering-colour",
+    "hero-colour",
+    "hero-colour",
+    "lift-off-clay",
+    "clay-breakdown-clay",
+    {
+      "left": "turn-front-wireframe",
+      "right": "turn-front-clay",
+      "split": 1210
+    },
+    "parts-wireframe",
+    "turn-side-wireframe",
+    "turn-side-rear-wireframe",
+    "breakdown-side-colour",
+    "rear-wing-colour",
+    "rear-wing-colour",
+    "rear-wing-colour",
+    "rear-wing-colour",
+    "rear-wing-colour",
+    "turn-rear-quarter-colour",
+    "turn-rear-colour",
+    "turn-high-colour",
+    "return-high-colour",
+    "return-quarter-colour",
+    "return-rear-colour",
+    "rear-overhead-colour",
+    "rear-assembled-colour",
+    "rear-assembled-colour",
+    "hero-colour",
+    "hero-colour",
+    "hero-colour"
+  ],
+  "regions": {
+    "10": {
+      "Flap overlap": [
+        389,
+        227,
+        708,
+        331
+      ],
+      "Endplate lettering": [
+        404,
+        285,
+        571,
+        353
+      ]
+    },
+    "12": {
+      "Graphite brow and wordmark": [
+        279,
+        102,
+        480,
+        172
+      ],
+      "Near grip and button caps": [
+        212,
+        120,
+        310,
+        235
+      ],
+      "Opposite grip and lower surround": [
+        413,
+        159,
+        547,
+        296
+      ],
+      "Right grip heel": [
+        485,
+        219,
+        536,
+        291
+      ],
+      "Rolled seat opening": [
+        263,
+        341,
+        471,
+        438
+      ]
+    },
+    "25": {
+      "Cowling overlap and reflection": [
+        365,
+        82,
+        715,
+        178
+      ],
+      "Projecting transmission shafts": [
+        266,
+        282,
+        464,
+        357
+      ],
+      "Endplate and sponsor positions": [
+        431,
+        147,
+        650,
+        361
+      ],
+      "Diffuser vanes and shadows": [
+        255,
+        354,
+        700,
+        435
+      ],
+      "Bare shaft ends": [
+        282,
+        325,
+        317,
+        349
+      ],
+      "Two exposed port mouths": [
+        652,
+        151,
+        719,
+        201
+      ]
+    },
+    "18": {
+      "Floor and lower sidepod": [
+        123,
+        229,
+        398,
+        343
+      ],
+      "Cowls and exposed power unit": [
+        132,
+        129,
+        410,
+        232
+      ],
+      "Released halo upper edge": [
+        318,
+        145,
+        378,
+        166
+      ],
+      "Rear blade and supports": [
+        46,
+        90,
+        178,
+        201
+      ],
+      "Opening over the power unit": [
+        205,
+        201,
+        282,
+        235
+      ]
+    },
+    "7": {
+      "Nose and forward shell": [
+        326,
+        199,
+        612,
+        326
+      ],
+      "Near tyre and wheel cover": [
+        332,
+        259,
+        458,
+        383
+      ],
+      "Floor edge and fences": [
+        139,
+        216,
+        342,
+        335
+      ]
+    }
+  }
+}

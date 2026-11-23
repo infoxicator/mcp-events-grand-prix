@@ -1,4 +1,4 @@
-# Jev Grand Prix
+# MCP Grand Prix
 
 Two teams. Two speeds of intelligence. Monza by day. Las Vegas by night. Built for Ruben Casas ([@Infoxicador](https://x.com/Infoxicador)).
 
@@ -16,7 +16,7 @@ npm ci
 npm run demo
 ```
 
-The launcher starts a local server on **http://127.0.0.1:5277** and opens three independent Chromium app windows side by side: **Ferrari | Broadcast | Mercedes**. It installs Chromium if missing. Ctrl+C or closing a demo window cleans up its browsers and server. An occupied port is rejected; use `PORT=5278 npm run demo` for another instance. The demo defaults to `JEV_MOCK=1`, even when a local key exists.
+The launcher starts a local server on **http://127.0.0.1:5277** and opens three independent Chromium app windows side by side: **Ferrari | Broadcast | Mercedes**. Click **Start race** once the grid is ready. It installs Chromium if missing. Ctrl+C or closing a demo window cleans up its browsers and server. An occupied port is rejected; use `PORT=5278 npm run demo` for another instance. The demo defaults to `JEV_MOCK=1`, even when a local key exists.
 
 Manual windows:
 
@@ -33,11 +33,11 @@ Keep both team seats open. Missing seats pause physics without losing laps, tyre
 
 ## Record for X
 
-Maximize the broadcast window to 1440×980 or 1920×1080. **Title sequence → Lights out** resets the default race and gives a clean recording start. The opening title is also available with `/?spectate&intro`. The engineer/radio panels, battle banner, timing tower and telemetry work with the sound muted.
+Maximize the broadcast window to 1440×980 or 1920×1080. Open **Title sequence** for the intro, then select **Continue to race** and **Start race**. The opening title is also available with `/?spectate&intro`. The engineer/radio panels, battle banner, timing tower and telemetry work with the sound muted.
 
 Use **44 Onboard**, **63 Onboard**, **Broadcast**, **Aerial** or **Car detail** to switch cameras. Onboard includes the physical halo, visible nose/wheels and a steering wheel dash with gear, speed, DRS and ERS. Broadcast rotates every 7–9 real seconds through stabilised Side, both teams’ T-cams and driver-eye onboards, Aerial and Chase. Each shot holds steadily; race events do not trigger extra cuts. Choose Side, Chase, Aerial or an onboard button to hold that view manually; Broadcast restarts the rotation. **Instant replay** replays the closest captured on-track lead change at 0.65×; **Back to live** restores the race. Results list all 22 drivers in finishing order with their race times. **Race again** resets the owner’s race.
 
-Three laps take about 80–100 wall seconds at the default **4× race clock**. `npm run demo:realistic` uses real simulation time (1×); up to 24× is supported for tests. Tyre degradation is deliberately accelerated so undercuts matter in three laps. Each pit-wall view has **Push / Manage / Box, box** radio overrides; they take priority for three wall seconds. Engineers otherwise update every 12 simulated seconds (3 wall seconds at 4×). Drivers request a decision every 200 ms, with one request in flight per team. A late response never advances or rewinds physics.
+Three laps take about 80–100 wall seconds at the default **4× race clock**. `npm run demo:realistic` uses real simulation time (1×); up to 24× is supported for tests. Tyre degradation is deliberately accelerated so undercuts matter in three laps. Engineers update every 12 simulated seconds (3 wall seconds at 4×). Drivers request a decision every 200 ms, with one request in flight per team. A late response never advances or rewinds physics.
 
 ## Real agents and keys
 
@@ -107,7 +107,7 @@ As in Pong, live Luna defaults to **600 ms after each response**, paced further 
 
 ## MCP Apps: two hosts, one race
 
-The local server exposes **Streamable HTTP at `/mcp`**. The linked `ui://jev-grand-prix/pit-wall.html` resource bundles the same Three.js renderer and UI in one HTML document using the official MCP Apps SDK. The included host uses `AppBridge` through a separate-origin double-iframe sandbox.
+The local server exposes **Streamable HTTP at `/mcp`**. The linked `ui://jev-grand-prix/pit-wall-v28.html` resource serves a small HTML template using the official MCP Apps SDK. The sandbox loads versioned game assets from the same server over HTTPS in production. The included host uses `AppBridge` through a separate-origin double-iframe sandbox.
 
 ```sh
 npm run demo:mcp
@@ -118,12 +118,13 @@ npm run demo:mcp
 
 Use another PORT if a demo is already running. Or run `npm run build && npm start`, then `npm run mcp:host` separately. The local host can connect only to a server reachable from its machine; registration in real ChatGPT/Claude accounts was not automated.
 
-1. First host calls `open_grand_prix({player:"a",autoplay:true})`. Without an invitation this creates a new isolated mock race.
-2. Copy the **team B invitation** from the app. Clipboard restrictions fall back to a focused, selected, read-only field; press ⌘C / Ctrl+C if needed.
-3. Second host calls `open_grand_prix({invite:"jev:…:b:…",autoplay:true})`. It joins the exact room and gets only its own seat, with no owner or opponent credential.
-4. **Open web app** opens a credential-free spectator link. Both embedded apps and the browser see the same room, telemetry and radio.
+Connect ChatGPT and Claude to the same MCP endpoint. The widget opens **Race menu** before the start. Use **Race setup** to choose a mode, circuit, available driver matchup, and seat. The current race, invitations, and spectator actions have separate sections. When the race starts, the menu closes and moves below the broadcast. Use **Race menu** to open it again.
 
-Invitations also work in the browser: **Invite a team → Join by invitation**, or open the invited team URL. `player:"both"` runs both empty seats from one app; copying an invitation releases team B. `player:"spectator"` starts none. Closing/stopping an app releases only its own controllers. Visibility changes stop owned controllers and hide its WebGL canvas; the race pauses if either team is missing. Host theme variables, safe areas, fullscreen, openLink and teardown are handled. `grand_prix_status({room})` reads state without starting AI calls.
+1. In the first host, open MCP Grand Prix as team A. Select **Ready team A** and copy the **team B invitation**.
+2. In the second host, use **Join an existing race** or ask the host to join with the full invitation. Select **Ready team B**. When both seats are ready, click **Start race**.
+3. Select **Open spectator** for a third, ordinary browser. The two pit walls and the spectator use the same race clock, telemetry, and radio.
+
+**Leave team** or closing its app releases that seat and pauses a running mock race. An automatic reconnect reclaims the same seat when it becomes available. A new view can rejoin with the original invitation. Clipboard restrictions fall back to a selected read-only field. The browser also supports **Invite a team → Join by invitation**. Opening both teams in one app fills both seats if you select **Ready both teams**. Copying the opponent invitation releases team B. The **Strategy replays** control opens the existing benchmarks in the browser.
 
 Local MCP rooms expire after two hours. Public Worker rooms expire after 15 minutes and always force mocks. Pass `matchup:"jev-vs-luna"` when creating a race to select Luna. An invitation preserves the existing room’s matchup regardless of the second host’s defaults. The included host accepts `?player=a&autoplay=1&matchup=jev-vs-luna`. MCP protocol, sandbox, invitations and shared-race behavior are tested with the actual SDK, not a simulated postMessage host.
 
@@ -143,6 +144,59 @@ flowchart LR
     P --> R
     R --> D[Durable Object checkpoint and expiry on Worker]
 ```
+
+## Solo races
+
+In the MCP app, select **Solo** and open its lobby. In the browser, select **Open solo lobby**. Click **Start race** when the grid is ready. You take Ferrari's seat and the game drives Mercedes as part of the 22-car grid. Solo races keep the usual circuits, strategy, radio, pit stops, and race classification. Leaving Ferrari's seat pauses the race until you reconnect.
+
+The `open_grand_prix` tool also accepts `solo: true`. `autoplay: true` connects the seat automatically. The countdown waits for **Start race**.
+
+## Private live races
+
+Choose **Private live** in the widget, select a circuit and strategist, and click **Start live race**. Match the pairing code on the owner page, authenticate with Cloudflare Access email PIN, review the preselected options, then click **Confirm and start live race**. The app polls using its in-memory pairing proof and switches to the confirmed race. Both drivers run on the Worker. Choose the race server strategist or the paired ChatGPT strategist.
+
+**Copy live invitation** lets the second MCP app join as a spectator. **Open live spectator** opens the same room in a browser. **Stop live race** opens the Access-protected owner page for that race. The owner page and both MCP views keep the spectator invitation available after the race stops. The spectator capability grants access to the feed and browser race controls. It travels in the browser URL fragment and WebSocket join message. It is not part of an HTTP request URL. Provider keys and the Access identity token stay outside MCP results.
+
+Private live races are limited to three laps, five minutes, and 240 outbound provider requests. Finishing, stopping, or reaching a limit cancels further calls. A Worker interruption ends live execution. Reopening a completed or interrupted race retrieves its last snapshot. Repeating a start confirmation returns its original room. Public demos and strategy replays use built-in drivers on the Worker.
+
+### ChatGPT as the live race strategist
+
+Rescan the MCP Grand Prix plugin after updating the server. In a ChatGPT Work chat, ask, “Use `open_grand_prix_strategy` at Monza. Subscribe this chat to `grand_prix.strategy_required` using the exact event filter returned by the tool. For each active event, read its telemetry and send one radio call.” Work chats can use the web app or the desktop app with Cloud selected. When the widget shows that the subscription is verified, click **Start race**. [ChatGPT MCP Events](https://developers.openai.com/plugins/build/mcp-events)
+
+Ferrari starts with its own strategy. The public race starts solo at 1× speed for 20 laps and uses built-in drivers. The host can stop it with **Stop strategy race**. The Worker allows up to one hour. Choose **ChatGPT strategy** in Race setup and open its lobby or call `open_grand_prix` with `chat_strategy: true`, then subscribe and click **Start race**.
+
+To add a second player, use **Copy Mercedes invitation** and have them paste the code into **Join an existing race** in their own widget. They join the running race with their own telemetry and radio for Mercedes. For native MCP Events, pass the same invitation to `open_grand_prix_strategy` in the second Work chat and subscribe using its returned filter. Mercedes stays under game control whenever the second strategy connection is absent.
+
+Open **Spectator** in a browser during a live race to access **Race control**. Deploy a safety car now or queue another for the start of the next leader lap. **Safety car in next lap** cancels a queued deployment and sends the active safety car back to the pits. Race restrictions lift at the next lap line unless yellow flags are active. Yellow flags slow the whole field for 30 race seconds, or until cleared. Rain has light, moderate and heavy settings. Select Dry to stop the rain while the track dries. Each change prompts a fresh strategy event with the flag, scheduled safety car lap, wetness and tyre recommendation. ChatGPT can call for slicks, intermediates or full wets over the radio.
+
+To pair ChatGPT with paid Jev drivers, use **Start live race**, sign in through Cloudflare Access, and select **ChatGPT Work via native MCP Events** on the confirmation page. In the paired Work chat, ask ChatGPT to subscribe to this race’s strategy events. Once the subscription verifies, click **Start race** in the widget to begin paid driving.
+
+The server publishes `grand_prix.strategy_required` at the opening of the race, on new laps, and after significant tyre, fuel or traffic changes. Native MCP Events uses `events/list`, `events/subscribe`, and `events/unsubscribe` on the Worker. The server verifies ChatGPT's callback and sends signed telemetry summaries to it. ChatGPT reads the snapshot with `get_grand_prix_strategy_event` and sends a decision with `submit_grand_prix_radio`. The pit wall updates over its WebSocket.
+
+The event includes position, speed, tyre wear and temperature, sector gap estimates, fuel projection, battery charge and pit commitment. The tool accepts hold, attack, defend, sector fuel save, yield, push, manage, box, extend and cover. The assigned car gets its accepted strategy through radio. **ChatGPT radio** appears inside the race feed above the circuit map. The driver’s number, team waveform, and progressive transcript identify each accepted call. Enable sound to hear it read by a local browser voice when available. The server enforces one call per event and the race's pit commitment and resource rules. Live races support slicks, intermediates and full wets. The weather and teammate exercises are available in **Strategy replays**.
+
+Expand **Event log** below the broadcast and filter by **Strategist**, **Driver** or **Radio**. Open a row to inspect its payload. The strategist log shows the telemetry snapshot, signed event delivery and when ChatGPT reads it. The driver log records the decisions applied to the car. Radio includes pit-wall calls and acknowledgements from live drivers. A browser reload retrieves the recent entries from the current race room.
+
+The subscription and widget stream use separate credentials from the spectator invitation. A strategy ticket expires when its race window closes or when its time limit is reached. The limit is 75 seconds for ChatGPT Work callbacks and 20 seconds for widget messages. An accepted radio order consumes its ticket. The local pit wall covers missed calls. Private races that pair ChatGPT with paid drivers run at 2×, with a longer interval between driver requests.
+
+The Worker tests exercise signed webhook verification and delivery, the open widget’s app bridge, and the radio tools with simulated model replies.
+
+### Cloudflare setup
+
+The production MCP endpoint is [MCP Grand Prix MCP](https://jev-grand-prix.jev-vs-luna.workers.dev/mcp). Create a separate **self-hosted Access application** for the exact path `jev-grand-prix.jev-vs-luna.workers.dev/owner/live`. Enable only the email **One-time PIN** provider on that application and use one **Allow** policy with a single **Emails** rule for the exact owner address. Keep the rest of the Worker public. [Cloudflare Worker Access paths](https://developers.cloudflare.com/workers/configuration/cloudflare-access/#protect-a-specific-hostname-custom-domain-or-path)
+
+Bind the following values on the **jev-grand-prix** Worker. Use a Grand Prix-specific Access audience and separately authorized provider credentials.
+
+| Binding | Value |
+| --- | --- |
+| `ACCESS_ISSUER` | Zero Trust team origin, without a trailing slash |
+| `ACCESS_AUD` | Audience for the Grand Prix Access application |
+| `ACCESS_OWNER_EMAIL` | Exact email in the allow rule |
+| `TYPESAFE_API_KEY` | Jev driver |
+| `AI_GATEWAY_API_KEY` or `OPENROUTER_API_KEY` | Optional Worker strategist via Vercel AI Gateway or OpenRouter |
+| `OPENAI_API_KEY` | Optional Luna driver for Jev vs Luna |
+
+Set provider keys as Worker secrets. `JEV_PROVIDER`, `JEV_MODEL`, `ENGINEER_PROVIDER`, and `ENGINEER_MODEL` optionally select the already-supported providers and models. The Worker validates the signed Access assertion header or signed browser cookie against the configured audience, issuer, expiry and exact owner email. The live button requires valid Access bindings and a configured driver. The Worker strategist additionally requires its provider key.
 
 ## Circuit and simulation
 
@@ -233,7 +287,7 @@ npm run model:build
 blender -b --factory-startup --python scripts/blender/build_car.py
 ```
 
-The macOS npm command uses `/Applications/Blender.app/Contents/MacOS/Blender`. The initial sandboxed launch crashed during Metal-device detection; running with normal local application/GPU access resolved it. Final exports use factory startup, with user add-ons disabled. No reinstall or substitute car renderer was needed. High detail is ~231k triangles, with a reduced LOD from 32 m; material batches keep draw calls bounded. GLBs are embedded in the MCP HTML so sandboxed app views need no model CDN or extra asset permissions.
+The macOS npm command uses `/Applications/Blender.app/Contents/MacOS/Blender`. The initial sandboxed launch crashed during Metal-device detection; running with normal local application/GPU access resolved it. Final exports use factory startup, with user add-ons disabled. No reinstall or substitute car renderer was needed. High detail is ~231k triangles, with a reduced LOD from 32 m; material batches keep draw calls bounded. Sandboxed app views load the selected circuit from the game origin declared in the MCP resource CSP.
 
 Review images, before/after JPEG sheets, reference comparisons, test logs and measured GPU results are in `artifacts/realism-v2/`. `python3 scripts/realism-sheets.py` recreates sheets from the screenshots and locally downloaded reference frames. The reference video remains local and outside production bundles.
 
@@ -253,7 +307,7 @@ PORT=5477 npm run demo:smoke -- --headed
 
 The original Pong working tree (including its invitation fixes) was copied without `.env.local`, `.git`, dependencies or generated artifacts. Its build and both browser scenarios passed before conversion. Local commit `ebb7eba` preserves that baseline, then M1–M5 evolve it. The source Pong folder was left untouched.
 
-Cloudflare configuration targets a new **`jev-grand-prix`** Worker with Durable Objects, static assets, room rate limits, mock-only public agents, checkpoints and expiry alarms. `npm run dev:worker` runs locally. No account id, provider secrets or previous Pong deployment URL is inherited. **Nothing was deployed, published or pushed.**
+Cloudflare configuration targets the **`jev-grand-prix`** Worker in the existing `jev-vs-luna` account. `npm run dev:worker` runs the production entry point locally. `npm run test:worker` uses separate local signing keys and simulated HTTP providers.
 
 ## Blender realism revision: cars and both circuits
 

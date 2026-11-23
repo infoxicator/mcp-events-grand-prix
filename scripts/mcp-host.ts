@@ -15,11 +15,12 @@ const root=resolve('dist/mcp-host');
 function serve(sandbox:boolean){return createServer(async(req,res)=>{
   const url=new URL(req.url??'/',sandbox?sandboxOrigin:hostOrigin);
   if(url.pathname==='/favicon.ico'){res.writeHead(204);res.end();return;}
-  if(!sandbox&&url.pathname==='/config'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({endpoint:process.env.MCP_SERVER_URL??`${origin}/mcp`,sandboxOrigin}));return;}
+  if(!sandbox&&url.pathname==='/config'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({endpoint:process.env.MCP_SERVER_URL??`${origin}/mcp`,sandboxOrigin,testStrategy:process.env.MCP_TEST_STRATEGY==='1'}));return;}
   if(sandbox){
-    let csp:{connectDomains?:unknown}={};try{csp=JSON.parse(url.searchParams.get('csp')??'{}');}catch{}
-    const connections=Array.isArray(csp.connectDomains)?csp.connectDomains.filter(x=>x===origin.replace('http','ws')):[];
-    res.setHeader('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src data:; img-src data:; connect-src ${connections.length?connections.join(' '):"'none'"}; frame-src 'self'; base-uri 'none'; object-src 'none'`);
+    let csp:{connectDomains?:unknown;resourceDomains?:unknown}={};try{csp=JSON.parse(url.searchParams.get('csp')??'{}');}catch{}
+    const connections=Array.isArray(csp.connectDomains)?csp.connectDomains.filter(x=>x===origin||x===origin.replace('http','ws')):[];
+    const resources=Array.isArray(csp.resourceDomains)&&csp.resourceDomains.includes(origin)?' '+origin:'';
+    res.setHeader('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline'${resources}; style-src 'self' 'unsafe-inline'${resources}; font-src data:${resources}; img-src data:${resources}; connect-src ${connections.length?connections.join(' '):"'none'"}; frame-src 'self'; base-uri 'none'; object-src 'none'`);
     res.setHeader('Referrer-Policy','strict-origin');
   }
   const pathname=url.pathname==='/'?(sandbox?'/mcp-sandbox.html':'/mcp-host.html'):url.pathname;

@@ -41,8 +41,8 @@ export function poseForearms(model:T.Object3D,steering:T.Object3D,visible=true){
   // by choosing either of two points on a constrained reach circle.
   const turn=T.MathUtils.clamp(side*steering.rotation.z/(.42*3.6),-1,1);
   const rise=Math.max(0,turn),fold=Math.max(0,-turn);
-  bend.set(side*(.20-.210*fold**1.35-.014*Math.sin(Math.PI*rise)),
-   .35+.28*rise**1.15-.04*Math.sin(Math.PI*fold),-.12-.07*fold-.04*rise).sub(centre);
+  bend.set(side*(.222-.221*fold**1.35-.014*Math.sin(Math.PI*rise)),
+   .358+.272*rise**1.15-.04*Math.sin(Math.PI*fold),-.125-.073*fold-.056*rise).sub(centre);
   bend.addScaledVector(along,-bend.dot(along)).normalize();
   elbow.copy(centre).addScaledVector(bend,radius);
   upper.quaternion.setFromUnitVectors(up,direction.subVectors(elbow,shoulder).normalize());
@@ -75,7 +75,12 @@ export function bindGloveCompression(hand:T.Object3D,side:-1|1){
  for(const child of candidates){
   if(!(child instanceof T.Mesh))continue;
   const geometry=child.geometry,base=geometry.getAttribute('position');
-  if(!base||geometry.morphAttributes.position?.length)continue;
+  if(!base)continue;
+  if(geometry.morphAttributes.position?.length){
+   if(!child.morphTargetInfluences)child.updateMorphTargets();
+   if(geometry.userData?.gloveCompression)meshes.push(child);
+   continue;
+  }
   const toHand=inverseHand.clone().multiply(child.matrixWorld);
   if(child instanceof T.SkinnedMesh){
    // glTF positions are in the skin bind space. At setup all joints are in their
@@ -95,6 +100,7 @@ export function bindGloveCompression(hand:T.Object3D,side:-1|1){
   }
   geometry.morphTargetsRelative=true;
   geometry.morphAttributes.position=[new T.BufferAttribute(deltas,3)];
+  geometry.userData={...geometry.userData,gloveCompression:true};
   child.updateMorphTargets();meshes.push(child);
  }
  return meshes;

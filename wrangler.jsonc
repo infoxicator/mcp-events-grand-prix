@@ -1,12 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "jev-grand-prix",
+  "name": "f1",
+  "account_id": "dea6d398d44bb555f31cd3e8c63668f8",
+  "preview_urls": false,
+  "keep_vars": true,
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-13",
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "run_worker_first": true
+    "run_worker_first": ["/api/*", "/mcp", "/mcp/*", "/owner/*", "/health", "/internal*"]
   },
   "durable_objects": {
     "bindings": [

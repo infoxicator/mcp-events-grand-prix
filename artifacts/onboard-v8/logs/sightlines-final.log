@@ -1,8 +1,0 @@
-
- RUN  v4.1.12 /Users/ruben.casas@postman.com/.t3/scratch/2026-11-13-build-jev-grand-prix-an-e75bd481/jev-grand-prix
-
-
- Test Files  1 passed (1)
-      Tests  2 passed (2)
-   Start at  09:25:16
-   Duration  174ms (transform 21ms, setup 0ms, import 46ms, tests 55ms, environment 0ms)

@@ -7,7 +7,7 @@ export const BROADCAST_SHOTS=[
  {mode:'chase',seconds:8},
  {mode:'tcam-b',seconds:7},
  {mode:'cockpit-a',seconds:7},
- {mode:'helicopter',seconds:9},
+ {mode:'trackside',seconds:9},
 ] as const;
 export class BroadcastDirector {
  private index=0;

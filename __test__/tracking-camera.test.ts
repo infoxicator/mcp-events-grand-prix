@@ -16,6 +16,21 @@ describe('continuous side and chase cameras',()=>{
   }
   expect(maxSpeed).toBeLessThan(90); // Old side shot jumped ~175m in one frame.
  });
+ it('absorbs a compressed side-camera snapshot and stays with an accelerated pack',()=>{
+  const rig=new TrackingCameraRig(SIDE_CAMERA);
+  let station=0,now=0;
+  function advance(metres:number){
+   const previous=rig.position.clone();station+=metres;now+=8;
+   rig.update(straight,car(station),car(station),()=>0,now);
+   return rig.position.distanceTo(previous)/.008;
+  }
+  for(let frame=0;frame<60;frame++)advance(.28);
+  expect(advance(1.184)).toBeLessThan(100);
+  expect(advance(.72)).toBeLessThan(100);
+  for(let frame=0;frame<60;frame++){
+   advance(10);expect(Math.abs(station-rig.target.z)).toBeLessThanOrEqual(2);
+  }
+ });
  it.each(['monza','las-vegas'] as const)('tracks a complete accelerated lap at %s with a fixed lens',id=>{
   const track=getTrack(id),rig=new TrackingCameraRig(SIDE_CAMERA);
   for(let i=0;i<2000;i++){

@@ -1,6 +1,30 @@
 import {loadCar} from './load-car';
 import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
+import {Mesh} from 'three';
+
+it('carries the masked inner cowling finish on the painted shell at both LODs',async()=>{
+ for(const level of ['high','low']){
+  const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
+  const {scene}=await loadCar(bytes);
+  let painted=0, carbon=0;
+  scene.getObjectByName('Chassis_TwoToneCover')!.traverse(part=>{
+   if(!(part instanceof Mesh))return;
+   const positions=part.geometry.getAttribute('position');
+   const mask=part.geometry.getAttribute('_cowllacquer');
+   expect(mask.count).toBe(positions.count);
+   for(let i=0;i<mask.count;i++){
+    if(mask.getX(i)>.5){
+     painted++;
+     expect(positions.getZ(i)).toBeLessThan(-.68);
+     expect(Math.abs(positions.getX(i))).toBeLessThanOrEqual(.405);
+    }else carbon++;
+   }
+  });
+  expect(painted).toBeGreaterThan(20);
+  expect(carbon).toBeGreaterThan(painted);
+ }
+});
 function glb(name:string){const data=readFileSync(new URL(`../src/race/assets/jgp26-${name}.glb`,import.meta.url));expect(data.toString('ascii',0,4)).toBe('glTF');expect(data.readUInt32LE(4)).toBe(2);return JSON.parse(data.toString('utf8',20,20+data.readUInt32LE(12)));}
 describe('Blender assets',()=>{
  it('contains independent animation rigs, two liveries’ numbers and embedded resources',()=>{for(const level of ['high','low']){const g=glb(level),names=g.nodes.map((n:any)=>n.name);for(const name of ['Chassis','Steering','DRS','Helmet','FrontL','FrontR','RearL','RearR','NumberA','NumberB','HelmetNumberA','HelmetNumberB','Hands','HandL','HandR','ForearmL','ForearmR',...['L','R'].flatMap(side=>Array.from({length:5},(_,i)=>`Finger${side}${i}`))])expect(names).toContain(name);expect(g.buffers.every((b:any)=>!b.uri)).toBe(true);for(const name of ['Carbon','WheelDish','BrakeDisc','GloveFabric','GloveSuede','GloveStitch','Sleeve'])expect(g.materials.map((m:any)=>m.name)).toContain(name);expect(JSON.stringify(g)).not.toMatch(/UniCredit|Pirelli|Ferrari|Peroni|Richard Mille/);}});
@@ -60,6 +84,23 @@ it('keeps the aerofoil stacks and the moving DRS flap on both sides at each LOD'
     return hit.point.y;
    });
    expect(Math.abs(heights[0]-heights[1])).toBeLessThan(.008);
+  }
+ }
+});
+
+it('keeps both diffuser exits open through to the rising floor at each LOD',async()=>{
+ const {Raycaster,Vector3}=await import('three');
+ for(const level of ['high','low']){
+  const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
+  const {scene}=await loadCar(bytes);
+  scene.updateMatrixWorld(true);
+  const floor=scene.getObjectByName('Floor')!;
+  for(const x of [-.34,.34]){
+   const ray=new Raycaster(new Vector3(x,.17,-3),new Vector3(0,0,1));
+   const hit=ray.intersectObject(floor,true)[0];
+   expect(hit).toBeDefined();
+   expect(hit.point.z).toBeGreaterThan(-2.50);
+   expect(hit.point.z).toBeLessThan(-2.10);
   }
  }
 });

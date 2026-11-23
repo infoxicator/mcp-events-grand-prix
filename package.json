@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "build": "npm run typecheck && vite build && vite build --config vite.mcp.config.ts && vite build --config vite.mcp-host.config.ts && node scripts/check-asset-budget.mjs",
     "test": "vitest run",
-    "test:e2e": "playwright test e2e/race.spec.ts e2e/provider-ui.spec.ts e2e/realism.spec.ts e2e/vegas.spec.ts e2e/realism-v2.spec.ts e2e/circuit-review.spec.ts e2e/aerial-camera.spec.ts e2e/side-camera.spec.ts e2e/broadcast-camera.spec.ts",
+    "test:e2e": "playwright test e2e/strategy.spec.ts e2e/radio.spec.ts e2e/race.spec.ts e2e/provider-ui.spec.ts e2e/realism.spec.ts e2e/vegas.spec.ts e2e/realism-v2.spec.ts e2e/circuit-review.spec.ts e2e/aerial-camera.spec.ts e2e/side-camera.spec.ts e2e/broadcast-camera.spec.ts e2e/watch.spec.ts e2e/crashes.spec.ts e2e/matchup-reconnect.spec.ts e2e/rain.spec.ts",
     "test:mcp": "playwright test --grep \"MCP\"",
     "test:worker": "playwright test --config playwright.worker.config.ts",
     "start": "node --import tsx server/index.ts --production",
@@ -28,7 +28,7 @@
     "demo:realistic": "RACE_SPEED=1 node scripts/demo.mjs",
     "test:handling": "node --import tsx scripts/handling-check.ts && node --import tsx scripts/calibrate.ts",
     "demo:vegas": "RACE_CIRCUIT=las-vegas RACE_SPEED=1 node scripts/demo.mjs",
-    "model:build": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/blender/build_car.py",
+    "model:build": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/blender/build_car.py && /Applications/Blender.app/Contents/MacOS/Blender -b scripts/blender/jgp26.blend --python-exit-code 1 --python scripts/blender/build_inspection_shell.py && /Applications/Blender.app/Contents/MacOS/Blender -b scripts/blender/jgp26.blend --python-exit-code 1 --python scripts/blender/reference_views.py -- bake-poses && /Applications/Blender.app/Contents/MacOS/Blender -b scripts/blender/jgp26.blend --python-exit-code 1 --python scripts/blender/build_field.py -- --near && /Applications/Blender.app/Contents/MacOS/Blender -b scripts/blender/jgp26.blend --python-exit-code 1 --python scripts/blender/build_field.py",
     "circuit:build": "node --import tsx scripts/export-circuit.ts && python3 scripts/blender/circuit_textures.py && /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/blender/build_circuits.py -- 11"
   },
   "devDependencies": {

@@ -19,7 +19,7 @@ describe('car and camera under load',()=>{
  it('lifts only the wheels on a marked kerb and repeats on the following lap',()=>{
   const s=new Suspension();s.update(monza,{...coast,offset:5.7},0,false);
   expect(s.heights[0]).toBeGreaterThan(.02);expect(s.heights[2]).toBeGreaterThan(.02);
-  expect(s.heights[1]).toBeCloseTo(pavementHeight(monza,2556+1.55,5.7-.8175),9);
+  expect(s.heights[1]).toBeCloseTo(pavementHeight(monza,2556+1.55,5.7-.8475),9);
   expect(s.heights[3]).toBeCloseTo(pavementHeight(monza,2556-2.05,5.7-.7675),9);
   expect(kerbHeight(monza,200,6.5)).toBe(0);
   expect(kerbHeight(monza,2556+monza.LENGTH,6.5)).toBeCloseTo(kerbHeight(monza,2556,6.5),9);

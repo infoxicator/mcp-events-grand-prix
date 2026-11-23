@@ -23,11 +23,13 @@ def rounded(value, power):
 def build_halo(mesh, interp, carbon, titanium, cavity, rod):
     # An oval aerodynamic shroud follows the wishbone in plan. Its long axis
     # turns into the surface normal of the side rail as it dives into the mount.
-    rails = [[-.316,.603,-.537,.042,.052],[-.332,.686,-.505,.038,.050],
-             [-.354,.815,-.409,.033,.041],[-.354,.884,-.19,.027,.039],
-             [-.324,.913,.102,.022,.043],[-.259,.914,.32,.019,.044],
-             [-.151,.899,.475,.019,.042],[-.071,.887,.545,.020,.040],
-             [0,.884,.558,.021,.042]]
+    shroud = carbon.copy()
+    shroud.name = 'HaloComposite'
+    rails = [[-.302,.634,-.536,.031,.041],[-.302,.692,-.495,.023,.040],
+             [-.300,.768,-.405,.016,.040],[-.298,.848,-.260,.015,.042],
+             [-.296,.908,-.065,.015,.046],[-.292,.938,.125,.016,.050],
+             [-.276,.947,.295,.016,.052],[-.222,.951,.412,.017,.052],
+             [-.138,.952,.476,.018,.047],[0,.952,.500,.019,.042]]
     rail = interp(rails + [[-x,y,z,h,w] for x,y,z,h,w in reversed(rails[:-1])], 5)
     rings = []
     for i, row in enumerate(rail):
@@ -38,7 +40,7 @@ def build_halo(mesh, interp, carbon, titanium, cavity, rod):
         up = across.cross(tangent).normalized()
         rings.append([centre + across * (row[4]*math.cos(k*math.tau/24)) +
                       up * (row[3]*math.sin(k*math.tau/24)) for k in range(24)])
-    mesh('Halo', *closed_rings(rings), carbon)
+    mesh('Halo', *closed_rings(rings), shroud)
 
     # A narrow spoiler is bonded to the upper, outer edge of the titanium
     # shroud. Each side tapers back into the swept wishbone before the centre.
@@ -57,16 +59,26 @@ def build_halo(mesh, interp, carbon, titanium, cavity, rod):
         mesh('Bonded halo upper fairing',*closed_rings(rows),carbon)
 
     # The front leg flares beneath the junction and sits on a teardrop foot.
-    stations = interp([[.601,.679,.042,.080],[.622,.671,.040,.070],
-                       [.657,.667,.020,.046],[.748,.631,.014,.045],
-                       [.838,.586,.017,.042],[.870,.562,.032,.038],
-                       [.887,.552,.059,.029]], 5)
+    stations = interp([[.608,.756,.043,.069],[.642,.745,.040,.062],
+                       [.705,.718,.022,.040],[.813,.638,.017,.040],
+                       [.903,.564,.019,.041],[.934,.524,.032,.036],
+                       [.952,.500,.057,.029]], 5)
     rings = [[(width*math.cos(a)*(1+.22*math.sin(a)), h, z+depth*math.sin(a))
               for a in [k*math.tau/32 for k in range(32)]] for h,z,width,depth in stations]
-    mesh('Faired centre leg', *closed_rings(rings), carbon)
+    mesh('Faired centre leg', *closed_rings(rings), shroud)
+    # Moulded landing pads follow the load path as it spreads into the tub.
+    for side in (-1, 0, 1):
+        rear = side != 0
+        rings = []
+        for h,scale in [(0,1),(.008,.97),(.016,.80),(.025,.62)]:
+            rings.append([(side*.302+scale*(.058 if rear else .073)*math.cos(a),
+                           (.641 if rear else .619)+h,
+                           (-.535 if rear else .752)+scale*(.091 if rear else .102)*math.sin(a))
+                          for a in (i*math.tau/32 for i in range(32))])
+        mesh('Halo mounting collar',*closed_rings(rings), carbon)
     for side in [-1,1]:
         for z in [-.570,-.498]:
-            x = side*.322
+            x = side*.305
             rod('Rear halo mounting washer',(x,.647,z),(x,.651,z),.007,titanium,vertices=16)
             rod('Socket recess',(x,.651,z),(x,.652,z),.003,cavity,vertices=6)
 
@@ -178,6 +190,12 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
         # A smooth bend through the wrist. The entire gauntlet mouth follows
         # the forearm. Finger contact surfaces remain attached to the wheel.
         cuff=(1-mix)*(1-smooth(-.091,-.048,vertex.co.z))
+        # Flare the gauntlet mouth over the sleeve; keep wrist weights on the
+        # existing pivot so the fingers and grip are unaffected at full lock.
+        hem=(1-smooth(-.105,-.087,vertex.co.z))*cuff
+        vertex.co.x+=(vertex.co.x-side*.215)*.10*hem
+        vertex.co.y+=(vertex.co.y+.062)*.10*hem
+        vertex.co.z-=.012*hem
         if cuff>0:gauntlet.add([vertex.index],cuff,'REPLACE')
         if 1-mix-cuff>1e-6:palm.add([vertex.index],1-mix-cuff,'REPLACE')
         if mix>0:joints[digit].add([vertex.index],mix,'REPLACE')
@@ -309,14 +327,14 @@ def build_driver(group, mesh, curve, interp, steer, body, materials):
 
         # Rigid anatomical segments, authored at final physical length. Only the
         # elbow joint moves as the wheel turns. No longitudinal sleeve scaling.
-        shoulder=Vector((side*.168,.501,-.366))
-        wrist=Vector((side*(.208-.205*(1-.85)),-.033,-.059))+steer.location
+        shoulder=Vector((side*.161,.515,-.392))
+        wrist=steer.location + steer.rotation_euler.to_matrix() @ Vector((side*(.208-.205*(1-.85)),-.033,-.059))
         upper_length,fore_length=.291,.290
         along=(wrist-shoulder).normalized()
         reach=(wrist-shoulder).length
         pole=Vector((side*.218,.180,-.20))-shoulder
         natural=(pole-along*pole.dot(along)).normalized()
-        dorsal=Vector((-side*.007,.029,.045)).normalized()
+        dorsal=steer.rotation_euler.to_matrix() @ Vector((-side*.007,.029,.045)).normalized()
         aligned=(-dorsal+along*dorsal.dot(along)).normalized()
         bend=(natural*.30+aligned*.70).normalized()
         advance=(upper_length**2+reach**2-fore_length**2)/(2*reach)

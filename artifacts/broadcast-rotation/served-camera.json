@@ -1,6 +1,0 @@
-{
-  "server": "http://127.0.0.1:5477",
-  "broadcastDirectorServed": true,
-  "sideButtonServed": true,
-  "onboardRotationServed": true
-}

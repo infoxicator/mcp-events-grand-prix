@@ -1,0 +1,169 @@
+{
+  "hero": {
+    "pose": null,
+    "frames": {
+      "colour": 3,
+      "clay": 5,
+      "wireframe": 7
+    },
+    "progress": 1
+  },
+  "front": {
+    "pose": null,
+    "frames": {},
+    "progress": 1
+  },
+  "side": {
+    "pose": null,
+    "frames": {},
+    "progress": 1
+  },
+  "top": {
+    "pose": null,
+    "frames": {},
+    "progress": 1
+  },
+  "rear": {
+    "pose": null,
+    "frames": {},
+    "progress": 1
+  },
+  "front-corner": {
+    "pose": null,
+    "frames": {
+      "colour": 10
+    },
+    "progress": 1
+  },
+  "steering": {
+    "pose": null,
+    "frames": {
+      "colour": 12
+    },
+    "progress": 1
+  },
+  "rear-quarter": {
+    "pose": "quarter",
+    "frames": {
+      "colour": 1
+    },
+    "progress": 1
+  },
+  "rear-wing": {
+    "pose": "service",
+    "frames": {
+      "colour": 25
+    },
+    "progress": 1
+  },
+  "rear-overhead": {
+    "pose": "overhead",
+    "frames": {
+      "colour": 35
+    },
+    "progress": 1
+  },
+  "diffuser-wire": {
+    "pose": null,
+    "frames": {},
+    "progress": 1
+  },
+  "parts": {
+    "pose": "exploded",
+    "frames": {
+      "wireframe": 20
+    },
+    "progress": 1
+  },
+  "lift-off": {
+    "pose": "lift",
+    "progress": 1,
+    "frames": {
+      "clay": 17
+    }
+  },
+  "clay-breakdown": {
+    "pose": "breakdown",
+    "progress": 1,
+    "frames": {
+      "clay": 18
+    }
+  },
+  "turn-front": {
+    "pose": "exploded",
+    "progress": 1,
+    "frames": {
+      "wireframe": 19
+    }
+  },
+  "turn-side": {
+    "pose": "exploded",
+    "progress": 1,
+    "frames": {
+      "wireframe": 21
+    }
+  },
+  "turn-side-rear": {
+    "pose": "exploded",
+    "progress": 1,
+    "frames": {
+      "wireframe": 22
+    }
+  },
+  "breakdown-side": {
+    "pose": "quarter",
+    "progress": 1,
+    "frames": {
+      "colour": 23
+    }
+  },
+  "turn-rear-quarter": {
+    "pose": "quarter",
+    "progress": 1,
+    "frames": {
+      "colour": 29
+    }
+  },
+  "turn-rear": {
+    "pose": "quarter",
+    "progress": 1,
+    "frames": {
+      "colour": 30
+    }
+  },
+  "turn-high": {
+    "pose": "quarter",
+    "progress": 1,
+    "frames": {
+      "colour": 31
+    }
+  },
+  "return-high": {
+    "pose": "quarter",
+    "progress": 0.88,
+    "frames": {
+      "colour": 32
+    }
+  },
+  "return-quarter": {
+    "pose": "quarter",
+    "progress": 0.64,
+    "frames": {
+      "colour": 33
+    }
+  },
+  "return-rear": {
+    "pose": "quarter",
+    "progress": 0.36,
+    "frames": {
+      "colour": 34
+    }
+  },
+  "rear-assembled": {
+    "pose": null,
+    "progress": 0,
+    "frames": {
+      "colour": 36
+    }
+  }
+}

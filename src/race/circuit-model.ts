@@ -1,17 +1,18 @@
 import * as T from 'three';
+import {createSphereShow} from './sphere-show';
 import {tracksideMotion} from './trackside-motion';
 import {Reflector} from 'three/addons/objects/Reflector.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
 import decoderJS from 'three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js?url&inline';
 import decoderWasm from 'three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url&inline';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {embeddedGLB,assetBytes} from './embedded-glb';
-import monzaMcp from './assets/circuits/monza-mcp.glb.gz?url&inline';
-import vegasMcp from './assets/circuits/las-vegas-mcp.glb.gz?url&inline';
-import monzaURL from './assets/circuits/monza.glb.gz?url&inline';
-import vegasURL from './assets/circuits/las-vegas.glb.gz?url&inline';
+import {embeddedGLB,gzipBytes} from './embedded-glb';
+import monzaMcp from './assets/circuits/monza-mcp.glb.gz?url';
+import vegasMcp from './assets/circuits/las-vegas-mcp.glb.gz?url';
+import monzaURL from './assets/circuits/monza.glb.gz?url';
+import vegasURL from './assets/circuits/las-vegas.glb.gz?url';
 import {circuitHeight} from './elevation';
-import canopyLightURL from './assets/circuits/monza-canopy-light.png?url&inline';
+import canopyLightURL from './assets/circuits/monza-canopy-light.png?url';
 import asphaltNormal from './assets/asphalt-normal.webp?url';
 import type {Track} from './track';
 /** Reflect the actual resort and jets on the surface of the Blender lake. */
@@ -41,23 +42,25 @@ function lakeReflection(bounds:T.Box3){
  return water;
 }
 /** All geometry is authored/exported by Blender. This loader only configures PBR and culling. */
-export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
+export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceWater={value:0}){
  let ready=false,error:string|undefined,disposed=false;
  const heightAt=(d:number)=>circuitHeight(track.id,d);
  const people=tracksideMotion();
- const sp=track.project(-115.1621,36.1207),spherePosition=new T.Vector3(sp.x,32.9184,sp.z),spheres:T.ShaderMaterial[]=[];
+ const sp=track.project(-115.1621,36.1207),spherePosition=new T.Vector3(sp.x,32.9184,sp.z);
+ let sphereShow:ReturnType<typeof createSphereShow>|undefined;
  const normal=new T.TextureLoader().load(asphaltNormal);normal.colorSpace=T.NoColorSpace;normal.flipY=false;normal.wrapS=normal.wrapT=T.RepeatWrapping;normal.anisotropy=anisotropy;
  const canopyLight=track.night?null:new T.TextureLoader().load(canopyLightURL);
  if(canopyLight){canopyLight.flipY=false;canopyLight.colorSpace=T.NoColorSpace;}
  const lakeBounds=new T.Box3();let reflection:Reflector|undefined;
  const distant:T.Mesh[]=[],casters:T.Mesh[]=[];
  const draco=import.meta.env.MCP_APP==='true'?null:new DRACOLoader().setDecoderPath({js:decoderJS,wasm:decoderWasm}).setWorkerLimit(2);
- const source=import.meta.env.MCP_APP==='true'?embeddedGLB(track.night?vegasMcp:monzaMcp,true):assetBytes(track.night?vegasURL:monzaURL).then(b=>new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()).then(b=>new GLTFLoader().setDRACOLoader(draco!).parseAsync(b,''));
+ const source=import.meta.env.MCP_APP==='true'?embeddedGLB(track.night?vegasMcp:monzaMcp,true):gzipBytes(track.night?vegasURL:monzaURL).then(b=>new GLTFLoader().setDRACOLoader(draco!).parseAsync(b,''));
  const loaded=source.then(gltf=>{
   draco?.dispose();
   if(disposed){gltf.scene.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material]){for(const value of Object.values(m))if(value instanceof T.Texture)value.dispose();m.dispose();}}});return;}
   // Partition Blender EXT_mesh_gpu_instancing by spatial tile for culling and shadows.
   gltf.scene.updateMatrixWorld(true);
+  const drySurfaces=new Set<T.MeshStandardMaterial>();
   const farCrowns=new Map<string,T.BufferGeometry>(),lodSources:T.Mesh[]=[];
   gltf.scene.traverse(o=>{
    if(!(o instanceof T.Mesh)||!(o.name.startsWith('LOD_Canopy')||o.name.startsWith('LOD_Grandstand')))return;
@@ -93,6 +96,11 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
    const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){const m=material as T.MeshStandardMaterial;m.side=T.DoubleSide;people.bind(m);
     if(m.map){m.map.anisotropy=anisotropy;m.map.wrapS=m.map.wrapT=T.RepeatWrapping;}
     if(track.night&&m.name==='Steel'){m.envMapIntensity=.92;m.roughness=.48;m.metalness=.55;}
+    if(track.night&&['White','Concrete','RunoffPaint','Red','Green'].includes(m.name))drySurfaces.add(m);
+    if(m.name==='GarageFascia'){
+     // Constructor numbers and names sit on the live bay board above this backing.
+     m.map=null;m.emissiveMap=null;m.color.set('#24272a');m.emissive.set('#090a0b');
+    }
     if(m.name==='Concrete'){m.color.set('#c3c1b8');m.bumpMap=m.map;m.bumpScale=.003;m.roughness=.89;m.metalness=0;m.envMapIntensity=.55;}
     if(m.name==='Asphalt'||m.name==='RepairCourse'){
      m.color.set(m.name==='RepairCourse'?(track.night?'#62676b':'#5f6263'):(track.night?'#7f8081':'#777b7c'));m.normalMap=normal;m.normalScale.set(.14,.14);
@@ -100,43 +108,115 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
      // Physical aggregate at the original survey UV scale, plus broad,
      // non-repeating binder variation between the racing line and the verge.
      m.onBeforeCompile=shader=>{
+      shader.uniforms.surfaceWater=surfaceWater;
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 pavementUV;')
        .replace('#include <begin_vertex>','#include <begin_vertex>\npavementUV=uv;');
       shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
+       uniform float surfaceWater;
        varying vec2 pavementUV;
        float pavementHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
        float pavementNoise(vec2 p){
         vec2 cell=floor(p),f=fract(p);f=f*f*(3.-2.*f);
         return mix(mix(pavementHash(cell),pavementHash(cell+vec2(1,0)),f.x),
           mix(pavementHash(cell+vec2(0,1)),pavementHash(cell+1.),f.x),f.y);
+       }
+       float resolvedNoise(vec2 p){
+        vec2 footprint=fwidth(p);
+        return mix(pavementNoise(p),.5,smoothstep(.35,1.,max(footprint.x,footprint.y)));
+       }
+       // Pixel coverage of a narrow joint, including oblique views.
+       float pavementJoint(float d,float halfWidth,float footprint){
+        float w=max(footprint,.001);
+        return clamp((min(d+.5*w,halfWidth)-max(d-.5*w,-halfWidth))/w,0.,1.);
        }`).replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
-        float binder=pavementNoise(pavementUV*vec2(1.1,.13));
-        float grit=pavementNoise(pavementUV*vec2(7.7,.62));
+        float binder=resolvedNoise(pavementUV*vec2(1.1,.13));
+        float grit=resolvedNoise(pavementUV*vec2(7.7,.62));
         vec2 metres=pavementUV*3.;
         float seamDistance=abs(metres.x-2.9+.058*sin(metres.y*.089)+.018*sin(metres.y*.81));
         float px=max(fwidth(metres.x),.004);
-        float joint=1.-smoothstep(.018,.022+px,seamDistance);
+        float joint=pavementJoint(seamDistance,.020,px);
         float aged=smoothstep(.18,.57,pavementNoise(vec2(metres.y*.027,3.)));
         diffuseColor.rgb*=(.86+.20*binder+.08*grit)*(1.-joint*aged*.38);
         roughnessFactor-=joint*aged*.10;
         roughnessFactor=clamp(roughnessFactor+.09*(binder-.5),.47,1.);
+        // Water settles unevenly across the existing course and binder texture.
+        float basin=resolvedNoise(metres*vec2(.43,.12))*.72+.28*binder;
+        float film=surfaceWater*(.46+.54*smoothstep(.60-surfaceWater*.38,.81-surfaceWater*.38,basin));
+        roughnessFactor=mix(roughnessFactor,.12+.15*(1.-basin),film);
        `);
+      if(!track.night)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+       // Blender's glTF export flips the survey V coordinate.
+       float station=3.-metres.y;
+       float braking=smoothstep(600.,755.,station)*(1.-smoothstep(945.,1020.,station));
+       // A recently surfaced braking zone. Preserve fine aggregate but omit the
+       // long fissure photographed in the source tile.
+       float aggregate=clamp(texture2D(map,vMapUv*1.83+vec2(.35,.71)).g,.076,.139);
+       vec3 wearingCourse=diffuse*vec3(1.,.986,.94)*(.047+aggregate*.52)*(.88+.2*binder);
+       float stripe=abs(abs(metres.x+2.4+1.2*smoothstep(830.,930.,station))-.85);
+       float brakingLoad=smoothstep(760.,892.,station);
+       float shoulderWear=exp(-stripe*stripe/1.75)*(.07+.10*brakingLoad);
+       float rubber=shoulderWear+exp(-stripe*stripe/.36)*(.17+.13*grit);
+       float edge=smoothstep(4.7,7.3,abs(metres.x));
+       float flecks=smoothstep(.73,.92,resolvedNoise(pavementUV*58.))*edge;
+       float jointDistance=min(abs(station-801.+metres.x*.06),abs(station-903.-metres.x*.045));
+       float transverse=pavementJoint(jointDistance,.036,fwidth(station));
+       diffuseColor.rgb=mix(diffuseColor.rgb,wearingCourse*(1.-rubber-.17*transverse+.13*flecks),braking);
+      `);
       if(track.night)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
        float lane=pow((metres.y-45.*floor(metres.y/45.+.5))/15.,2.);
        float axial=exp(-lane);
        float lateral=exp(-pow((abs(metres.x)-7.5)/10.,2.));
-       totalEmissiveRadiance+=diffuseColor.rgb*vec3(.50,.59,.73)*(.25+.8*axial)*lateral;
+       totalEmissiveRadiance+=diffuseColor.rgb*vec3(.52,.55,.59)*(.12+.88*axial)*lateral;
+      `);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <lights_physical_fragment>',`
+       diffuseColor.rgb*=1.-film*.51;
+       #include <lights_physical_fragment>
       `);
      };
     }
     if(m.name.startsWith('Canopy')){m.color.set(['#a7ad94','#98ab8a','#96a49a','#b1ac8b'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.009;m.roughness=1;m.transparent=false;m.alphaTest=.33;m.alphaToCoverage=true;m.depthWrite=true;if(m.map)m.map.repeat.set(1,1);}
     if(m.name==='Windows'&&m.map){m.color.set('#acb3c2');m.emissiveIntensity=.88;}
     if(m.name==='Balustrade'){m.transparent=true;m.opacity=.23;m.depthWrite=false;}
+    if(track.night&&['Windows','WarmWindows','StoreGlass'].includes(m.name)&&m.map){
+     const strip=track.pointAt(3841,0),elevation=heightAt(3841),store=m.name==='StoreGlass';
+     m.onBeforeCompile=shader=>{
+      shader.vertexShader='varying vec3 facadeWorld;\n'+shader.vertexShader.replace('#include <begin_vertex>',
+       '#include <begin_vertex>\nfacadeWorld=(modelMatrix*vec4(transformed,1.)).xyz;');
+      shader.fragmentShader='varying vec3 facadeWorld;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+       vec2 bay=floor(vec2(vMapUv.x*3.1,facadeWorld.y/10.5));
+       float block=fract(sin(dot(bay,vec2(17.21,63.07)))*3178.94);
+       float groupLight=mix(.12,.86,smoothstep(.22,.79,block));
+       ${store?'':`totalEmissiveRadiance*=groupLight*mix(vec3(.76,.87,1.),vec3(1.,.85,.68),block);
+       diffuseColor.rgb*=.43+.37*groupLight;`}
+       // Alternate occupied rooms, recessed entrances and unlit sections in
+       // the street-level Strip frontage.
+       vec2 local=facadeWorld.xz-vec2(${strip.x.toFixed(3)},${strip.z.toFixed(3)});
+       // Broad service cores and mechanical storeys interrupt the window
+       // texture at building scale. World-space derivatives soften distant rows.
+       float frontage=dot(local,vec2(.834,.552));
+       float tower=floor(frontage/62.);
+       float phase=fract(sin(tower*12.78)*4375.);
+       float vertical=abs(fract(frontage/(26.+13.*phase)+phase)-.5);
+       float floorBand=abs(fract((facadeWorld.y+phase*43.)/(22.+17.*phase))-.5);
+       float shaft=smoothstep(.05,.15+min(.16,fwidth(frontage)*.035),vertical);
+       float floors=smoothstep(.025,.095+min(.12,fwidth(facadeWorld.y)*.028),floorBand);
+       float corridor=1.-smoothstep(210.,720.,length(local));
+       totalEmissiveRadiance*=mix(vec3(1.),mix(vec3(.48,.68,.80),vec3(.96,.87,.78),phase)*(.17+.83*shaft*floors),corridor);
+       float low=(1.-smoothstep(105.,295.,length(local)))*(1.-smoothstep(13.,45.,facadeWorld.y-${elevation.toFixed(3)}));
+       vec2 rooms=floor(vec2((local.x*.83+local.y*.56)/5.3,(facadeWorld.y-${elevation.toFixed(3)})/4.3));
+       float suite=fract(sin(dot(rooms,vec2(12.71,39.46)))*4358.67);
+       float lit=mix(.09,.79,smoothstep(.40,.79,suite));
+       totalEmissiveRadiance*=mix(1.,lit,low);
+       diffuseColor.rgb*=mix(1.,.35+.61*lit,low);
+      `);
+     };
+    }
+    if(m.name.startsWith('Brake')&&!track.night){m.color.set('#f1eee2');m.roughness=.92;m.metalness=0;}
     if(m.name==='Hospitality'){m.color.set('#c4cbd2');m.roughness=.40;m.envMapIntensity=.42;}
     if(m.name==='WarmWindows'&&m.map){m.map.repeat.set(1,1);m.color.set('#ffdfae');m.emissiveIntensity=.65;}
-    if(m.name==='Travertine'){m.emissive.set('#c28b43');m.emissiveIntensity=.30;m.envMapIntensity=.8;}
+    if(m.name==='Travertine'){m.emissive.set('#c28b43');m.emissiveIntensity=.11;m.envMapIntensity=.5;}
     if(m.name==='CityGround'){m.color.set('#828897');m.emissive.set('#9ba4b1');m.emissiveIntensity=.38;m.envMapIntensity=.34;}
-    if(m.name==='Fountain'){m.color.set('#c2c9ce');m.emissive.set('#e5dbc3');m.emissiveIntensity=1.55;m.roughness=.48;}
+    if(m.name==='Fountain'){m.color.set('#c2c9ce');m.emissive.set('#e5dbc3');m.emissiveIntensity=.66;m.roughness=.64;}
     if(m.name==='BootContact'){m.transparent=true;m.depthWrite=false;m.polygonOffset=true;m.polygonOffsetFactor=-2;}
     if(m.name==='Water'){lakeBounds.expandByObject(o);m.envMapIntensity=.55;m.roughness=.24;m.metalness=.37;m.normalMap=normal;m.normalScale.set(.05,.05);}
     if(m.name==='ParkHorizon'){m.color.set('#a5af9e');m.roughness=1;
@@ -146,6 +226,10 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
       'diffuseColor.a*=1.-smoothstep(.12,.29,dot(normalize(vViewPosition),viewMatrix[1].xyz));\n#include <alphatest_fragment>');};
      m.transparent=false;m.alphaTest=.40;m.alphaToCoverage=true;m.depthWrite=true;}
     if(m.name==='Grass')m.color.set('#708554');
+    // The woodland floor uses the gravel scan for grain. Its neutral source
+    // albedo needs the leaf-litter tint when it meets the grass in wide shots.
+    if(m.name==='LeafLitter')m.color.set('#514a35');
+    if(m.name==='RoughMeadow')m.color.set('#81774d');
     if(m.name==='Gravel'){m.bumpMap=m.map;m.bumpScale=.008;}
     if(m.name==='RunoffPaint'&&!m.userData.canopyBaked){
      m.roughness=.88;
@@ -158,7 +242,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
        .replace('#include <color_fragment>',`#include <color_fragment>
         float joint=abs(fract(apronMetres.y/4.)-.5)*4.;
         float aa=max(fwidth(apronMetres.y),.002);
-        float seam=1.-smoothstep(.007,.007+aa,joint);
+        float seam=clamp((min(joint+.5*aa,.007)-max(joint-.5*aa,-.007))/aa,0.,1.);
         float scuff=sin(apronMetres.y*1.71+.6*cos(apronMetres.x*3.1))*sin(apronMetres.x*4.2+apronMetres.y*.16);
         float grit=fract(sin(dot(floor(apronMetres*44.),vec2(12.9898,78.233)))*43758.5453);
         float resolved=1.-smoothstep(.012,.05,max(fwidth(apronMetres.x),aa));
@@ -168,12 +252,13 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
      };
     }
     if(['Concrete','White','Steel','Foliage','Trunk'].includes(m.name)||m.name.startsWith('Canopy'))casters.push(o);
-    if(m.name==='Ice'&&track.night)m.emissiveIntensity=2.6;
+    if(m.name==='Ice'&&track.night)m.emissiveIntensity=1.15;
+    if(m.name==='Gold'&&track.night){m.emissiveIntensity=.37;m.roughness=.49;}
     if(m.name==='Dark'&&track.night)m.color.set('#080b12');
     if(['Foliage','Fence','Crowd'].includes(m.name)){m.transparent=false;m.alphaTest=.4;m.depthWrite=true;}
     if(m.name==='Rubber'){m.transparent=true;m.depthWrite=false;m.polygonOffset=true;m.polygonOffsetFactor=-1;}
     if(['Fence','Crowd','Foliage','Trunk','Skin'].includes(m.name)||m.name.startsWith('Spectator')||m.name.startsWith('Seated'))distant.push(o);
-    if(canopyLight&&['Asphalt','RepairCourse','Grass','White','Red','Green','RunoffPaint','Gravel','Rubber'].includes(m.name)){
+    if(canopyLight&&['Asphalt','RepairCourse','Grass','LeafLitter','RoughMeadow','White','Red','Green','RunoffPaint','Gravel','Rubber'].includes(m.name)){
      if(m.name==='Asphalt'||m.name==='RepairCourse'||!m.userData.canopyBaked){
       const original=m.onBeforeCompile;
       m.onBeforeCompile=function(shader,renderer){
@@ -188,13 +273,35 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number){
      }
     }
     if(m.name==='Sphere'){
-     const shader=new T.ShaderMaterial({uniforms:{time:{value:0},art:{value:m.map}},vertexShader:'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:`uniform float time;uniform sampler2D art;varying vec2 vUv;void main(){float w=.5+.5*sin(vUv.x*35.+vUv.y*18.+time*.3);vec3 c=mix(vec3(.02,.48,.65),vec3(.85,.025,.18),w);float bands=pow(.5+.5*sin(vUv.y*90.+vUv.x*15.-time*.2),12.);vec2 cell=fract(vUv*vec2(1400.,700.))-.5;float led=mix(.87,.76+.24*(1.-smoothstep(.12,.5,length(cell))),1.-smoothstep(.15,1.,fwidth(vUv.x)*1400.));vec3 artwork=texture2D(art,vec2(fract(.88-vUv.x),vUv.y)).rgb;gl_FragColor=vec4((artwork*1.5+c*bands*.12)*led,1.);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>
-}`,side:T.DoubleSide});o.material=shader;spheres.push(shader);
+     const bounds=new T.Box3().setFromObject(o),centre=bounds.getCenter(new T.Vector3());
+     centre.y=bounds.max.y-(bounds.max.x-bounds.min.x)*.5;
+     sphereShow??=createSphereShow(centre);o.material=sphereShow.material;
     }
    }
-  });scene.add(gltf.scene);
+  });
+  for(const material of drySurfaces){
+   const concrete=material.name==='Concrete';
+   if(material.name==='White')material.color.set('#bcbeb9');
+   material.roughness=Math.max(.91,material.roughness);material.metalness=0;
+   material.envMapIntensity=.30;
+   const previous=material.onBeforeCompile;
+   material.onBeforeCompile=function(shader,renderer){
+    previous.call(this,shader,renderer);
+    // Compress only intense reflected light on matte paint and concrete.
+    // The venue's authored luminaires and signs use their own HDR materials.
+    shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
+     float luma=dot(outgoingLight,vec3(.2126,.7152,.0722));
+     float excess=max(0.,luma-.24);
+     float shoulder=${concrete?'.38':'.60'};
+     outgoingLight*=(min(luma,.24)+excess/(1.+excess/shoulder))/max(luma,.00001);
+     #include <opaque_fragment>
+    `);
+   };
+   material.customProgramCacheKey=()=>`dry-${material.name}`;
+  }
+  scene.add(gltf.scene);
   if(!lakeBounds.isEmpty()){reflection=lakeReflection(lakeBounds);scene.add(reflection);}
   ready=true;
  }).catch(e=>{draco?.dispose();error=String(e);console.error('Blender circuit asset failed',e);});
- return {loaded,heightAt,spherePosition,people,get ready(){return ready;},get error(){return error;},update:(time:number,focus?:T.Vector3)=>{if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;for(const s of spheres)s.uniforms.time.value=time;if(focus)for(const o of casters){const p=o.userData.cullCenter as T.Vector3;o.castShadow=Math.hypot(p.x-focus.x,p.z-focus.z)<105;}if(focus)for(const o of distant){const p=o.userData.cullCenter as T.Vector3;o.visible=Math.hypot(p.x-focus.x,p.z-focus.z)<950;}},dispose:()=>{disposed=true;normal.dispose();canopyLight?.dispose();if(reflection){reflection.removeFromParent();reflection.geometry.dispose();reflection.dispose();}}};
+ return {loaded,heightAt,spherePosition,people,get sphereShow(){return sphereShow;},get ready(){return ready;},get error(){return error;},update:(time:number,focus?:T.Vector3)=>{if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;if(focus)for(const o of casters){const p=o.userData.cullCenter as T.Vector3;o.castShadow=Math.hypot(p.x-focus.x,p.z-focus.z)<105;}if(focus)for(const o of distant){const p=o.userData.cullCenter as T.Vector3;o.visible=Math.hypot(p.x-focus.x,p.z-focus.z)<950;}},dispose:()=>{disposed=true;normal.dispose();canopyLight?.dispose();if(reflection){reflection.removeFromParent();reflection.geometry.dispose();reflection.dispose();}}};
 }

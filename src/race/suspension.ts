@@ -3,7 +3,7 @@ import {pavementHeight} from './pavement';
 import type {Track} from './track';
 
 export const wheelStations=[
- {name:'FrontL',x:-.8175,z:1.55},{name:'FrontR',x:.8175,z:1.55},
+ {name:'FrontL',x:-.8475,z:1.55},{name:'FrontR',x:.8475,z:1.55},
  {name:'RearL',x:-.7675,z:-2.05},{name:'RearR',x:.7675,z:-2.05}
 ] as const;
 
@@ -15,6 +15,7 @@ export function kerbHeight(track:Track,station:number,offset:number){
  const edge=Math.abs(offset)-track.trackHalfWidth(station);
  if(edge<=0||edge>=width)return 0;
  const d=track.wrap(station);
+ if(offset<0&&track.pitOpenings.some(([a,b])=>d>=a&&d<=b))return 0;
  for(const corner of track.CORNERS){
   if(corner.speed>78)continue;
   const parabolica=corner.name==='Parabolica';

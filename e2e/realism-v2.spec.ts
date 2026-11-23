@@ -15,7 +15,11 @@ test('Blender cars, onboard, studio finishes and live camera transitions',async(
   await page.locator('#viewport').screenshot({path:`artifacts/${process.env.CAR_REVIEW_DIR??'realism-v2'}/${name}.png`});records.push({name,stats:await page.evaluate(()=>(window as any).__renderStats)});
  }
  if(!process.env.ONBOARD_ONLY){
- await shot('front-beauty','showroom');await shot('halo-closeup','showroom','halo');await shot('airbox-closeup','showroom','airbox');await shot('sidepod-closeup','showroom','sidepod');await shot('rear-three-quarter','showroom','rear');await shot('side-profile','showroom','side');await shot('wheel-closeup','showroom','wheel');await shot('steering-closeup','showroom','steering');await shot('showroom-colour','showroom');
+ await shot('front-beauty','showroom');await shot('halo-closeup','showroom','halo');await shot('airbox-closeup','showroom','airbox');await shot('sidepod-closeup','showroom','sidepod');await shot('rear-three-quarter','showroom','rear');await shot('diffuser','showroom','diffuser');
+ await page.getByRole('button',{name:'Wireframe',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).__renderStats.finish)).toBe('wireframe');
+ await page.locator('#viewport').screenshot({path:`artifacts/${process.env.CAR_REVIEW_DIR??'realism-v2'}/diffuser-wire.png`});
+ await shot('side-profile','showroom','side');await shot('wheel-closeup','showroom','wheel');await shot('steering-closeup','showroom','steering');await shot('showroom-colour','showroom');
  for(const finish of ['Clay','Wireframe']){await page.getByRole('button',{name:finish,exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).__renderStats.finish)).toBe(finish.toLowerCase());await page.waitForTimeout(250);await page.locator('#viewport').screenshot({path:`artifacts/${process.env.CAR_REVIEW_DIR??'realism-v2'}/showroom-${finish.toLowerCase()}.png`});}
  await page.getByRole('button',{name:'Back to race'}).click();await expect(page.locator('#camera-name')).not.toContainText('STUDIO');await expect(page.locator('.studio-controls')).toBeHidden();
  }

@@ -10,6 +10,8 @@
     ]
   },
   "include": [
-    "worker/index.ts"
-  ]
+    "worker/index.ts",
+    "e2e-worker/test-entry.ts"
+  ],
+  "exclude": []
 }

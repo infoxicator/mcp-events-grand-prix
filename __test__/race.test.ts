@@ -17,3 +17,16 @@ describe('two-speed mock agents',()=>{
  it('engineer calls the undercut; the fast driver obeys manage and attack',()=>{const s=createRace();s.cars.a.distance=4400;const call=mockEngineer(s,'a');expect(call.box).toBe(true);expect(call.tyre).toBe('hard');expect(call.line).toContain('undercut');s.cars.a.instruction={...call,pace:'manage',tactic:'attack',ers:'deploy'};s.cars.b.distance=4430;const d=mockDriver(s,'a');expect(d.speedBias).toBeLessThan(0);expect(d.side).not.toBe('hold');expect(d.ers).toBe(true);});
  it('has distinct driver personalities and completes a full strategic race',()=>{const s=run(420);expect(s.phase).toBe('finished');expect(s.winner).toBeTruthy();for(const t of ['a','b'] as const){expect(s.cars[t].stops).toBe(1);expect(s.cars[t].lapTimes.length).toBe(3);}expect(mockDriver(s,'a').reply).not.toBe(mockDriver(s,'b').reply);});
 });
+
+it('reports an on-track duel pass and suppresses position changes at the flag or in the pits',()=>{
+ for(const situation of ['track','finish','pit'] as const){
+  const r=createRace();r.phase='racing';r.leader='a';
+  Object.assign(r.cars.a,{distance:400,speed:48,offset:-2});
+  Object.assign(r.cars.b,{distance:404,speed:50,offset:2});
+  if(situation==='finish')r.cars.b.finishTime=309.1;
+  if(situation==='pit')r.cars.b.pit='entry';
+  stepRace(r);
+  expect(r.events.some(e=>e.kind==='overtake')).toBe(situation==='track');
+  expect(r.phase).toBe('racing');
+ }
+});

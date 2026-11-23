@@ -1,6 +1,6 @@
 {
   "source": "scripts/blender/build_car.py",
-  "highTriangles": 242407,
+  "highTriangles": 244716,
   "dimensions": {
     "length": 5.62,
     "width": 2.0,
@@ -8,5 +8,5 @@
     "bodyHeight": 1.171
   },
   "lodDistanceMetres": 32,
-  "licence": "Original project asset; fictional branding"
+  "licence": "Original project mesh with reference sponsor markings"
 }

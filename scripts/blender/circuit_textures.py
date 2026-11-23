@@ -41,7 +41,7 @@ for i in range(8):
  x=i*32+16;v=random.choice([(35,49,63),(160,57,40),(205,202,183),(54,78,69)])
  d.ellipse((x-5,34,x+5,46),fill=(150,113,89,255));d.rounded_rectangle((x-7,46,x+7,68),radius=4,fill=(*v,255));d.line((x-5,65,x-8,80),fill=(*v,255),width=4);d.line((x+5,65,x+8,80),fill=(*v,255),width=4)
 save(im.crop((0,24,256,88)),'crowd')
-im=Image.new('RGB',(1024,128),(24,31,35));d=ImageDraw.Draw(im);f=ImageFont.truetype(font,62);d.text((30,25),'NEXUS  /  JEV GRAND PRIX',font=f,fill=(240,234,210));save(im,'sign')
+im=Image.new('RGB',(1024,128),(24,31,35));d=ImageDraw.Draw(im);f=ImageFont.truetype(font,62);d.text((30,25),'NEXUS  /  MCP GRAND PRIX',font=f,fill=(240,234,210));save(im,'sign')
 im=Image.new('RGBA',(128,128));d=ImageDraw.Draw(im)
 for x in range(128):
  alpha=int(37*math.sin(math.pi*x/127)**2)
@@ -54,7 +54,7 @@ for y in range(0,512,6):
  points=[(x,y+int(math.sin(x/90+y/40)*22)) for x in range(0,1024,4)];d.line(points,fill=(25,90+y%100,120+y%110),width=2)
 for i in range(2):
  x=256+i*512;d.rounded_rectangle((x-230,150,x+230,360),radius=20,fill=(10,13,28),outline=(210,53,112),width=3)
- for text,y,size,col in [('WELCOME TO',190,25,(224,98,158)),('LAS VEGAS',255,57,(248,230,195)),('JEV GRAND PRIX',320,28,(90,219,209))]:d.text((x,y),text,anchor='mm',font=ImageFont.truetype(font,size),fill=col)
+ for text,y,size,col in [('WELCOME TO',190,25,(224,98,158)),('LAS VEGAS',255,57,(248,230,195)),('MCP GRAND PRIX',320,28,(90,219,209))]:d.text((x,y),text,anchor='mm',font=ImageFont.truetype(font,size),fill=col)
 save(im,'sphere-art')
 # Perforated original leaf sprays with a branching centre, layered on bent 3D fans.
 rng=random.Random(731);im=Image.new('RGBA',(256,256));d=ImageDraw.Draw(im)

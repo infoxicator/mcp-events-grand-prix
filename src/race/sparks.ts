@@ -14,6 +14,6 @@ export function createSparks(scene:T.Scene,track:Track,heightAt:(d:number)=>numb
   const age=((race.time*1.7+n*.618033)%1)*.55,seed=Math.floor(race.time*1.7+n*.618033)*97+n*17,back=car.speed*age*.75,emission=car.distance-car.speed*age;
   const contact=sparkContact(car.speed,emission,car.pit??'none'),alive=contact>rand(seed)*.8&&race.phase==='racing';
   const p=track.pointAt(car.distance-back-2.2,car.offset+(rand(seed+1)-.5)*(.7+age*7)),t=track.tangentAt(car.distance-back),height=heightAt(car.distance-back)+Math.max(.025,.12+rand(seed+2)*2.2*age-4.9*age*age),length=.18+car.speed*.014*(1-age/.6),fade=alive?(1-age/.6)*2.8:0;
-  positions.set([p.x,height,p.z,p.x+t.x*length,height+.02,p.z+t.z*length],i*6);colours.set([fade,fade*.47,fade*.08,fade,fade*.88,fade*.5],i*6);if(alive)active++;
+  const k=i*6;positions[k]=p.x;positions[k+1]=height;positions[k+2]=p.z;positions[k+3]=p.x+t.x*length;positions[k+4]=height+.02;positions[k+5]=p.z+t.z*length;colours[k]=fade;colours[k+1]=fade*.47;colours[k+2]=fade*.08;colours[k+3]=fade;colours[k+4]=fade*.88;colours[k+5]=fade*.5;if(alive)active++;
  }geometry.attributes.position.needsUpdate=true;geometry.attributes.color.needsUpdate=true;},dispose(){geometry.dispose();(lines.material as T.Material).dispose();lines.removeFromParent();}};
 }

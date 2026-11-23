@@ -19,6 +19,7 @@ export class TrackingCameraRig {
  private wantedTarget=new Vector3();
  private lastTime:number|null=null;
  private offset=0;
+ private station=0;
  reset(){this.lastTime=null;}
  update(track:Track,a:{distance:number;offset:number},b:{distance:number;offset:number},heightAt:(d:number)=>number,now:number){
   // Weight toward whichever car is ahead, continuously, with an equal midpoint
@@ -38,9 +39,12 @@ export class TrackingCameraRig {
    const turn=Math.atan2(Math.sin(wanted-yaw),Math.cos(wanted-yaw));
    const next=yaw+turn*-Math.expm1(-dt/.9);this.heading.set(Math.sin(next),0,Math.cos(next));
   }
-  // Follow longitudinal travel directly (already interpolated by the network).
-  // Damping this would leave the cars out of frame at the accelerated demo clock.
-  const centre=track.pointAt(d,this.offset);this.target.set(centre.x,heightAt(d)+.5,centre.z);
+  // A pair of delayed snapshots can arrive together and compress several
+  // metres of motion into one frame. Keep the side rig within two metres
+  // of the live battle even at the accelerated demo clock.
+  const trailing=this.lens===SIDE_CAMERA&&!cut?(d-this.station)*Math.exp(-dt/.032):0;
+  this.station=d-MathUtils.clamp(trailing,-2,2);
+  const centre=track.pointAt(this.station,this.offset);this.target.set(centre.x,heightAt(this.station)+.5,centre.z);
   this.position.set(this.target.x-this.heading.x*this.lens.back-this.heading.z*this.lens.side,this.target.y+this.lens.height,this.target.z-this.heading.z*this.lens.back+this.heading.x*this.lens.side);
   this.lastTime=now;return this;
  }

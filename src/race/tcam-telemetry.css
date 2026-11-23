@@ -1,0 +1,37 @@
+.tcam-telemetry{position:absolute;inset:0;overflow:hidden;pointer-events:none;container-type:size;--constructor:#ff4659;font-family:Oxanium,'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
+.tcam-telemetry[data-seat=b]{--constructor:#46e2cf}
+.halo-instruments{position:absolute;left:50%;top:0;transform:translateX(-50%);width:200cqh;height:100cqh;overflow:visible;fill:#fbfcff;text-anchor:middle;font-weight:700}
+.halo-instruments .glass{fill:url(#tcam-glass);stroke:#a5d6e87a;stroke-width:2}
+.halo-instruments .dial{stroke:#c2d4e0bd;stroke-width:2.4}
+.halo-instruments .caption{font-size:15px;letter-spacing:1.3px;fill:#cbdde6}
+.halo-instruments .kph{font:700 62px 'Space Grotesk',sans-serif;letter-spacing:-2px}
+.halo-instruments .mph{font-size:32px}
+.halo-instruments .ers-box{fill:#103b3e;stroke:#5bc5b6;stroke-width:1.6}
+.halo-instruments .ers-label{fill:#a4f4d5;font-size:16.5px;letter-spacing:.9px}
+.halo-instruments .wing{text-anchor:middle}.halo-instruments .wing-value{font-size:26px}
+.halo-instruments .pedals .caption{font-size:12.5px;letter-spacing:.9px}
+.halo-instruments .pedals rect{fill:#526272;opacity:.58}.halo-instruments .pedals rect.lit{opacity:1}
+.halo-instruments .brake .lit{fill:#ff5669}.halo-instruments .throttle .lit{fill:#53e8a5}
+.halo-instruments .gears text{font-size:23px;fill:#a5b4bd}.halo-instruments .gears .engaged{font-size:34px;fill:#fff;font-weight:bold}
+.halo-instruments .rpm-track,.halo-instruments [data-meter]{stroke:#43515d;stroke-width:5}.halo-instruments [data-meter]{stroke:var(--constructor)}
+.tcam-timing{position:absolute;left:58%;bottom:18%;width:clamp(148px,18cqw,240px);background:#10141de8;border-radius:3px;overflow:hidden;color:#f6f7f9;box-shadow:0 2px 8px #0005}
+.tcam-driver,.tcam-lap,.tcam-sectors{display:flex;align-items:center}.tcam-driver{gap:.5em;border-bottom:2px solid var(--constructor);font-size:clamp(11px,1.2cqw,18px)}
+.tcam-driver b{padding:.19em .5em;background:var(--constructor);color:#101217}.tcam-driver span{margin-left:auto;margin-right:.6em;font-size:.8em}
+.tcam-driver [data-compound=soft]{color:#ff5864}.tcam-driver [data-compound=medium]{color:#ffde70}.tcam-driver [data-compound=intermediate]{color:#72e990}.tcam-driver [data-compound=wet]{color:#72b9ff}
+.tcam-lap{padding:3px 8px;justify-content:space-between}.tcam-lap small,.tcam-sectors{font:700 9px 'Space Grotesk',sans-serif;color:#c6d0db}.tcam-lap b{font-size:clamp(16px,1.65cqw,25px)}
+.tcam-sectors i{flex:1;text-align:center;font-style:normal;border-bottom:2px solid #44505c}.tcam-sectors [data-state=active]{border-color:#f2f4f5}.tcam-sectors [data-state=purple]{border-color:#d593ff}.tcam-sectors [data-state=green]{border-color:#85df9b}.tcam-sectors [data-state=yellow]{border-color:#ffd16c}
+.clean-feed .tcam-timing{bottom:7%}
+.tcam-best{display:flex;justify-content:space-between;align-items:center;padding:0 8px 4px;font-size:11px;color:#c6d4e0}.tcam-best small{font-size:8px}
+.compact-wing-left,.compact-wing-right,.stub-wing-right{display:none}
+.flow-badge rect{fill:#172e40;stroke:#79bdda;stroke-width:1.6}.flow-badge text{fill:#caeafe;font-size:14.5px;letter-spacing:1.1px}
+.flow-badge.deploy rect{fill:#1c4733;stroke:#72db99}.flow-badge.deploy text{fill:#bbf7ce}
+@container (max-aspect-ratio:1.28){
+ .halo-instruments .full-wing-right,.halo-instruments .wing-aero{display:none}
+ .halo-instruments .compact-wing-right{display:inline}
+ .halo-instruments .wing-gears{transform:translate(338px,504px) rotate(24deg) scale(.86)}
+}
+@container (max-aspect-ratio:.95){
+ .halo-instruments .full-wing-left,.halo-instruments .compact-wing-right,.halo-instruments .wing-driver,.halo-instruments .wing-gears{display:none}
+ .halo-instruments .compact-wing-left,.halo-instruments .stub-wing-right{display:inline}
+ .tcam-timing{left:50%;transform:translateX(-50%);bottom:24%}.clean-feed .tcam-timing{bottom:11%}
+}

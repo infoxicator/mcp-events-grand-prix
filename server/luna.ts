@@ -1,4 +1,9 @@
+import {damageLevel} from '../src/race/crashes';
 import {CIRCUITS} from '../src/race/track';
+import {raceControlTelemetry,sectorWetnessOf} from '../src/race/race-control';
+import {drsAllowed,grip} from '../src/race/physics';
+import {getTrack} from '../src/race/track';
+import {nearbyTrafficState} from './race-brains';
 /** Adapted from Jev Pong's OpenAI Decisions driver. Keys and HTTP stay server-side. */
 import {mockDriver} from '../src/race/brains';
 import {nearbyRival} from '../src/race/grid';
@@ -14,18 +19,19 @@ export function lunaConfig(env:Record<string,string|undefined>):LunaConfig{
  return {mock,apiKey:env.OPENAI_API_KEY,baseURL:'https://api.openai.com/v1',model:LUNA_MODEL,intervalMs,tokensPerMinute};
 }
 export function lunaRequest(s:Race,team:Team){
- const c=s.cars[team],r=nearbyRival(s,team),fallback=mockDriver(s,team);
+ const c=s.cars[team],r=nearbyRival(s,team),fallback=mockDriver(s,team),track=getTrack(s.circuit);
+ const sectorWet=sectorWetnessOf(s.control,c.sector);
  const question=(name:string,instructions:string,choices:Record<string,string>)=>({type:'choice' as const,name,instructions,choices:Object.entries(choices).map(([value,description])=>({value,description}))});
  return {model:LUNA_MODEL,input:[{role:'user' as const,content:[
   {type:'input_text' as const,text:`F1 at ${CIRCUITS[s.circuit??'monza'].name}. Follow engineer strategy; local control handles corners and smooths intent. Team ${team}: ${team==='a'?'calm Ferrari':'aggressive Mercedes'}. Pick independent driving choices.`},
-  {type:'input_json' as const,data:{team,tick:s.tick,metres:Math.round(c.distance),speedKmh:Math.round(c.speed*3.6),gapMetres:Math.round(r.distance-c.distance),rivalOffset:Math.round(r.offset*10)/10,wear:Number(c.wear.toFixed(2)),battery:Math.round(c.ers),instruction:{...c.instruction}}},
+  {type:'input_json' as const,data:{team,tick:s.tick,lap:c.lap+1,totalLaps:s.laps,sector:c.sector+1,metres:Math.round(c.distance),speedKmh:Math.round(c.speed*3.6),gapMetres:Math.round(r.distance-c.distance),rivalOffset:Math.round(r.offset*10)/10,offset:Math.round(c.offset*10)/10,racingLineOffset:Math.round(track.racingLineOffset(c.distance)*10)/10,nearbyTraffic:nearbyTrafficState(s,team),compound:c.compound,wear:Number(c.wear.toFixed(2)),tyreTempC:Math.round(c.temperature),lockup:Boolean(c.lockup),fuelKg:Math.round(c.fuel*100)/100,damagePercent:Math.round(damageLevel(c.damage)*100),battery:Math.round(c.ers),drsEligible:c.eligible.some(Boolean),inDrsZone:drsAllowed(c,track),pitPhase:c.pit,grip:Math.round(grip(c,sectorWet)*100)/100,raceControl:raceControlTelemetry(s),rain:s.control?.rain,sectorWetness:Math.round(sectorWet*100)/100,instruction:{...c.instruction}}},
  ]}],questions:[
-  question('line','Racing line. Pass beside, not through the rival.',{left:'Offset -3m',hold:'Racing line',right:'Offset +3m'}),
-  question('pace','Speed bias in addition to safe cornering.',{cautious:'-2m/s',normal:'0m/s',attack:'+2m/s'}),
-  question('brake','Brake point aggression.',{early:'Conserve tyres',normal:'Balanced',late:'Late braking'}),
+  question('line','Racing line. Pass beside traffic, never through it.',{left:'Offset -3m',hold:'Racing line',right:'Offset +3m'}),
+  question('pace','Cornering speed bias and tyre/fuel tradeoff.',{cautious:'-2.8% corner speed; saves tyres, heat and fuel',normal:'Balanced cornering speed and wear',attack:'+2.8% corner speed; +14% tyre wear, higher heat and fuel burn'}),
+  question('brake','Braking aggression and lockup risk.',{early:'Early smooth braking; conserves tyres',normal:'Balanced braking',late:'Late threshold braking; higher wear and lockup risk on worn or wet tyres'}),
   question('ers','Deploy battery now?',{yes:'Deploy',no:'Harvest or hold'}),
-  question('drs','Request DRS if eligible?',{yes:'Use eligible DRS zone',no:'Keep closed'}),
-  question('reply','Reply over team radio.',{copy:fallback.reply,attack:team==='a'?'Copy. Setting up the pass.':'I’m sending it. Watch this.',tyres:'The rears are going. Need a new set.'}),
+  question('drs','Request DRS if eligible?',{yes:'Open DRS in eligible zone',no:'Keep closed'}),
+  question('reply','Short cockpit feedback over team radio.',{copy:fallback.reply,attack:team==='a'?'Copy. Setting up the pass.':'I’m sending it. Watch this.',tyres:'The rears are going. Need a new set.',graining:'Fronts are graining through the medium-speed corners.',wet:'Track is too wet for these tyres — struggling for traction.',traffic:'Stuck in dirty air behind traffic.',overheating:'Tyres are overheating — need clean air.'}),
  ]};
 }
 function answer(answers:unknown,name:string,allowed:string[]):string{

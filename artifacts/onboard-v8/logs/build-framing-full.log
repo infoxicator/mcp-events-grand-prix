@@ -1,9 +1,0 @@
-
-> jev-grand-prix@1.0.0 build
-> npm run typecheck && vite build && vite build --config vite.mcp.config.ts && vite build --config vite.mcp-host.config.ts && node scripts/check-asset-budget.mjs
-
-
-> jev-grand-prix@1.0.0 typecheck
-> tsc --noEmit && tsc --noEmit -p tsconfig.worker.json
-
-e2e/realism-v2.spec.ts(31,31): error TS2339: Property 'remove' does not exist on type 'Node'.

@@ -33,7 +33,7 @@ describe('onboard sightlines through the exported Blender car',()=>{
   }
  });
  it('keeps both front tyres and the lower camera dashboard within the image',()=>{
-  for(const tv of [true,false])for(const x of [-.8175,.8175]){
+  for(const tv of [true,false])for(const x of ['FrontL','FrontR'].map(name=>model.getObjectByName(name)!.position.x)){
    const p=new T.Vector3(x,.65,1.55).project(camera(tv));
    expect(Math.abs(p.x)).toBeLessThan(.95);expect(Math.abs(p.y)).toBeLessThan(.95);
   }

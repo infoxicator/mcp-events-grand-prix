@@ -1,0 +1,24 @@
+import type {Engine} from './matchup';
+import type {observeStrategy} from './strategy-observation';
+import type {StrategyEventNotice} from './strategy-events';
+import type {Decision,DriverIntent,Instruction,Radio,Team} from './types';
+
+export type StrategyLogData={
+ kind:'strategy';agent:'chatgpt'|'pit-wall';
+ stage:'requested'|'delivered'|'delivery-failed'|'telemetry-read';
+ reasons:string[];
+ summary?:StrategyEventNotice['summary'];
+ telemetry?:ReturnType<typeof observeStrategy>;
+};
+type DriverLogData={
+ kind:'driver';engine:Engine;source:Decision['source'];responseMs:number;sequence:number;
+ intent:Omit<DriverIntent,'reply'>;
+};
+type RadioLogData={
+ kind:'radio';speaker:Radio['speaker'];source:Radio['source'];text:string;responseMs:number;
+ strategist?:Radio['strategist'];instruction?:Instruction;submittedText?:string;
+};
+export type RaceLogData=StrategyLogData|DriverLogData|RadioLogData;
+export type RaceLogKind=RaceLogData['kind'];
+export interface RaceLogEntry {id:number;time:number;lap:number;team:Team;data:RaceLogData}
+export interface RaceLogUpdate {type:'event-log';entries:RaceLogEntry[];reset?:true;discarded?:number}
