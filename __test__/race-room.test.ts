@@ -1,6 +1,7 @@
 import {it,expect,vi} from 'vitest';
 import {RaceRoom} from '../server/race-room';
-import {LENGTH} from '../src/race/track';
+import {getTrack} from '../src/race/track';
+const {LENGTH}=getTrack();
 import {createRace,stepRace} from '../src/race/physics';
 import {mockDriver,mockEngineer} from '../src/race/brains';
 import {createRaceDriver,createRaceEngineer,providerConfig} from '../server/race-brains';

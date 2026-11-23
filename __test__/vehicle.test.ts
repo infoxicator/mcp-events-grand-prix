@@ -1,7 +1,8 @@
 import {it,expect} from 'vitest';
 import {VEHICLE,forces,brakeCapacity,cornerLimit,drivetrain} from '../src/race/vehicle';
 import {createRace,stepRace,DT} from '../src/race/physics';
-import {LENGTH,pointAt,tangentAt,racingLineOffset,trackHalfWidth} from '../src/race/track';
+import {getTrack} from '../src/race/track';
+const {LENGTH,pointAt,tangentAt,racingLineOffset,trackHalfWidth}=getTrack();
 it('downforce and drag grow with speed squared, with physical DRS and tow reductions',()=>{
  const slow=forces(40,820,1),fast=forces(80,820,1);expect(fast.drag/slow.drag).toBeCloseTo(4);expect(fast.downforce/slow.downforce).toBeCloseTo(4);
  expect(forces(80,820,1,true).drag).toBeLessThan(fast.drag);expect(forces(80,820,1,false,.8).drag).toBeLessThan(fast.drag);expect(forces(80,820,1,false,0,.2).downforce).toBeLessThan(fast.downforce);

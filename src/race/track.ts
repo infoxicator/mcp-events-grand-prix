@@ -84,5 +84,3 @@ return {id,...CIRCUITS[id],OFFICIAL_LENGTH,LENGTH,centreline,cumulative,START_OF
 export type Track=ReturnType<typeof buildTrack>;
 const cache=new Map<CircuitId,Track>();
 export function getTrack(id:CircuitId='monza'):Track {let track=cache.get(id);if(!track){track=buildTrack(id);cache.set(id,track);}return track;}
-// Monza exports preserve the original API for existing tools and regression tests.
-export const {OFFICIAL_LENGTH,LENGTH,centreline,cumulative,START_OFFSET,wrap,pointAt,tangentAt,signedCurvatureAt,curvatureAt,trackHalfWidth,racingLineOffset,racingCurvature,CORNERS,SECTORS,SPEED_TRAP,DRS_ZONES,inZone,isDrsZone,cornerName,PIT_ENTRY,PIT_EXIT,PIT_STOP,PIT_LIMIT,PIT_STOP_SECONDS,pitOffset}=getTrack();

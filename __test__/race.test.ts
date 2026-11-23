@@ -1,5 +1,6 @@
 import {describe,it,expect} from 'vitest';
-import {LENGTH,OFFICIAL_LENGTH,pointAt,DRS_ZONES,PIT_STOP_SECONDS,PIT_LIMIT} from '../src/race/track';
+import {getTrack} from '../src/race/track';
+const {LENGTH,OFFICIAL_LENGTH,pointAt,DRS_ZONES,PIT_STOP_SECONDS,PIT_LIMIT}=getTrack();
 import {createRace,stepRace,DT,aero,drsAllowed,grip} from '../src/race/physics';
 import {mockDriver,mockEngineer} from '../src/race/brains';
 function run(seconds:number,s=createRace()){s.phase='racing';for(let i=0;i<seconds/DT;i++){if(i%24===0)for(const t of ['a','b'] as const){if(i%1440===0)s.cars[t].instruction=mockEngineer(s,t);s.cars[t].intent=mockDriver(s,t);}stepRace(s);}return s;}
