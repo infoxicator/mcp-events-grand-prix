@@ -1493,3 +1493,33 @@ body.drive-active {
 .drive-assist-lamp[data-mode="human"] { border-color: #4ade80; color: #86efac; }
 .drive-assist-lamp[data-mode="jev"] { border-color: #f43f5e; color: #fda4af; }
 .drive-assist-lamp[data-mode="autopilot"] { border-color: #38bdf8; color: #7dd3fc; }
+
+/* ======================== EMBEDDED MCP DRIVE VIEW ======================== */
+.drive-mode[data-embedded="true"] {
+ position: relative;
+ inset: auto;
+ width: min(100%, 1216px);
+ height: clamp(480px, 72vh, 760px);
+ margin: 8px auto 12px;
+ border: 1px solid #2b3f4a;
+ border-radius: 10px;
+}
+.drive-mode[data-embedded="true"] .drive-home-link,
+.drive-mode[data-embedded="true"] .drive-head-links,
+.drive-mode[data-embedded="true"] #drive-eng-pill,
+.drive-mode[data-embedded="true"] .drive-group:has(#lobby-eng-seg),
+.drive-mode[data-embedded="true"] .drive-group:has(#lobby-circuit-seg),
+.drive-mode[data-embedded="true"] .drive-group:has(#pause-eng-seg),
+.drive-mode[data-embedded="true"] #drive-lobby .drive-cta-row > a,
+.drive-mode[data-embedded="true"] #drive-pause .drive-cta-row > a,
+.drive-mode[data-embedded="true"] #drive-pause #pause-reset-btn,
+.drive-mode[data-embedded="true"] #drive-results .drive-exit-link,
+.drive-mode[data-embedded="true"] #drive-results #res-again-btn,
+.drive-mode[data-embedded="true"] #drive-results .drive-cta-row > a {
+ display: none;
+}
+.drive-mode[data-embedded="true"] + .race-event-log {
+ width: min(100%, 1216px);
+ margin: 0 auto 18px;
+}
+

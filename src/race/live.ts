@@ -2,7 +2,7 @@ export const OWNER_LIVE_PATH = '/owner/live';
 export const LIVE_PAIR_PATH = '/api/live-pair';
 export const PAIR_TTL_MS = 5 * 60_000;
 export const LIVE_TIME_MS = 5 * 60_000;
-export const CHAT_STRATEGY_LAPS = 10;
+export const CHAT_STRATEGY_LAPS = 5;
 export const CHAT_STRATEGY_MAX_LAPS = 20;
 export const CHAT_STRATEGY_TIME_MS = 25 * 60_000;
 export const strategyTimeBudgetMs = (laps: number) => Math.min(60 * 60_000, Math.max(CHAT_STRATEGY_TIME_MS, Math.ceil(laps * 2.5) * 60_000));

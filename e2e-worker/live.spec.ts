@@ -13,9 +13,9 @@ async function signedToken(request:APIRequestContext,query=''){
  return (await request.get(fixture+'/token'+query).then(r=>r.json())).token as string;
 }
 
-async function pair(request:APIRequestContext){
+async function pair(request:APIRequestContext,chat=false){
  const room=crypto.randomUUID(),key=newLiveKey(),challenge=await pairingChallenge(key);
- const registration=await request.post(pairPath,{data:{room,key:challenge}});
+ const registration=await request.post(pairPath,{data:{room,key:challenge,chat}});
  expect(registration.ok()).toBe(true);
  return {room,key,challenge,url:`${accessPath}?pair=${room}`};
 }
@@ -75,20 +75,9 @@ test('one confirmed room plays through two MCP hosts and a separate browser, the
  let probe:ReturnType<typeof watch>|undefined;
  let second:ReturnType<typeof watch>|undefined;
  try{
-  await pageA.goto(host+'/?player=a');
-  const appA=pageA.frameLocator('#app-frame').frameLocator('iframe');
-  await expect(appA.locator('#mcp-status')).toContainText('Ready to connect');
-  await appA.getByRole('button',{name:'Ready team A'}).click();
-  await expect(appA.locator('#mcp-status')).toContainText('Waiting for team B');
-  expect(counts(await readCalls(request))).toEqual(before);
-
-  await appA.getByRole('radio',{name:'Private live'}).check();
-  await appA.getByRole('region',{name:'Race menu'}).getByLabel('Driver matchup',{exact:true}).selectOption('jev-vs-luna');
-  await appA.getByRole('button',{name:'Start live race',exact:true}).click();
-  await expect(appA.locator('#mcp-pair-status')).toContainText('Sign in and confirm');
-  await expect.poll(()=>contextA.pages().find(p=>p!==pageA)?.url()).toContain(accessPath);
-  const ownerUrl=contextA.pages().find(p=>p!==pageA)!.url();
-  const room=new URL(ownerUrl).searchParams.get('pair')!;
+  const paired=await pair(request);
+  const ownerUrl=`${origin}${paired.url}&matchup=jev-vs-luna`;
+  const room=paired.room;
   expect(counts(await readCalls(request))).toEqual(before);
   await ownerPage.goto(ownerUrl);
   await expect(ownerPage.getByRole('heading',{name:'Owner sign-in required'})).toBeVisible();
@@ -130,11 +119,14 @@ test('one confirmed room plays through two MCP hosts and a separate browser, the
   expect((await client.callTool({name:'grand_prix_status',arguments:{room}})).isError).toBe(true);
   expect((await client.callTool({name:'open_grand_prix',arguments:{invite:liveInvitation({room,key:newLiveKey()})}})).isError).toBe(true);
 
+  await pageA.goto(host+'/?invite='+encodeURIComponent(code));
+  const appA=pageA.frameLocator('#app-frame').frameLocator('iframe');
   await expect(appA.locator('#mcp-invite')).toHaveValue(code);
-  await pageB.goto(host+'/?player=b');
+  await pageB.goto(host+'/');
   const appB=pageB.frameLocator('#app-frame').frameLocator('iframe');
-  await appB.getByLabel('Join an existing race').fill(code);
-  await appB.getByRole('button',{name:'Join race',exact:true}).click();
+  await appB.locator('#mcp-join-panel summary').click();
+  await appB.locator('#mcp-join').fill(code);
+  await appB.getByRole('button',{name:'Join Team B',exact:true}).click();
   await expect(appB.locator('#mcp-invite')).toHaveValue(code);
   for(const app of [appA,appB]){
    const menu=app.getByRole('button',{name:'Race menu',exact:true});
@@ -142,7 +134,7 @@ test('one confirmed room plays through two MCP hosts and a separate browser, the
    await menu.click();
   }
   const spectatorPopup=contextA.waitForEvent('page');
-  await appA.getByRole('button',{name:'Open live spectator',exact:false}).click();
+  await appA.getByRole('button',{name:'Open spectator',exact:false}).click();
   const linkPage=await spectatorPopup;
   await linkPage.waitForURL(url=>url.searchParams.get('live')===room);
   const browserLink=new URL(linkPage.url());
@@ -235,17 +227,9 @@ test('owner-paired strategy waits for subscription and Start race before paid dr
  const incoming='grand_prix.strategy_required';
  let ownerUrl:string|undefined,probe:ReturnType<typeof watch>|undefined;
  try{
-  const page=await context.newPage();
-  await page.goto(host+'/?player=a&test-messages=1');
-  const app=page.frameLocator('#app-frame').frameLocator('iframe');
-  await app.getByRole('radio',{name:'Private live'}).check();
-  await app.getByLabel('Strategist',{exact:true}).selectOption('chatgpt');
-  await expect(app.getByRole('region',{name:'Race menu'}).getByLabel('Driver matchup',{exact:true})).toBeHidden();
-  await app.getByRole('button',{name:'Start live race',exact:true}).click();
-  await expect(app.locator('#mcp-pair-status')).toContainText('Sign in and confirm');
-  await expect.poll(()=>context.pages().find(p=>p!==page)?.url()).toContain(accessPath);
-  ownerUrl=context.pages().find(p=>p!==page)!.url();
-  const room=new URL(ownerUrl).searchParams.get('pair')!;
+  const paired=await pair(request,true);
+  ownerUrl=`${origin}${paired.url}&strategist=chatgpt`;
+  const room=paired.room;
   const html=await request.get(ownerUrl,{headers:ownerHeaders}).then(r=>r.text());
   expect(html).toContain('<option value="chatgpt" selected>ChatGPT Work via native MCP Events');
   const challenge=html.match(/name="challenge" value="([a-f0-9]+)"/)?.[1];
@@ -256,25 +240,24 @@ test('owner-paired strategy waits for subscription and Start race before paid dr
   expect(confirmed.ok()).toBe(true);
   const invitation=(await confirmed.text()).match(/value="(jev-live:[a-f0-9:-]+)"/)?.[1];
   const invite=parseLiveInvitation(invitation!,origin)!;
+  const claimed=await request.post(pairPath+'/claim',{data:{room,key:paired.key}}).then(r=>r.json()) as {
+   room:string;key:string;strategyKey:string;eventFilter:{room:string;subscription_key:string};
+  };
+  expect(claimed).toMatchObject({room,key:invite.key,eventFilter:{room,subscription_key:expect.stringMatching(/^[a-f0-9]{64}$/)}});
   probe=watch(origin,room,invite.key);
   await expect.poll(()=>probe?.state()?.strategyWebhook).toBe('waiting');
   expect(probe.state()?.race.phase).toBe('lobby');
   expect(counts(await readCalls(request))).toEqual(callsBefore);
-  const start=app.getByRole('button',{name:'Start race',exact:true});
-  await expect(start).toBeDisabled();
-  await expect(page.locator('body')).toHaveAttribute('data-strategy-context',/event_filter/);
-  const handoff=JSON.parse((await page.locator('body').getAttribute('data-strategy-context'))!);
-  expect(handoff).toMatchObject({event:incoming,event_filter:{room,subscription_key:expect.stringMatching(/^[a-f0-9]{64}$/)}});
   const requestRpc=(method:string,params:object)=>request.post('/mcp',{data:{jsonrpc:'2.0',id:method,method,params}});
   const stream=await requestRpc('events/stream',{name:incoming,arguments:{room}});
   expect(stream.status()).toBe(403);
   const subscription=await requestRpc('events/subscribe',{
-   name:incoming,arguments:handoff.event_filter,
+   name:incoming,arguments:claimed.eventFilter,
    delivery:{mode:'webhook',url:'https://connectors.api.openai.com'+endpoint,secret:'whsec_'+Buffer.alloc(32,7).toString('base64')},
   }).then(r=>r.json());
   expect(subscription.result.id).toMatch(/^sub_/);
   const received=()=>request.get(fixture+endpoint).then(r=>r.json());
-  await expect(start).toBeEnabled();
+  await expect.poll(()=>probe?.state()?.strategyWebhook).toBe('connected');
   probe.ws.send(JSON.stringify({type:'start',startKey:invite.key}));
   const sent=Date.now();
   probe.ws.send(JSON.stringify({type:'ping',sent}));
@@ -282,7 +265,7 @@ test('owner-paired strategy waits for subscription and Start race before paid dr
   expect(probe.state()?.race).toMatchObject({phase:'lobby',tick:0,time:0});
   expect((await received()).events).toEqual([]);
   expect(counts(await readCalls(request))).toEqual(callsBefore);
-  await start.click();
+  probe.ws.send(JSON.stringify({type:'start',startKey:claimed.strategyKey}));
   await expect.poll(async()=>(await received()).events.length,{timeout:15000}).toBeGreaterThan(0);
   const {events:[event]}=await received();
   expect(event.data).toMatchObject({room,team:'a',lap:1});
@@ -291,6 +274,9 @@ test('owner-paired strategy waits for subscription and Start race before paid dr
   const order={...args,action:'manage',radio:'Manage the tyres through this stint.'};
   expect((await client.callTool({name:'submit_grand_prix_radio',arguments:order})).isError).toBeFalsy();
   expect((await client.callTool({name:'submit_grand_prix_radio',arguments:order})).isError).toBe(true);
+  const page=await context.newPage();
+  await page.goto(host+'/?test-messages=1&invite='+encodeURIComponent(invitation!));
+  const app=page.frameLocator('#app-frame').frameLocator('iframe');
   await expect(app.getByRole('region',{name:'ChatGPT radio'})).toContainText(order.radio);
   expect(await page.locator('body').getAttribute('data-strategy-message')).toBeNull();
   await expect.poll(async()=>(await readCalls(request)).jev).toBeGreaterThan(callsBefore.jev);
@@ -303,63 +289,78 @@ test('owner-paired strategy waits for subscription and Start race before paid dr
  }
 });
 
-test('the MCP race menu fits a narrow host and opens lobbies with the selected options',async({page,request})=>{
+test('the simplified MCP race menu fits a narrow host and launches ChatGPT strategy with chosen options',async({page})=>{
  await page.setViewportSize({width:390,height:850});
- await page.goto(host+'/?player=a&test-messages=1');
+ await page.goto(host+'/?test-messages=1');
  const app=page.frameLocator('#app-frame').frameLocator('iframe');
- const menu=app.getByRole('region',{name:'Race menu'}),launch=menu.getByRole('button',{name:'Open multiplayer lobby'});
- await expect(launch).toBeEnabled();
- expect(await menu.evaluate(element=>document.documentElement.scrollWidth===document.documentElement.clientWidth&&
+ const menu=app.getByRole('dialog',{name:'Race menu'});
+ const accept=menu.getByRole('button',{name:'Accept',exact:true});
+ await expect(accept).toBeEnabled();
+ await expect(menu.locator('#mcp-mode-pill')).toHaveText('ChatGPT strategy');
+ await expect(menu.locator('#mcp-driver-jev-option')).toBeHidden();
+ await expect(menu.getByText(/Mock mode|Mock race/i)).toHaveCount(0);
+ expect(await menu.evaluate(element=>getComputedStyle(element).position==='fixed'&&
+  document.documentElement.scrollWidth===document.documentElement.clientWidth&&
   element.getBoundingClientRect().right<=document.documentElement.clientWidth)).toBe(true);
- await menu.getByLabel('Circuit',{exact:true}).selectOption('las-vegas');
- await menu.getByLabel('Driver matchup',{exact:true}).selectOption('jev-vs-luna');
- await menu.getByLabel('Seat',{exact:true}).selectOption('both');
- await menu.getByLabel('Connect seats when the lobby opens').check();
- await launch.click();
- await expect(app.locator('#mcp-session-details')).toHaveText('Las Vegas · 3 laps · Jev vs Luna');
- await expect(app.locator('body')).toHaveAttribute('data-connected','true');
- await expect(app.locator('#race-phase')).toHaveText('LOBBY');
- const start=menu.getByRole('button',{name:'Start race',exact:true});
- await expect(start).toBeEnabled();
- const room=await app.locator('body').getAttribute('data-room');
- const state:RaceState=await request.get('/api/rooms/'+room+'/status').then(r=>r.json());
- expect(state).toMatchObject({race:{circuit:'las-vegas',tick:0},matchup:'jev-vs-luna',connected:{a:true,b:true}});
- await menu.getByRole('radio',{name:'ChatGPT strategy',exact:true}).check();
- await expect(menu.getByLabel('Seat',{exact:true})).toBeHidden();
- await menu.getByRole('button',{name:'Open ChatGPT strategy lobby',exact:true}).click();
- await expect(app.locator('#mcp-session-details')).toHaveText('Las Vegas · 10 laps · Jev vs Jev');
- await expect(menu.getByLabel('Mercedes strategy invitation')).toBeVisible();
- await expect(start).toBeDisabled();
+ // Defaults: Monza, 5 laps, Autopilot, Multiplayer unchecked
+ await expect(menu.locator('input[name="circuit"][value="monza"]')).toBeChecked();
+ await expect(menu.locator('input[name="laps"][value="5"]')).toBeChecked();
+ await expect(menu.locator('input[name="driver"][value="autopilot"]')).toBeChecked();
+ await expect(menu.locator('#mcp-multiplayer')).not.toBeChecked();
+ // Select Las Vegas, 10 laps, Manual, Add Multiplayer -> Accept
+ await menu.locator('input[name="circuit"][value="las-vegas"]').check();
+ await menu.locator('input[name="laps"][value="10"]').check();
+ await menu.locator('input[name="driver"][value="human"]').check();
+ await menu.locator('#mcp-multiplayer').check();
+ await accept.click();
+ await expect(app.getByRole('button',{name:'Race menu',exact:true})).toHaveAttribute('aria-expanded','false');
+ await expect(app.locator('#mcp-multiplayer-bar')).toBeVisible();
+ await expect(app.locator('#mcp-guest-invite')).toHaveValue(/^jev-strategy:/);
+ await expect(app.locator('#drive-root')).toHaveAttribute('data-embedded','true');
+ await expect(app.locator('#drive-mode-switcher [data-dmode="jev"]')).toBeHidden();
+ await expect(app.locator('#race-event-log')).toBeVisible();
+ await expect(app.locator('#mcp-status')).toContainText('ChatGPT strategy · Las Vegas · 10 laps · Manual');
  await expect(page.locator('body')).toHaveAttribute('data-strategy-context',/event_filter/);
+ // Opening Race menu as a modal overlay must not push #app down
+ const appTopClosed=await app.locator('#app').evaluate(el=>Math.round(el.getBoundingClientRect().top));
+ await app.getByRole('button',{name:'Race menu',exact:true}).click();
+ await expect(menu).toBeVisible();
+ const appTopOpen=await app.locator('#app').evaluate(el=>Math.round(el.getBoundingClientRect().top));
+ expect(appTopOpen).toBe(appTopClosed);
+ // Switch back via Race menu to Monza, 5 laps, Autopilot, solo
+ await menu.locator('input[name="circuit"][value="monza"]').check();
+ await menu.locator('input[name="laps"][value="5"]').check();
+ await menu.locator('input[name="driver"][value="autopilot"]').check();
+ await menu.locator('#mcp-multiplayer').uncheck();
+ await accept.click();
+ await expect(app.locator('#mcp-multiplayer-bar')).toBeHidden();
+ await expect(app.locator('#mcp-status')).toContainText('ChatGPT strategy · Monza · 5 laps · Autopilot');
+ await expect(app.locator('#race-phase')).toHaveText('LOBBY');
+ await expect(app.getByRole('button',{name:'Start race',exact:true})).toBeDisabled();
 });
 
-test('solo play waits for Start race with Ferrari alone in MCP and the browser',async({browser,request,baseURL})=>{
+test('multiplayer Team B joins with their own ChatGPT strategist and solo browser play still works',async({browser,request,baseURL})=>{
  const context=await browser.newContext();
  try{
-  const page=await context.newPage();
-  await page.goto(host+'/?player=a');
-  const app=page.frameLocator('#app-frame').frameLocator('iframe');
-  await expect(app.locator('#mcp-status')).toContainText('Ready to connect');
-  for(const name of ['Solo','Multiplayer','ChatGPT strategy','Private live'])
-   await expect(app.getByRole('radio',{name,exact:true})).toBeVisible();
-  const oldRoom=await app.locator('body').getAttribute('data-room');
-  await app.getByRole('radio',{name:'Solo',exact:true}).check();
-  await app.getByRole('region',{name:'Race menu'}).getByLabel('Circuit',{exact:true}).selectOption('las-vegas');
-  await app.getByRole('button',{name:'Open solo lobby',exact:true}).click();
-  await expect(app.locator('#mcp-status')).toContainText('Solo race · Ferrari ready');
-  await expect(app.locator('#race-phase')).toHaveText('LOBBY');
-  await expect(app.locator('body')).toHaveAttribute('data-circuit','las-vegas');
-  await app.getByRole('button',{name:'Start race',exact:true}).click();
-  await expect(app.locator('#mcp-status')).toContainText('Solo race · Race in progress');
-  await expect(app.getByRole('button',{name:'Race menu',exact:true})).toHaveAttribute('aria-expanded','false');
-  await expect(app.locator('#mcp-copy')).toBeHidden();
-  const room=await app.locator('body').getAttribute('data-room');
-  expect(room).not.toBe(oldRoom);
-  const state=()=>request.get('/api/rooms/'+room+'/status').then(result=>result.json()) as Promise<RaceState>;
-  await expect.poll(async()=>(await state()).intents.b).toBeGreaterThan(0);
-  await app.getByRole('button',{name:'Full grid'}).click();
-  await expect(app.locator('#timing-rows .timing-row')).toHaveCount(22);
-  await expect(app.locator('#timing-rows .timing-row').filter({hasText:'George Russell'})).toContainText('AI');
+  const hostA=await context.newPage();
+  await hostA.goto(host+'/?test-messages=1');
+  const appA=hostA.frameLocator('#app-frame').frameLocator('iframe');
+  await appA.locator('#mcp-multiplayer').check();
+  await appA.getByRole('button',{name:'Accept',exact:true}).click();
+  await expect(appA.locator('#mcp-multiplayer-bar')).toBeVisible();
+  const teamBInvite=await appA.locator('#mcp-guest-invite').inputValue();
+  expect(teamBInvite).toMatch(/^jev-strategy:/);
+
+  const hostB=await context.newPage();
+  await hostB.goto(host+'/?test-messages=1');
+  const appB=hostB.frameLocator('#app-frame').frameLocator('iframe');
+  await appB.locator('#mcp-join-panel summary').click();
+  await appB.locator('#mcp-join').fill(teamBInvite);
+  await appB.getByRole('button',{name:'Join Team B',exact:true}).click();
+  await expect(appB.locator('#mcp-status')).toContainText('Team B (Mercedes)');
+  await expect(hostB.locator('body')).toHaveAttribute('data-strategy-context',/event_filter/);
+  const roomA=await appA.locator('body').getAttribute('data-room');
+  await expect(appB.locator('body')).toHaveAttribute('data-room',roomA!);
 
   const web=await context.newPage();
   await web.goto(baseURL+'/?solo&view=telemetry&circuit=las-vegas');
@@ -368,7 +369,7 @@ test('solo play waits for Start race with Ferrari alone in MCP and the browser',
   await web.getByRole('button',{name:'Start race',exact:true}).click();
   await expect(web.locator('#race-phase')).toHaveText('GREEN FLAG');
   const browserRoom=new URL(web.url()).searchParams.get('room');
-  expect(browserRoom).not.toBe(room);
+  expect(browserRoom).not.toBe(roomA);
   const result=await request.get('/api/rooms/'+browserRoom+'/status').then(r=>r.json()) as RaceState;
   expect(result.solo).toBe(true);
   expect(result.race.field).toHaveLength(20);
@@ -438,7 +439,7 @@ test('native MCP Events verifies the subscription, starts a race and delivers si
   expect(event.eventId).toBe(event.data.event_id);
   const args={room:invite.room,event_id:event.eventId};
   const telemetry=await client.callTool({name:'get_grand_prix_strategy_event',arguments:args});
-  expect(telemetry.structuredContent).toMatchObject({observation:{lapsRemaining:10,tyres:expect.any(Object)}});
+  expect(telemetry.structuredContent).toMatchObject({observation:{lapsRemaining:5,tyres:expect.any(Object)}});
   const order={...args,action:'manage',radio:'Manage the tyres on the opening stint.'};
   expect((await client.callTool({name:'submit_grand_prix_radio',arguments:order})).isError).toBeFalsy();
   expect((await client.callTool({name:'submit_grand_prix_radio',arguments:order})).isError).toBe(true);
@@ -450,31 +451,28 @@ test('native MCP Events verifies the subscription, starts a race and delivers si
   const caption=pinned.getByText(`"${order.radio}"`,{exact:true});
   await expect(caption).toBeVisible();
   await expect.poll(()=>probe?.state()?.latestChatRadio?.a?.reply?.team).toBe('a');
-  const log=page.locator('#race-event-log'),logToggle=log.locator(':scope > summary');
-  await expect(log.locator('ol')).toBeHidden();
-  await logToggle.click();
+  const log=page.locator('#race-event-log');
+  await expect(log.locator('ol')).toBeVisible();
+  await expect(log.getByRole('button',{name:'Driver',exact:true})).toHaveCount(0);
+  await expect(log.locator('li[data-kind="driver"]')).toHaveCount(0);
   await log.getByRole('button',{name:'Strategist',exact:true}).click();
   const telemetryRow=log.locator('li').filter({hasText:'Strategy requested'}).filter({hasText:'Opening strategy'});
   await telemetryRow.locator('summary').click();
-  await expect(telemetryRow.locator('pre')).toContainText('"lapsRemaining": 10');
+  await expect(telemetryRow.locator('pre')).toContainText('"lapsRemaining": 5');
   await expect(telemetryRow.locator('pre')).toContainText('"projectedFuelKg"');
   await expect(log).toContainText('Telemetry read');
   await expect(log).toContainText('Event delivered');
   await expect(log).not.toContainText(event.eventId);
-  await log.getByRole('button',{name:'Driver',exact:true}).click();
-  await log.locator('li[data-kind="driver"]').first().locator('summary').click();
-  await expect(log.locator('pre')).toContainText('"brakeAggression"');
   await log.getByRole('button',{name:'Radio',exact:true}).click();
   await expect(log.getByText(order.radio,{exact:true})).toBeVisible();
   await expect(log.getByText(/JEV radio/)).toHaveCount(0);
   await page.reload();
   await expect(caption).toBeVisible();
   await expect(pinned.locator('.radio-transcript')).toHaveCount(1);
-  await logToggle.click();
+  await expect(log.locator('ol')).toBeVisible();
   await log.getByRole('button',{name:'Radio',exact:true}).click();
   await expect(log.getByText(order.radio,{exact:true})).toBeVisible();
   await expect(log.getByText(/JEV radio/)).toHaveCount(0);
-  await logToggle.click();
   const controls=page.getByRole('group',{name:'Race control'});
   const conditions=page.locator('#race-conditions');
   const incident=async(reason:string)=>{

@@ -12,16 +12,17 @@ import {STRATEGY_EVENT} from '../src/race/strategy-events';
 
 export const RACE_RESOURCE='ui://jev-grand-prix/pit-wall-v29.html';
 const LEGACY_RACE_RESOURCES=['ui://jev-grand-prix/pit-wall-v28.html','ui://jev-grand-prix/pit-wall-v27.html','ui://jev-grand-prix/pit-wall-v26.html','ui://jev-grand-prix/pit-wall-v25.html','ui://jev-grand-prix/pit-wall-v24.html','ui://jev-grand-prix/pit-wall-v23.html','ui://jev-grand-prix/pit-wall-v22.html','ui://jev-grand-prix/pit-wall-v21.html','ui://jev-grand-prix/pit-wall-v20.html','ui://jev-grand-prix/pit-wall-v19.html','ui://jev-grand-prix/pit-wall-v18.html','ui://jev-grand-prix/pit-wall-v17.html','ui://jev-grand-prix/pit-wall-v16.html','ui://jev-grand-prix/pit-wall-v15.html','ui://jev-grand-prix/pit-wall-v14.html','ui://jev-grand-prix/pit-wall-v13.html','ui://jev-grand-prix/pit-wall-v12.html','ui://jev-grand-prix/pit-wall-v11.html','ui://jev-grand-prix/pit-wall-v10.html','ui://jev-grand-prix/pit-wall-v9.html','ui://jev-grand-prix/pit-wall-v8.html','ui://jev-grand-prix/pit-wall-v7.html','ui://jev-grand-prix/pit-wall-v6.html','ui://jev-grand-prix/pit-wall-v5.html','ui://jev-grand-prix/pit-wall-v4.html','ui://jev-grand-prix/pit-wall-v3.html','ui://jev-grand-prix/pit-wall-v2.html','ui://jev-grand-prix/pit-wall.html'];
+export type StrategyDriver='autopilot'|'human';
 export interface McpRoom {links:RoomLinks;mcpToken:string;state:RaceState;}
-export type StrategySeatAccess=LiveInvitation&{phase:LivePhase;strategyKey:string;subscriptionKey:string;guestInviteKey?:string};
+export type StrategySeatAccess=LiveInvitation&{phase:LivePhase;strategyKey:string;subscriptionKey:string;guestInviteKey?:string;laps?:number;driver?:StrategyDriver};
 export interface RaceGateway {
  create:(matchup:Matchup,circuit:CircuitId,solo?:boolean)=>Promise<McpRoom>;
  get:(id:string)=>Promise<McpRoom|null>;
  html:()=>Promise<string>;
  liveAvailable?:boolean;
  liveOptions?:{provider:boolean;chatgpt:boolean;luna:boolean};
- startChatPractice?:(circuit:CircuitId,laps?:number)=>Promise<StrategySeatAccess>;
- joinChatPractice?:(invite:LiveInvitation)=>Promise<(StrategySeatAccess&{circuit:CircuitId})|null>;
+ startChatPractice?:(circuit:CircuitId,laps?:number,driver?:StrategyDriver)=>Promise<StrategySeatAccess>;
+ joinChatPractice?:(invite:LiveInvitation,driver?:StrategyDriver)=>Promise<(StrategySeatAccess&{circuit:CircuitId})|null>;
  stopChatPractice?:(room:string,key:string)=>Promise<boolean>;
  strategyEvent?:(room:string,eventId:string)=>Promise<StrategyEvent|null>;
  submitStrategy?:(input:RadioInput)=>Promise<{team:Team;line:string}|{error:string}>;
@@ -57,67 +58,87 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
   });
  }
 
- async function strategyRace(circuit:CircuitId,invite?:LiveInvitation,laps?:number){
+ async function strategyRace(circuit:CircuitId,invite?:LiveInvitation,laps?:number,driver:StrategyDriver='autopilot',multiplayer=false){
   if(!gateway.startChatPractice)return {isError:true,content:[{type:'text' as const,text:'ChatGPT strategy races are unavailable on this server.'}]};
-  const joined=invite?await gateway.joinChatPractice?.(invite):null;
+  const joined=invite?await gateway.joinChatPractice?.(invite,driver):null;
   if(invite&&!joined)return invalidInvite();
-  const {room,key,phase,strategyKey,subscriptionKey,guestInviteKey}=joined??await gateway.startChatPractice(circuit,laps);
+  const created=joined??await gateway.startChatPractice(circuit,laps,driver);
+  const {room,key,phase,strategyKey,subscriptionKey,guestInviteKey}=created;
+  const resolvedLaps=created.laps??laps??5;
+  const resolvedDriver=created.driver??driver;
   const team=joined?'b':'a',car=PERSONAS[team].name;
   const eventFilter={room,subscription_key:subscriptionKey};
-  const start=joined?'':" Use the widget's Start race control when shown.";
+  const start=joined?'':" Use the widget's Accept or Start race control when ready.";
   return {
    content:[{type:'text' as const,text:`${car} strategy seat opened. Subscribe in this Work chat to ${STRATEGY_EVENT} using the exact event_filter from structuredContent. Keep the subscription key out of chat text.${start}`}],
-   structuredContent:{circuit:joined?.circuit??circuit,room,player:team,solo:!joined,strategy_team:car,mode:'mock',matchup:'jev-vs-jev',strategist:'chatgpt',strategyPractice:true,delivery:'webhook',event:STRATEGY_EVENT,event_filter:eventFilter},
+   structuredContent:{circuit:joined?.circuit??circuit,room,laps:resolvedLaps,driver:resolvedDriver,multiplayer:Boolean(multiplayer||joined),player:team,solo:!joined,strategy_team:car,strategist:'chatgpt',strategyPractice:true,delivery:'webhook',event:STRATEGY_EVENT,event_filter:eventFilter},
    _meta:{...setupCapabilities,origin,liveInvitation:{room,key},phase,strategyKey,strategyPractice:true,strategySeat:team,
+    laps:resolvedLaps,driver:resolvedDriver,multiplayer:Boolean(multiplayer||joined),
     ...(guestInviteKey?{guestInvitation:strategySeatInvitation({room,key:guestInviteKey})}:{})},
   };
  }
 
  if(gateway.startChatPractice){
   registerAppTool(server,'open_grand_prix_strategy',{
-   title:'Start ChatGPT Work race strategy subscription',
-   description:'Open a native MCP Events strategy seat in ChatGPT Work. Start as Ferrari or pass a Mercedes strategy invitation to join the same race. Subscribe to grand_prix.strategy_required using this seat’s event_filter.',
-   inputSchema:z.object({circuit:z.enum(['monza','las-vegas']).default('monza'),laps:z.number().int().min(3).max(20).optional().describe('Optional race distance (3-20 laps, default 10). Shorter races finish faster.'),invite:z.string().max(2048).optional()}),
+   title:'Start ChatGPT strategy race',
+   description:'Open a ChatGPT strategy seat at Monza or Las Vegas. Choose 5 or 10 laps, autopilot or manual driving, and optionally invite Team B (Mercedes) with their own ChatGPT strategist.',
+   inputSchema:z.object({
+    circuit:z.enum(['monza','las-vegas']).default('monza'),
+    laps:z.number().int().min(3).max(20).optional().describe('Race distance (default 5, or 10 laps).'),
+    driver:z.enum(['autopilot','human']).default('autopilot').describe('Who drives your car: autopilot or human (manual user controls).'),
+    multiplayer:z.boolean().default(false).describe('Add multiplayer to invite Team B (Mercedes) with their own ChatGPT strategist.'),
+    invite:z.string().max(2048).optional(),
+   }),
    _meta:{ui:{resourceUri:RACE_RESOURCE},'openai/outputTemplate':RACE_RESOURCE},
    annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
-  },({circuit,laps,invite})=>{
-   if(!invite)return strategyRace(circuit,undefined,laps);
+  },({circuit,laps,driver,multiplayer,invite})=>{
+   if(!invite)return strategyRace(circuit,undefined,laps,driver,multiplayer);
    try{
     const seat=parseStrategySeatInvitation(invite);
-    return seat?strategyRace(circuit,seat):invalidInvite();
+    return seat?strategyRace(circuit,seat,laps,driver,true):invalidInvite();
    }catch{return invalidInvite();}
   });
  }
 
  if(gateway.stopChatPractice){
   server.registerTool('stop_grand_prix_chat_strategy',{
-   title:'Stop ChatGPT strategy race',description:'Stop the public strategy race controlled by this widget.',
+   title:'Stop ChatGPT strategy race',description:'Stop the strategy race controlled by this widget.',
    inputSchema:z.object({room:z.string().uuid(),key:z.string().regex(/^[a-f0-9]{64}$/)}),
    _meta:{ui:{visibility:['app']}},
    annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
   },async({room,key})=>{
    const stopped=await gateway.stopChatPractice!(room,key);
-   return {isError:!stopped,content:[{type:'text' as const,text:stopped?'ChatGPT strategy race stopped.':'Could not stop this strategy race.'}]};
+   return {isError:!stopped,content:[{type:'text',text:stopped?'ChatGPT strategy race stopped.':'Could not stop this strategy race.'}]};
   });
  }
 
  registerAppTool(server,'open_grand_prix',{
   title:'Open MCP Grand Prix',
-  description:'Open the MCP Grand Prix lobby at Monza or Las Vegas. Click Start race in the widget when ready. Use chat_strategy=true to open a native MCP Events strategy seat for Ferrari. A Mercedes strategy invitation joins the same race with independent strategy telemetry. A live spectator invitation grants viewing.',
+  description:'Open MCP Grand Prix in ChatGPT strategy mode at Monza or Las Vegas (5 or 10 laps, autopilot or manual driving). Pass a Team B strategy invitation to join Mercedes with your own ChatGPT strategist, or a live spectator invitation to watch.',
   inputSchema:z.object({
-   circuit:z.enum(['monza','las-vegas']).default('monza'),autoplay:z.boolean().default(false).describe('Connect driver seats automatically. The grid waits for Start race.'),solo:z.boolean().default(false),chat_strategy:z.boolean().default(false),
-   player:z.enum(['a','b','both','spectator']).default('a'),matchup:z.enum(['jev-vs-jev','jev-vs-luna']).default('jev-vs-jev'),
+   circuit:z.enum(['monza','las-vegas']).default('monza'),
+   laps:z.number().int().min(3).max(20).optional(),
+   driver:z.enum(['autopilot','human']).optional(),
+   multiplayer:z.boolean().optional(),
+   autoplay:z.boolean().optional(),
+   solo:z.boolean().optional(),
+   chat_strategy:z.boolean().optional(),
+   player:z.enum(['a','b','both','spectator']).optional(),
+   matchup:z.enum(['jev-vs-jev','jev-vs-luna']).optional(),
    invite:z.string().max(2048).optional(),
   }),
   _meta:{ui:{resourceUri:RACE_RESOURCE},'openai/outputTemplate':RACE_RESOURCE},annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
- },async({autoplay,player,matchup,circuit,invite,solo,chat_strategy})=>{
-  if(chat_strategy&&!invite)return strategyRace(circuit);
+ },async({autoplay,player,matchup,circuit,invite,solo,chat_strategy,laps,driver,multiplayer})=>{
+  const legacyRequest=Boolean(solo||autoplay||player!==undefined||matchup!==undefined);
+  if((chat_strategy||(!legacyRequest&&gateway.startChatPractice))&&!invite){
+   return strategyRace(circuit,undefined,laps,driver??'autopilot',Boolean(multiplayer));
+  }
   let room:McpRoom|null;
-  let assigned=player;
+  let assigned=player??'a';
   if(invite){
    try{
     const seat=parseStrategySeatInvitation(invite);
-    if(seat)return strategyRace(circuit,seat);
+    if(seat)return strategyRace(circuit,seat,laps,driver??'autopilot',true);
     const live=parseLiveInvitation(invite,origin);
     if(live){
      const state=await gateway.watchLive?.(live);
@@ -135,7 +156,7 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
    }catch{return invalidInvite();}
   }else{
    if(solo)assigned='a';
-   room=await gateway.create(solo?'jev-vs-jev':matchup,circuit,solo);
+   room=await gateway.create(solo?'jev-vs-jev':(matchup??'jev-vs-jev'),circuit,Boolean(solo));
   }
 
   const links=room.links,own=assigned==='a'||assigned==='b'?assigned:null,opponent:Team=own==='b'?'a':'b';
@@ -143,8 +164,8 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
   const safeLinks={...links,owner:'',a:assigned==='a'||assigned==='both'?links.a:'',b:assigned==='b'||assigned==='both'?links.b:''};
   const invitation=!room.state.solo&&!invite&&assigned!=='spectator'?invitationCode(links.room,opponent,tokenFrom(links[opponent])):'';
   return {
-   content:[{type:'text',text:`MCP Grand Prix · ${CIRCUITS[room.state.race.circuit].name} · regular race with the local pit wall. ${gateway.startChatPractice?'For ChatGPT radio, select Open ChatGPT Work strategy lobby in the widget. ':''}${own?`Team ${own.toUpperCase()}. `:''}Spectator: ${links.spectator}.`}],
-   structuredContent:{circuit:room.state.race.circuit,room:links.room,player:assigned,autoplay,solo:room.state.solo===true,mode:room.state.mode,strategist:'local',matchup:room.state.matchup,players:room.state.players},
+   content:[{type:'text',text:`MCP Grand Prix · ${CIRCUITS[room.state.race.circuit].name}.${own?` Team ${own.toUpperCase()}.`:''} Spectator: ${links.spectator}.`}],
+   structuredContent:{circuit:room.state.race.circuit,room:links.room,player:assigned,autoplay:Boolean(autoplay),solo:room.state.solo===true,mode:room.state.mode,strategist:'local',matchup:room.state.matchup,players:room.state.players},
    _meta:{
     ...setupCapabilities,
     connection:{origin,token:room.mcpToken,hosted:{room:links.room,token,links:safeLinks}},

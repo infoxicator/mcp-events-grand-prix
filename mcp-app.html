@@ -8,76 +8,91 @@
 <body>
 <div class="mcp-shell">
  <header class="mcp-header">
-  <div>
+  <div class="mcp-header-title">
    <div class="mcp-brand"><span class="brand-mark" aria-hidden="true"></span><strong>MCP Grand Prix</strong></div>
    <p id="mcp-status" role="status">Connecting to MCP host…</p>
   </div>
-  <button id="mcp-menu-toggle" aria-controls="mcp-menu" aria-expanded="true">Race menu</button>
+  <button id="mcp-menu-toggle" type="button" aria-controls="mcp-menu" aria-expanded="true">Race menu</button>
  </header>
- <section id="mcp-menu" class="mcp-menu" aria-label="Race menu">
-  <section class="mcp-card mcp-session" aria-labelledby="mcp-session-title">
+ <section id="mcp-multiplayer-bar" class="mcp-multiplayer-bar" aria-label="Team B multiplayer invitation" hidden>
+  <div class="mcp-multiplayer-meta">
+   <span class="mcp-mp-dot" aria-hidden="true"></span>
    <div>
-    <h2 id="mcp-session-title">Current race</h2>
-    <p id="mcp-session-details">Connecting to the grid…</p>
-    <p id="mcp-crew" role="status" hidden></p>
+    <strong id="mcp-multiplayer-title">Team B invitation</strong>
+    <p id="mcp-multiplayer-status">Share so Team B can race Mercedes #63 with their own ChatGPT strategist.</p>
    </div>
-   <div class="mcp-current-actions">
-    <div id="mcp-session-badge"></div>
-    <button id="mcp-play" disabled>Ready to race</button>
-    <div id="mcp-start-slot"></div>
-   </div>
-  </section>
-  <div class="mcp-menu-grid">
-   <section class="mcp-card" aria-labelledby="mcp-setup-title">
-    <h2 id="mcp-setup-title">Race setup</h2>
-    <form id="mcp-setup">
-     <fieldset class="mcp-modes" disabled>
-      <legend>Race mode</legend>
-      <label><input type="radio" name="race-mode" value="solo" aria-labelledby="mcp-mode-solo"><strong id="mcp-mode-solo">Solo</strong><small>Ferrari with the built-in pit wall</small></label>
-      <label><input type="radio" name="race-mode" value="multiplayer" aria-labelledby="mcp-mode-multiplayer" checked><strong id="mcp-mode-multiplayer">Multiplayer</strong><small>Share the grid with another driver</small></label>
-      <label id="mcp-mode-chat-option" hidden><input type="radio" name="race-mode" value="chat" aria-labelledby="mcp-mode-chat"><strong id="mcp-mode-chat">ChatGPT strategy</strong><small>20 laps with ChatGPT on Ferrari radio</small></label>
-      <label id="mcp-mode-live-option" hidden><input type="radio" name="race-mode" value="live" aria-labelledby="mcp-mode-live"><strong id="mcp-mode-live">Private live</strong><small>Live drivers with owner sign-in</small></label>
-     </fieldset>
-     <div class="mcp-settings">
-      <div><label for="mcp-circuit">Circuit</label><select id="mcp-circuit"><option value="monza">Monza · Day</option><option value="las-vegas">Las Vegas · Night</option></select></div>
-      <div id="mcp-matchup-option"><label for="mcp-matchup">Driver matchup</label><select id="mcp-matchup"><option value="jev-vs-jev">Jev vs Jev</option><option value="jev-vs-luna">Jev vs Luna</option></select></div>
-      <div id="mcp-seat-option"><label for="mcp-seat">Seat</label><select id="mcp-seat"><option value="a">Ferrari</option><option value="b">Mercedes</option><option value="both">Both seats</option><option value="spectator">Spectator</option></select></div>
-      <div id="mcp-strategist-option" hidden><label for="mcp-strategist">Strategist</label><select id="mcp-strategist"><option value="provider">Race server</option><option value="chatgpt">ChatGPT Work</option></select></div>
-     </div>
-     <label id="mcp-autoconnect-option" class="mcp-checkbox"><input id="mcp-autoconnect" type="checkbox">Connect seats when the lobby opens</label>
-     <div class="mcp-setup-actions"><button id="mcp-open-lobby" type="submit" class="mcp-primary" disabled>Open multiplayer lobby</button></div>
-    </form>
-    <div id="mcp-pairing" class="mcp-pairing" hidden>
-     <span id="mcp-pair-status" role="status"></span>
-     <button id="mcp-pair-open">Open owner sign-in ↗</button>
-     <button id="mcp-pair-cancel">Dismiss</button>
+  </div>
+  <div class="mcp-field-actions">
+   <input id="mcp-guest-invite" readonly aria-label="Team B invitation">
+   <button id="mcp-guest-copy" type="button">Copy Team B invite</button>
+  </div>
+ </section>
+ <section id="mcp-legacy-bar" class="mcp-legacy-bar" aria-label="Seat controls" hidden>
+  <button id="mcp-play" type="button" hidden>Ready</button>
+  <div id="mcp-sharing" class="mcp-invite-form" hidden>
+   <label for="mcp-invite" id="mcp-invite-label">Invite a player</label>
+   <div class="mcp-field-actions"><input id="mcp-invite" readonly aria-label="Race invitation"><button id="mcp-copy" type="button">Copy invitation</button></div>
+   <a id="mcp-join-web" href="#" hidden>Open invited seat in browser ↗</a>
+  </div>
+ </section>
+ <section id="mcp-menu" class="mcp-menu" role="dialog" aria-modal="true" aria-label="Race menu">
+  <div class="mcp-menu-dialog">
+   <div class="mcp-card-head">
+    <div>
+     <h2 id="mcp-setup-title">Race setup</h2>
+     <p id="mcp-crew" class="mcp-crew" role="status" hidden></p>
     </div>
-   </section>
-   <section class="mcp-card" aria-labelledby="mcp-invitations-title">
-    <h2 id="mcp-invitations-title">Invitations</h2>
+    <div class="mcp-head-right">
+     <span class="mcp-mode-pill" id="mcp-mode-pill">ChatGPT strategy</span>
+     <button id="mcp-menu-close" type="button" class="mcp-icon-close" aria-label="Close race menu" hidden>×</button>
+    </div>
+   </div>
+   <form id="mcp-setup">
+    <fieldset class="mcp-choice-grid" data-group="circuit" disabled>
+     <legend>Circuit</legend>
+     <label class="mcp-choice"><input type="radio" name="circuit" value="monza" checked><strong>Monza · Day</strong><small>High-speed temple · 5.793 km</small></label>
+     <label class="mcp-choice"><input type="radio" name="circuit" value="las-vegas"><strong>Las Vegas · Night</strong><small>Floodlit Strip · 6.201 km</small></label>
+    </fieldset>
+    <fieldset class="mcp-choice-grid mcp-laps-grid" data-group="laps" disabled>
+     <legend>Number of laps</legend>
+     <label class="mcp-choice"><input type="radio" name="laps" value="5" checked><strong>5 laps</strong><small>Quick strategy sprint</small></label>
+     <label class="mcp-choice"><input type="radio" name="laps" value="10"><strong>10 laps</strong><small>Full pit-window battle</small></label>
+    </fieldset>
+    <fieldset class="mcp-choice-grid" data-group="driver" disabled>
+     <legend>Who’s driving</legend>
+     <label class="mcp-choice"><input type="radio" name="driver" value="autopilot" checked><strong>Autopilot</strong><small>Optimal racing line obeying ChatGPT calls</small></label>
+     <label class="mcp-choice"><input type="radio" name="driver" value="human"><strong>Manual</strong><small>You drive with keyboard, gamepad, or touch</small></label>
+     <label class="mcp-choice" id="mcp-driver-jev-option" hidden><input type="radio" name="driver" value="jev" disabled><strong>Jev</strong><small>AI driver · Coming soon</small></label>
+    </fieldset>
+    <label class="mcp-addon-toggle" for="mcp-multiplayer">
+     <input id="mcp-multiplayer" type="checkbox" disabled>
+     <span class="mcp-addon-copy">
+      <strong>Add Multiplayer <em class="mcp-addon-tag">Team B</em></strong>
+      <small>Invite Team B to race Mercedes #63 with their own ChatGPT strategist</small>
+     </span>
+    </label>
+    <div class="mcp-setup-actions">
+     <button id="mcp-accept" type="submit" class="mcp-primary mcp-accept" disabled>Accept</button>
+    </div>
+   </form>
+   <details id="mcp-join-panel" class="mcp-join-panel">
+    <summary>Join as Team B with an invitation</summary>
     <form id="mcp-join-form" class="mcp-invite-form">
-     <label for="mcp-join">Join an existing race</label>
-     <div class="mcp-field-actions"><input id="mcp-join" name="invite" placeholder="Paste an invitation" autocomplete="off" maxlength="2048" required><button>Join race</button></div>
+     <label for="mcp-join">Team B invitation</label>
+     <div class="mcp-field-actions">
+      <input id="mcp-join" name="invite" placeholder="Paste Team B invitation" autocomplete="off" maxlength="2048" required>
+      <button type="submit">Join Team B</button>
+     </div>
     </form>
-    <div id="mcp-sharing" class="mcp-invite-form" hidden>
-     <label for="mcp-invite" id="mcp-invite-label">Invite a player</label>
-     <div class="mcp-field-actions"><input id="mcp-invite" readonly aria-label="Race invitation"><button id="mcp-copy" type="button">Copy invitation</button></div>
-     <a id="mcp-join-web" href="#" hidden>Open invited seat in browser ↗</a>
-    </div>
-    <div id="mcp-guest-sharing" class="mcp-invite-form" hidden>
-     <label for="mcp-guest-invite">Mercedes strategy invitation</label>
-     <div class="mcp-field-actions"><input id="mcp-guest-invite" readonly><button id="mcp-guest-copy" type="button">Copy Mercedes invitation</button></div>
-    </div>
-   </section>
+   </details>
+   <div class="mcp-menu-actions" aria-label="Race actions">
+    <button id="mcp-back-feed" type="button" hidden>Back to race</button>
+    <button id="mcp-web" type="button" disabled>Open spectator ↗</button>
+    <button id="mcp-fullscreen" type="button" hidden>Expand</button>
+    <button id="mcp-owner" type="button" class="mcp-danger" hidden>Stop race</button>
+   </div>
+   <p id="mcp-join-error" role="alert"></p>
   </div>
-  <div class="mcp-menu-actions" aria-label="Race actions">
-   <button id="mcp-back-feed" hidden>Back to broadcast</button>
-   <button id="mcp-web" disabled>Open spectator ↗</button>
-   <button id="mcp-strategy" hidden>Strategy replays ↗</button>
-   <button id="mcp-fullscreen" hidden>Expand</button>
-   <button id="mcp-owner" class="mcp-danger" hidden>Stop live race ↗</button>
-  </div>
-  <p id="mcp-join-error" role="alert"></p>
  </section>
  <div id="app"></div>
 </div>

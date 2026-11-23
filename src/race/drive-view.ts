@@ -6,7 +6,8 @@ import {createDriveControls} from './drive-controls';
 import {createDriveAudio} from './drive-audio';
 import {createScene, type CameraMode} from './scene';
 import {mountTcamTelemetry} from './tcam-telemetry';
-import {connect, createInterpolator} from './network';
+import {connect, createInterpolator, type Connection} from './network';
+import {mountEventLog} from './event-log-view';
 import {blendRace} from './presentation-motion';
 import {getTrack, isCircuit, type CircuitId} from './track';
 import {classification, constructors, opponents, playerEntry} from './grid';
@@ -36,6 +37,7 @@ const CAMERA_LABELS: Record<DriveCameraKind, string> = {
  nose: 'NOSE',
 };
 const DRIVER_CYCLE: readonly DriverControlMode[] = ['human', 'jev', 'autopilot'];
+const EMBEDDED_DRIVER_CYCLE: readonly DriverControlMode[] = ['human', 'autopilot'];
 const DRIVER_LABELS: Record<DriverControlMode, string> = {
  human: 'YOU',
  jev: 'JEV',
@@ -58,12 +60,22 @@ function escapeHtml(text: string): string {
  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export function mountDrive(room: HostedRoom): {dispose: () => void} {
+export interface DriveMountOptions {
+ team?: Team;
+ embedded?: boolean;
+ canStart?: () => boolean;
+ startReady?: (state: RaceState) => boolean;
+ onStart?: () => void;
+ autostart?: boolean;
+}
+
+export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {connection: Connection; suspend3D: () => void; dispose: () => void} {
  const params = new URLSearchParams(location.search);
- const seat: Team = params.get('team') === 'b' ? 'b' : 'a';
- const initialDriverParam = params.get('driver');
- const initialEngineerParam = params.get('engineer');
- const autostart = params.has('autostart');
+ const embedded = options.embedded === true;
+ const seat: Team = options.team ?? (params.get('team') === 'b' ? 'b' : 'a');
+ const initialDriverParam = embedded ? null : params.get('driver');
+ const initialEngineerParam = embedded ? null : params.get('engineer');
+ const autostart = options.autostart ?? params.has('autostart');
 
  let cameraKind: DriveCameraKind = 'tcam';
  let racingLineMode: RacingLineMode = 'full';
@@ -103,7 +115,7 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
 
  let conn = connect(seat, room, {
   role: 'driver',
-  shouldDecide: (s) => (s.driverMode?.[seat] ?? 'jev') === 'jev',
+  shouldDecide: (s) => !embedded && (s.driverMode?.[seat] ?? 'jev') === 'jev',
  });
  let promotingRoom: Promise<HostedRoom> | null = null;
  let promotedPending: {driverMode: DriverControlMode; engineerMode: EngineerControlMode; start: boolean} | null = null;
@@ -120,7 +132,7 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
 
  const app = document.getElementById('app')!;
  app.innerHTML = `
- <div class="drive-mode" id="drive-root" data-seat="${seat}">
+ <div class="drive-mode" id="drive-root" data-seat="${seat}"${embedded ? ' data-embedded="true"' : ''}>
   <div class="drive-viewport" id="drive-viewport">
    <div class="drive-loading" id="drive-loading">
     <div class="drive-eyebrow">MCP GRAND PRIX · DRIVE MODE</div>
@@ -506,9 +518,13 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
     </div>
    </div>
   </div>
- </div>`;
+ </div>${embedded ? '<section id="race-event-log" class="race-event-log" aria-labelledby="event-log-title"></section>' : ''}`;
 
  const el = (id: string) => document.getElementById(id)!;
+ if (embedded) {
+  app.querySelectorAll<HTMLElement>('[data-dmode="jev"]').forEach((node) => { node.hidden = true; });
+ }
+ const eventLog = embedded ? mountEventLog(el('race-event-log'), conn) : null;
  const viewport = el('drive-viewport');
  const hudEl = el('drive-hud');
  const loadingEl = el('drive-loading');
@@ -746,9 +762,13 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
  bindSeg('opt-pit', (v) => { pitAssist = v === 'on'; });
 
  // Start / Pause / Reset / Replay
+ const sendStart = () => {
+  if (options.onStart) options.onStart();
+  else conn.send({type: 'start'});
+ };
  el('drive-start-btn').onclick = () => {
   if (audioEnabled) audio.unlock();
-  conn.send({type: 'start'});
+  sendStart();
  };
  el('drive-menu-btn').onclick = () => { menuOpen = !menuOpen; pauseEl.hidden = !menuOpen; };
  el('pause-close-btn').onclick = () => { menuOpen = false; pauseEl.hidden = true; };
@@ -846,8 +866,10 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
   if (e.repeat) return;
   if (e.code === 'KeyG') {
+   const cycle = embedded ? EMBEDDED_DRIVER_CYCLE : DRIVER_CYCLE;
    const cur = currentDriverMode(conn.state);
-   const next = DRIVER_CYCLE[(DRIVER_CYCLE.indexOf(cur) + 1) % DRIVER_CYCLE.length];
+   const idx = cycle.indexOf(cur);
+   const next = cycle[(idx + 1) % cycle.length];
    setDriverMode(next);
   }
  };
@@ -905,9 +927,11 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
     if (currentEngineerMode(s) !== initialEngineerParam) conn.send({type: 'engineer-mode', mode: initialEngineerParam});
    }
   }
-  if (autostart && !autostartSent && conn.team && s.race.phase === 'lobby' && s.connected.a && s.connected.b) {
+  const canStartNow = options.canStart?.() ?? true;
+  const startReadyNow = options.startReady?.(s) ?? true;
+  if (autostart && !autostartSent && target.team && canStartNow && startReadyNow && s.race.phase === 'lobby' && s.connected.a && s.connected.b) {
    autostartSent = true;
-   conn.send({type: 'start'});
+   sendStart();
   }
 
   // Handle circuit changes dynamically
@@ -1057,6 +1081,8 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
 
   document.body.dataset.phase = r.phase;
   document.body.dataset.room = s.room;
+  document.body.dataset.circuit = r.circuit;
+  document.body.dataset.connected = String(s.connected.a && s.connected.b);
   document.body.dataset.driverMode = dMode;
   document.body.dataset.engineerMode = currentEngineerMode(s);
 
@@ -1071,11 +1097,17 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
   // Lobby ready state
   if (inLobby) {
    const seatsReady = s.connected.a && s.connected.b;
+   const canStart = options.canStart?.() ?? true;
+   const startReady = options.startReady?.(s) ?? true;
    const startBtn = el('drive-start-btn') as HTMLButtonElement;
-   startBtn.disabled = !seatsReady || conn.status !== 'CONNECTED';
+   startBtn.disabled = !seatsReady || !canStart || !startReady || conn.status !== 'CONNECTED';
    startBtn.textContent = !seatsReady
     ? 'Connecting seats…'
-    : `START ${track.name.toUpperCase()} GRAND PRIX (${r.laps} LAPS) ↗`;
+    : !canStart
+     ? 'Waiting for Team A to start…'
+     : !startReady
+      ? 'Waiting for ChatGPT to subscribe…'
+      : `START ${track.name.toUpperCase()} GRAND PRIX (${r.laps} LAPS) ↗`;
    const padInfo = latestGamepadName ? ` · Gamepad: ${latestGamepadName}` : '';
    el('lobby-pad-badge').textContent = room.local ? `Local Race · 0ms${padInfo}` : `Room ${s.room.slice(0, 8)} · ${conn.status} (${conn.latency}ms)${padInfo}`;
   }
@@ -1394,15 +1426,19 @@ export function mountDrive(room: HostedRoom): {dispose: () => void} {
  frameId = requestAnimationFrame(tick);
 
  return {
+  get connection() { return conn; },
+  suspend3D: () => {},
   dispose: () => {
    disposed = true;
    cancelAnimationFrame(frameId);
    window.removeEventListener('keydown', onKeyDown);
+   eventLog?.dispose();
    controls.dispose();
    audio.dispose();
    tcam.hide();
    conn.close();
    scene.dispose();
+   document.body.classList.remove('drive-active');
   },
  };
 }

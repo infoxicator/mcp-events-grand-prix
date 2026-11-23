@@ -34,7 +34,16 @@ try{
   await bridge.connect(new PostMessageTransport(frame.contentWindow!,frame.contentWindow!));
   await bridge.sendSandboxResourceReady({html:content.text,csp:ui?.csp});await initialized;
   // The local host opens read-only. Starting the two agents requires an explicit UI click.
-  const args={...(params.has('circuit')?{circuit:params.get('circuit')}:{}),autoplay:params.get('autoplay')==='1',...(params.has('player')?{player:params.get('player')}:{}),...(params.has('matchup')?{matchup:params.get('matchup')}:{}),...(params.has('invite')?{invite:params.get('invite')}:{} )};
+  const args={
+   ...(params.has('circuit')?{circuit:params.get('circuit')}:{}),
+   ...(params.has('laps')?{laps:Number(params.get('laps'))}:{}),
+   ...(params.has('driver')?{driver:params.get('driver')}:{}),
+   ...(params.has('multiplayer')?{multiplayer:params.get('multiplayer')==='1'}:{}),
+   ...(params.has('autoplay')?{autoplay:params.get('autoplay')==='1'}:{}),
+   ...(params.has('player')?{player:params.get('player')}:{}),
+   ...(params.has('matchup')?{matchup:params.get('matchup')}:{}),
+   ...(params.has('invite')?{invite:params.get('invite')}:{}),
+  };
   bridge.sendToolInput({arguments:args});
   const result=await client.callTool({name:'open_grand_prix',arguments:args});
   if(config.testStrategy)result._meta={...result._meta,'jev-grand-prix/telemetry':true};

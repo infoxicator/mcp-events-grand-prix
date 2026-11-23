@@ -5,122 +5,374 @@
  color:#efeee8;
  color-scheme:dark;
 }
-.mcp-header,.mcp-menu {
+.mcp-header {
  width:min(100%,1216px);
  margin-inline:auto;
- padding-inline:clamp(14px,3.1vw,36px);
-}
-.mcp-header {
+ padding:14px clamp(14px,3.1vw,36px) 10px;
+ box-sizing:border-box;
  display:flex;
  justify-content:space-between;
  align-items:center;
  flex-wrap:wrap;
- gap:12px 20px;
- padding-block:16px 12px;
+ gap:10px 18px;
 }
+.mcp-header-title{min-width:0}
 .mcp-brand {
  display:flex;
  align-items:center;
  gap:9px;
  width:fit-content;
- font-size:clamp(16px,2.05vw,23px);
+ font-size:clamp(16px,2vw,22px);
  line-height:1.15;
- letter-spacing:-.045em;
+ letter-spacing:-.04em;
 }
-.mcp-brand .brand-mark{width:31px;height:27px;flex:none;border-radius:5px}
+.mcp-brand .brand-mark{width:30px;height:26px;flex:none;border-radius:5px}
 .mcp-brand .brand-mark::before{transform:scale(.85) skewX(-28deg)}
-.mcp-header p,.mcp-session p {margin:5px 0 0;font-size:12px;line-height:1.5;color:#afbab5}
-.mcp-menu{margin-block:5px 16px}
-.mcp-menu-grid {
+.mcp-header p{margin:4px 0 0;font-size:12px;line-height:1.45;color:#afbab5}
+
+/* Multiplayer Team B banner */
+.mcp-multiplayer-bar {
  display:grid;
- grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);
- gap:12px;
- margin-block:12px;
-}
-.mcp-card {
- min-width:0;
- padding:clamp(13px,2.05vw,20px);
- border:1px solid #30373a;
+ grid-template-columns:minmax(0,1fr) minmax(240px,1.1fr);
+ align-items:center;
+ gap:10px 14px;
+ padding:11px 14px;
+ width:min(calc(100% - 2 * clamp(14px,3.1vw,36px)),1144px);
+ margin:0 auto 10px;
+ box-sizing:border-box;
+ border:1px solid #2b4744;
  border-radius:8px;
- background:#191e21;
+ background:linear-gradient(135deg,#132225,#171d21);
 }
-.mcp-card h2{margin:0 0 13px;font-size:17px;letter-spacing:-.025em;line-height:1.2}
-.mcp-session{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 20px}
-.mcp-session h2{margin:0}
-.mcp-session #mcp-crew{color:#cfdf9f}
-.mcp-current-actions,.mcp-menu-actions,.mcp-setup-actions,.mcp-pairing{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-#mcp-start-slot:empty,#mcp-start-slot:not(:has(button:not([hidden]))),#mcp-session-badge:empty{display:none}
-.mcp-shell :is(button,input,select):focus-visible,.mcp-shell a:focus-visible {
+.mcp-multiplayer-bar[hidden]{display:none}
+.mcp-multiplayer-meta {
+ display:flex;
+ align-items:flex-start;
+ gap:9px;
+ min-width:0;
+}
+.mcp-mp-dot {
+ width:8px;
+ height:8px;
+ margin-top:5px;
+ flex:none;
+ border-radius:999px;
+ background:#2be4cb;
+ box-shadow:0 0 0 4px rgba(43,228,203,.16);
+}
+.mcp-multiplayer-meta strong {
+ display:block;
+ font-size:12px;
+ font-weight:700;
+ color:#e4faf5;
+}
+.mcp-multiplayer-meta p {
+ margin:2px 0 0;
+ font-size:11px;
+ line-height:1.4;
+ color:#9fc0bd;
+}
+
+/* Modal overlay menu (does not push the race UI down) */
+.mcp-menu {
+ position:fixed;
+ inset:0;
+ z-index:900;
+ display:grid;
+ place-items:start center;
+ overflow-y:auto;
+ overscroll-behavior:contain;
+ padding:clamp(14px,4vh,36px) clamp(12px,3vw,24px);
+ box-sizing:border-box;
+ background:rgba(8,10,13,.76);
+ backdrop-filter:blur(8px);
+ -webkit-backdrop-filter:blur(8px);
+}
+.mcp-menu[hidden]{display:none}
+.mcp-menu-dialog {
+ width:min(100%,580px);
+ min-width:0;
+ margin-block:auto;
+ padding:clamp(16px,2.4vw,24px);
+ box-sizing:border-box;
+ border:1px solid #354147;
+ border-radius:12px;
+ background:#161b1e;
+ box-shadow:0 24px 64px rgba(0,0,0,.64),0 0 0 1px rgba(255,255,255,.04) inset;
+}
+.mcp-card-head {
+ display:flex;
+ align-items:flex-start;
+ justify-content:space-between;
+ flex-wrap:wrap;
+ gap:8px 12px;
+ margin-bottom:16px;
+}
+.mcp-head-right {
+ display:flex;
+ align-items:center;
+ gap:8px;
+}
+.mcp-menu-dialog h2{margin:0;font-size:18px;letter-spacing:-.025em;line-height:1.2}
+.mcp-mode-pill {
+ display:inline-flex;
+ align-items:center;
+ gap:6px;
+ padding:5px 10px;
+ border:1px solid #485b35;
+ border-radius:999px;
+ background:#20291a;
+ color:#d6ef83;
+ font-size:11px;
+ font-weight:700;
+ letter-spacing:.02em;
+ white-space:nowrap;
+}
+.mcp-mode-pill::before {
+ content:'';
+ width:6px;
+ height:6px;
+ border-radius:999px;
+ background:#d6ef83;
+}
+.mcp-menu .mcp-icon-close {
+ min-width:32px;
+ min-height:32px;
+ padding:0;
+ display:grid;
+ place-items:center;
+ border-radius:7px;
+ font-size:18px;
+ line-height:1;
+ color:#aebbb6;
+ background:#1d2428;
+ border-color:#343f44;
+}
+.mcp-menu .mcp-icon-close[hidden]{display:none}
+.mcp-menu .mcp-icon-close:hover{color:#fff;background:#2a3439}
+.mcp-crew {
+ margin:5px 0 0;
+ font-size:12px;
+ line-height:1.45;
+ color:#cfdf9f;
+}
+.mcp-crew[hidden]{display:none}
+
+.mcp-shell :is(button,input,select,summary):focus-visible,.mcp-shell a:focus-visible {
  outline:2px solid #d6ef83;
  outline-offset:3px;
 }
-.mcp-menu button,.mcp-header button {
+.mcp-menu button,.mcp-header button,.mcp-multiplayer-bar button,.mcp-legacy-bar button {
  min-height:36px;
- padding:7px 12px;
- border:1px solid #414b4d;
- border-radius:5px;
- background:#22292b;
- color:#eeeee8;
+ padding:7px 13px;
+ border:1px solid #3f4a4d;
+ border-radius:6px;
+ background:#21282b;
+ color:#efeee8;
  font-size:12px;
  font-weight:600;
+ cursor:pointer;
 }
-.mcp-menu button:hover:not(:disabled),.mcp-header button:hover{background:#303a3b}
-.mcp-menu button:disabled{opacity:.5;cursor:default}
-.mcp-menu .mcp-primary,.mcp-menu #start-race{border-color:#c9e785;background:#d6ef83;color:#1b2310}
-.mcp-menu .mcp-primary:hover:not(:disabled),.mcp-menu #start-race:hover:not(:disabled){background:#e0f5a2}
+.mcp-menu button:hover:not(:disabled),.mcp-header button:hover,.mcp-multiplayer-bar button:hover,.mcp-legacy-bar button:hover{background:#2d373a}
+.mcp-menu button:disabled,.mcp-legacy-bar button:disabled{opacity:.5;cursor:default}
+.mcp-menu .mcp-primary{border-color:#c9e785;background:#d6ef83;color:#17200d}
+.mcp-menu .mcp-primary:hover:not(:disabled){background:#e2f6a6}
 .mcp-menu .mcp-danger{margin-left:auto;border-color:#6c4647;color:#ffc5ba}
-.mcp-settings,.mcp-modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.mcp-modes{min-width:0;margin:0 0 13px;padding:0;border:0}
-.mcp-modes legend,.mcp-settings label,.mcp-invite-form label,.mcp-checkbox{font-size:12px;font-weight:600;color:#d6ddd8}
-.mcp-modes legend{margin-bottom:7px;padding:0}
-.mcp-modes label{
+
+/* Radio option groups */
+#mcp-setup {
+ display:grid;
+ gap:14px;
+}
+.mcp-choice-grid {
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:8px;
+ min-width:0;
+ margin:0;
+ padding:0;
+ border:0;
+}
+.mcp-choice-grid legend {
+ margin-bottom:7px;
+ padding:0;
+ font-size:11px;
+ font-weight:700;
+ letter-spacing:.06em;
+ text-transform:uppercase;
+ color:#98a8a3;
+}
+.mcp-choice {
  position:relative;
  display:grid;
  align-content:start;
  row-gap:3px;
- padding:9px 9px 9px 27px;
- border:1px solid #363f42;
- border-radius:6px;
- background:#161b1e;
+ padding:11px 12px 11px 32px;
+ border:1px solid #313a3d;
+ border-radius:8px;
+ background:#121719;
  cursor:pointer;
+ transition:border-color .14s ease,background-color .14s ease;
 }
-.mcp-modes label:has(:checked){border-color:#b2ca70;background:#242b20}
-.mcp-modes label:has(:focus-visible){outline:2px solid #d6ef83;outline-offset:2px}
-.mcp-modes input{position:absolute;inset:10px auto auto 9px;margin:0;accent-color:#b5d779}
-.mcp-modes strong{font-size:12px;line-height:1.3}
-.mcp-modes small{font-size:11px;line-height:1.4;color:#aebbb6}
-.mcp-settings>div{display:grid;min-width:0;gap:5px}
-.mcp-invite-form label{display:block}
-.mcp-menu :is(select,input:not([type=radio]):not([type=checkbox])){
+.mcp-choice[hidden]{display:none}
+.mcp-choice:hover{border-color:#49565a;background:#181e21}
+.mcp-choice:has(:checked){border-color:#b2ca70;background:#21281d}
+.mcp-choice:has(:focus-visible){outline:2px solid #d6ef83;outline-offset:2px}
+.mcp-choice input{position:absolute;inset:12px auto auto 11px;margin:0;accent-color:#b5d779}
+.mcp-choice strong{font-size:13px;line-height:1.25;color:#f2f1eb}
+.mcp-choice small{font-size:11px;line-height:1.38;color:#9eb0aa}
+
+/* Multiplayer add-on toggle */
+.mcp-addon-toggle {
+ display:flex;
+ align-items:flex-start;
+ gap:11px;
+ padding:12px 13px;
+ border:1px solid #2e3b3f;
+ border-radius:8px;
+ background:#12181c;
+ cursor:pointer;
+ transition:border-color .14s ease,background-color .14s ease;
+}
+.mcp-addon-toggle:hover{border-color:#3f565b}
+.mcp-addon-toggle:has(:checked){border-color:#2be4cb;background:#122427}
+.mcp-addon-toggle input {
+ width:16px;
+ height:16px;
+ margin:2px 0 0;
+ flex:none;
+ accent-color:#2be4cb;
+}
+.mcp-addon-copy {
+ display:grid;
+ row-gap:3px;
+ min-width:0;
+}
+.mcp-addon-copy strong {
+ display:inline-flex;
+ align-items:center;
+ flex-wrap:wrap;
+ gap:7px;
+ font-size:13px;
+ color:#eef5f3;
+}
+.mcp-addon-tag {
+ font-style:normal;
+ font-size:10px;
+ font-weight:700;
+ letter-spacing:.05em;
+ text-transform:uppercase;
+ padding:2px 6px;
+ border-radius:4px;
+ background:rgba(43,228,203,.15);
+ color:#7ff4e3;
+ border:1px solid rgba(43,228,203,.32);
+}
+.mcp-addon-copy small {
+ font-size:11px;
+ line-height:1.4;
+ color:#9cb2b0;
+}
+
+/* Single Accept CTA */
+.mcp-setup-actions {
+ display:flex;
+ align-items:center;
+ margin-top:2px;
+}
+.mcp-accept {
+ width:100%;
+ min-height:42px;
+ font-size:14px;
+ font-weight:700;
+ letter-spacing:.01em;
+}
+
+/* Join Team B collapsible drawer */
+.mcp-join-panel {
+ margin-top:14px;
+ padding-top:12px;
+ border-top:1px solid #2a3236;
+}
+.mcp-join-panel summary {
+ font-size:12px;
+ font-weight:600;
+ color:#b9c7c3;
+ cursor:pointer;
+ list-style:none;
+ display:flex;
+ align-items:center;
+ gap:6px;
+}
+.mcp-join-panel summary::-webkit-details-marker{display:none}
+.mcp-join-panel summary::before {
+ content:'▸';
+ color:#8da09b;
+ transition:transform .14s ease;
+}
+.mcp-join-panel[open] summary::before{transform:rotate(90deg)}
+.mcp-join-panel .mcp-invite-form{margin-top:10px}
+
+.mcp-invite-form label{display:block;margin-bottom:5px;font-size:12px;font-weight:600;color:#d6ddd8}
+.mcp-menu input:not([type=radio]):not([type=checkbox]),
+.mcp-multiplayer-bar input,
+.mcp-legacy-bar input {
  width:100%;
  min-width:0;
  min-height:36px;
  padding:7px 9px;
- border:1px solid #3f494a;
- border-radius:5px;
- background:#121719;
+ border:1px solid #3c474a;
+ border-radius:6px;
+ background:#111618;
  color:#efeee8;
  font:12px 'Space Grotesk',sans-serif;
+ box-sizing:border-box;
 }
-.mcp-menu input[readonly]{font-family:'Space Mono',monospace;font-size:10px;color:#cbd3d1}
-.mcp-menu input::placeholder{color:#98a6a6}
-.mcp-checkbox{display:flex;gap:7px;align-items:center;margin-top:10px;font-weight:400}
-.mcp-checkbox input{accent-color:#b5d779;margin:0}
-.mcp-setup-actions,.mcp-pairing{margin-top:13px}
-.mcp-pairing{padding-top:10px;border-top:1px solid #30373a;color:#cfdf9f;font-size:12px}
-#mcp-pair-status{flex:1 0 100%}
-.mcp-invite-form+.mcp-invite-form{margin-top:12px}
-.mcp-invite-form>label{margin-bottom:5px}
+.mcp-menu input[readonly],.mcp-multiplayer-bar input[readonly],.mcp-legacy-bar input[readonly]{font-family:'Space Mono',monospace;font-size:10px;color:#cbd3d1}
+.mcp-menu input::placeholder{color:#8fa0a0}
 .mcp-field-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch}
 .mcp-field-actions input{flex:1 1 160px}
 .mcp-field-actions button{flex:none}
 .mcp-invite-form a{display:inline-block;margin-top:7px;color:#d6ef83;font-size:12px}
+
+/* Legacy bar (hidden for default ChatGPT strategy mode) */
+.mcp-legacy-bar {
+ width:min(calc(100% - 2 * clamp(14px,3.1vw,36px)),1144px);
+ margin:0 auto 10px;
+ padding:10px 14px;
+ box-sizing:border-box;
+ border:1px solid #2e363a;
+ border-radius:8px;
+ background:#171c1f;
+ display:flex;
+ flex-wrap:wrap;
+ align-items:center;
+ gap:10px;
+}
+.mcp-legacy-bar[hidden]{display:none}
+.mcp-legacy-bar .mcp-invite-form{flex:1 1 260px}
+
+.mcp-menu-actions {
+ display:flex;
+ flex-wrap:wrap;
+ gap:8px;
+ align-items:center;
+ margin-top:14px;
+ padding-top:12px;
+ border-top:1px solid #2a3236;
+}
 #mcp-join-error{margin:8px 0 0;color:#ffbfaa;font-size:12px}
 #mcp-join-error:empty{display:none}
+
 [data-mcp-app=true] #app{display:flow-root;background:#101214;color:#efeee8;color-scheme:dark}
 [data-mcp-app=true] .topbar,[data-mcp-app=true] .feed-actions .matchup-label{display:none}
 [data-mcp-app=true] main{padding-top:9px}
 [data-mcp-app=true] .race-heading{margin-bottom:15px}
 [data-mcp-hidden=true] canvas{visibility:hidden}
-@media(max-width:650px){.mcp-menu-grid{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:370px){.mcp-modes,.mcp-settings{grid-template-columns:minmax(0,1fr)}}
+
+@media(max-width:680px){
+ .mcp-multiplayer-bar{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:440px){
+ .mcp-choice-grid{grid-template-columns:minmax(0,1fr)}
+}

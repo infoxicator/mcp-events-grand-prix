@@ -107,17 +107,18 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
     get:id=>get(env,origin,id),
     liveAvailable:livePairingAvailable(env),
     liveOptions:{provider:liveAvailable(env),chatgpt:liveAvailable(env,'jev-vs-jev','chatgpt'),luna:liveAvailable(env,'jev-vs-luna')},
-    startChatPractice:async (circuit,laps)=>{
+    startChatPractice:async (circuit,laps,driver='autopilot')=>{
      if(!(await allowMcpCreate()).success)throw new Error('Room creation limit');
      const room=crypto.randomUUID();
      expiredRooms.delete(room);
      const lapQuery=laps!==undefined?`&laps=${laps}`:'';
-     const started=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice?room=${room}&circuit=${circuit}${lapQuery}`,{method:'POST'}));
+     const driverQuery=`&driver=${driver}`;
+     const started=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice?room=${room}&circuit=${circuit}${lapQuery}${driverQuery}`,{method:'POST'}));
      if(!started.ok)throw new Error('Unable to create a ChatGPT strategy race');
      return started.json<StrategySeatAccess>();
     },
-    joinChatPractice:async({room,key})=>{
-     const joined=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-seat`,{method:'POST',body:JSON.stringify({key})}));
+    joinChatPractice:async({room,key},driver='autopilot')=>{
+     const joined=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-seat`,{method:'POST',body:JSON.stringify({key,driver})}));
      return joined.ok?joined.json<StrategySeatAccess&{circuit:CircuitId}>():null;
     },
     stopChatPractice:async(room,key)=>{
@@ -257,6 +258,10 @@ export class GameRoom extends DurableObject<Env> {
     this.strategySeats=saved.live.strategySeats??(saved.live.subscriptionKey?{
      a:{key:newLiveKey(),subscriptionKey:saved.live.subscriptionKey,webhook:saved.live.webhook},
     }:{});
+    room.strategyDriverKeys={
+     ...(this.strategySeats.a?{a:this.strategySeats.a.key}:{}),
+     ...(this.strategySeats.b?{b:this.strategySeats.b.key}:{}),
+    };
     room.guestChatStrategy=state.guestChatStrategy;
     room.players=state.players;
     room.mode=state.mode;
@@ -484,10 +489,13 @@ export class GameRoom extends DurableObject<Env> {
   // This path never reads provider bindings or installs paid transports.
   const lapsParam=Number(url.searchParams.get('laps'));
   const laps=Number.isFinite(lapsParam)&&lapsParam>=3&&lapsParam<=CHAT_STRATEGY_MAX_LAPS?Math.round(lapsParam):CHAT_STRATEGY_LAPS;
-  const room=this.room=new RaceRoom(id,url.origin,{JEV_MOCK:'1'},1,'jev-vs-jev',{},circuit,true,laps);
+  const driver=url.searchParams.get('driver')==='human'?'human':'autopilot';
+  const room=this.room=new RaceRoom(id,url.origin,{JEV_MOCK:'1'},1,'jev-vs-jev',{},circuit,true,laps,driver==='human');
   room.strategyPractice=true;
+  room.driverMode={a:driver,b:'autopilot'};
   this.guestInviteKey=newLiveKey();
   this.strategySeats.a=this.newStrategySeat();
+  room.strategyDriverKeys={a:this.strategySeats.a.key};
   this.activateStrategySeat('a',this.strategySeats.a);
   return this.prepareLiveRace(room);
  }
@@ -498,7 +506,13 @@ export class GameRoom extends DurableObject<Env> {
 
  private strategySeatAccess(team:Team){
   const seat=this.strategySeats[team]!;
-  return {strategyKey:seat.key,subscriptionKey:seat.subscriptionKey,...(team==='a'?{guestInviteKey:this.guestInviteKey}:{})};
+  return {
+   strategyKey:seat.key,
+   subscriptionKey:seat.subscriptionKey,
+   laps:this.room!.race.laps,
+   driver:this.room!.driverMode[team]==='human'?'human':'autopilot',
+   ...(team==='a'?{guestInviteKey:this.guestInviteKey}:{}),
+  };
  }
 
  private setWebhookStatus(team:Team,status:RaceState['strategyWebhook']){
@@ -646,13 +660,17 @@ export class GameRoom extends DurableObject<Env> {
   if(!current||current.expiresAt<=Date.now())return json({error:'Race expired'},404);
   if(current.live){
    if(path==='/internal-chat-seat'&&req.method==='POST'){
-    const {key}=await req.json() as {key:unknown};
+    const {key,driver}=await req.json() as {key:unknown;driver?:unknown};
     if(!current.strategyPractice||current.live!=='running'||!this.guestInviteKey||key!==this.guestInviteKey)return json({error:'Invalid strategy invitation'},403);
     const seat=this.strategySeats.b;
     if(!seat?.subscriptionKey){
      if(current.strategyFor('b')||seat?.webhookVerification)return json({error:'Mercedes already uses a different connection'},409);
      this.strategySeats.b=this.newStrategySeat();
     }
+    const nextDriver=driver==='human'?'human':'autopilot';
+    current.driverMode.b=nextDriver;
+    current.strategyDriverKeys={...current.strategyDriverKeys,b:this.strategySeats.b!.key};
+    await this.save();
     return json({...this.controls(),...this.strategySeatAccess('b'),circuit:current.race.circuit});
    }
    if(path==='/internal-strategy-event'&&req.method==='POST'){
@@ -714,7 +732,8 @@ export class GameRoom extends DurableObject<Env> {
   if(!peer||!room||typeof raw!=='string'||raw.length>4096){ws.close(1008,'Invalid payload');return;}
   try{
    const message=JSON.parse(raw) as ClientMessage;
-   if(room.live&&!peer.joined&&(message.type!=='join'||message.token!==room.viewerKey)){
+   const validStrategyDriver=room.strategyPractice&&message.type==='join'&&(message.team==='a'||message.team==='b')&&message.token===this.strategySeats[message.team]?.key;
+   if(room.live&&!peer.joined&&(message.type!=='join'||(message.token!==room.viewerKey&&!validStrategyDriver))){
     ws.close(1008,'Invalid live invitation');return;
    }
    if(room.live&&message.type==='start'){
@@ -734,7 +753,7 @@ export class GameRoom extends DurableObject<Env> {
    }
    await room.message(peer,message);
    if(message.type==='join')ws.serializeAttachment({team:peer.team,role:peer.role,owner:peer.owner,joined:peer.joined});
-   if(!room.live&&(message.type==='circuit'||message.type==='matchup'||message.type==='reset'||message.type==='start'||message.type==='driver-mode'||message.type==='engineer-mode'))await this.save();
+   if((!room.live&&(message.type==='circuit'||message.type==='matchup'||message.type==='reset'||message.type==='start'||message.type==='driver-mode'||message.type==='engineer-mode'))||(room.strategyPractice&&message.type==='driver-mode'))await this.save();
    this.activate();
   }catch{ws.send(JSON.stringify({type:'error',message:'Invalid request'}));}
  }

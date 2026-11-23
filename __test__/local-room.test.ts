@@ -69,8 +69,8 @@ describe('local browser physics & single-WS watch optimizations', () => {
   expect(fetchSpy).not.toHaveBeenCalled();
  });
 
- it('scales ChatGPT strategy defaults to 10 laps / 25 min and supports up to 20 laps', () => {
-  expect(CHAT_STRATEGY_LAPS).toBe(10);
+ it('scales ChatGPT strategy defaults to 5 laps / 25 min and supports up to 20 laps', () => {
+  expect(CHAT_STRATEGY_LAPS).toBe(5);
   expect(CHAT_STRATEGY_MAX_LAPS).toBe(20);
   expect(CHAT_STRATEGY_TIME_MS).toBe(25 * 60_000);
   expect(strategyTimeBudgetMs(3)).toBe(25 * 60_000);

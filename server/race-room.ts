@@ -22,6 +22,7 @@ export class RaceRoom {
  live?:LivePhase;
  strategyPractice?:boolean;
  viewerKey?:string;
+ strategyDriverKeys?:Partial<Record<Team,string>>;
  chatStrategy?:RaceState['chatStrategy'];
  guestChatStrategy?:RaceState['chatStrategy'];
  latestChatRadio?:RaceState['latestChatRadio'];
@@ -65,8 +66,14 @@ export class RaceRoom {
  add(send:Peer['send']):Peer{const p:Peer={send,team:null,owner:false,joined:false,lastSeen:Date.now(),lastDecision:0,sequence:0,accepted:0,busy:false};this.peers.add(p);return p;}
  remove(p:Peer){if(this.audible===p)this.audible=null;this.peers.delete(p);this.broadcast();}
  join(p:Peer,team:Team|null,token:string,role?:PeerRole){if(p.joined)return;
-  if(this.live&&(!this.viewerKey||token!==this.viewerKey)){p.send({type:'error',message:'Invalid live invitation'});return;}
-  p.joined=true;if(this.live){p.send({type:'joined',team:null,canReset:false});p.send(this.state());return;}
+  if(this.live){
+   const driverSeat=this.strategyPractice&&team&&this.strategyDriverKeys?.[team]&&token===this.strategyDriverKeys[team]?team:null;
+   if(!driverSeat&&(!this.viewerKey||token!==this.viewerKey)){p.send({type:'error',message:'Invalid live invitation'});return;}
+   p.joined=true;
+   if(driverSeat){p.team=driverSeat;p.role='driver';p.send({type:'joined',team:driverSeat,role:'driver',canReset:false});p.send(this.state());return;}
+   p.send({type:'joined',team:null,canReset:false});p.send(this.state());return;
+  }
+  p.joined=true;
   p.owner=token===this.tokens.owner;
   if(role==='engineer'){
    const allowed=Boolean(team&&(token===this.tokens[team]||p.owner));
@@ -481,7 +488,42 @@ export class RaceRoom {
    }
    return;
   }
-  if(this.live)return;
+  if(this.live){
+   if(this.strategyPractice&&this.live==='running'){
+    if(msg.type==='start'&&msg.startKey&&msg.startKey===this.strategyDriverKeys?.a&&this.strategyWebhook==='connected'){
+     this.start();
+     return;
+    }
+    if(msg.type==='driver-mode'&&p.team&&p.role==='driver'&&(msg.mode==='human'||msg.mode==='autopilot')&&this.driverMode[p.team]!==msg.mode){
+     this.driverMode[p.team]=msg.mode;
+     if(msg.mode!=='human')delete this.humanInputs[p.team];
+     if(this.race.phase==='racing'){
+      event(this.race,'radio',p.team,msg.mode==='human'?'MANUAL CONTROL · YOU ARE DRIVING':'AUTOPILOT ENGAGED');
+     }
+     this.broadcast();
+     return;
+    }
+    if(msg.type==='control'&&p.team&&p.role==='driver'&&this.driverMode[p.team]==='human'){
+     const inp=msg.input;
+     if(inp&&typeof inp.throttle==='number'&&typeof inp.brake==='number'&&typeof inp.steer==='number'){
+      this.humanInputs[p.team]={input:{
+       throttle:Number.isFinite(inp.throttle)?inp.throttle:0,
+       brake:Number.isFinite(inp.brake)?inp.brake:0,
+       steer:Number.isFinite(inp.steer)?inp.steer:0,
+       ersOvertake:Boolean(inp.ersOvertake),
+       ersMode:inp.ersMode==='deploy'||inp.ersMode==='balanced'||inp.ersMode==='harvest'?inp.ersMode:undefined,
+       drs:typeof inp.drs==='boolean'?inp.drs:undefined,
+       brakeBias:typeof inp.brakeBias==='number'&&Number.isFinite(inp.brakeBias)?inp.brakeBias:undefined,
+       gear:typeof inp.gear==='number'&&Number.isFinite(inp.gear)?inp.gear:undefined,
+       tc:inp.tc==='off'||inp.tc==='medium'||inp.tc==='full'?inp.tc:undefined,
+       abs:typeof inp.abs==='boolean'?inp.abs:undefined,
+       pitAssist:typeof inp.pitAssist==='boolean'?inp.pitAssist:undefined,
+      },at:Date.now()};
+     }
+    }
+   }
+   return;
+  }
   if(msg.type==='start'&&(p.owner||p.team)){this.start();return;}
   if(msg.type==='matchup'&&p.owner&&!this.solo){if(!isMatchup(msg.matchup)){p.send({type:'error',message:'Invalid matchup'});return;}const roster=driverRoster(this.env,msg.matchup);if(msg.matchup==='jev-vs-luna')this.lunaDriver??=createLunaDriver(lunaConfig(this.env));this.players=roster.players;this.mode=roster.mode;this.matchup=msg.matchup;this.driverStats={a:{attempts:0,successes:0,fallbacks:0},b:{attempts:0,successes:0,fallbacks:0}};this.reset();return;}
   if(msg.type==='circuit'&&p.owner){if(!isCircuit(msg.circuit)){p.send({type:'error',message:'Invalid circuit'});return;}this.race.circuit=msg.circuit;this.reset();return;}
