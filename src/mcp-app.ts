@@ -17,6 +17,7 @@ type Result=Parameters<NonNullable<App['ontoolresult']>>[0];
 const app=new App({name:'MCP Grand Prix',version:'1.0.0'});
 const element=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id)! as T;
 const status=element('mcp-status'),menu=element('mcp-menu'),menuToggle=element<HTMLButtonElement>('mcp-menu-toggle'),
+ headerStopButton=element<HTMLButtonElement>('mcp-stop-header'),
  menuClose=element<HTMLButtonElement>('mcp-menu-close'),
  crew=element('mcp-crew'),modePill=element('mcp-mode-pill'),
  setup=element<HTMLFormElement>('mcp-setup'),acceptButton=element<HTMLButtonElement>('mcp-accept'),
@@ -26,6 +27,7 @@ const status=element('mcp-status'),menu=element('mcp-menu'),menuToggle=element<H
  guestInvite=element<HTMLInputElement>('mcp-guest-invite'),guestCopy=element<HTMLButtonElement>('mcp-guest-copy'),
  joinPanel=element<HTMLDetailsElement>('mcp-join-panel'),
  joinForm=element<HTMLFormElement>('mcp-join-form'),joinField=element<HTMLInputElement>('mcp-join'),
+ joinSubmit=joinForm.querySelector<HTMLButtonElement>('button')!,
  legacyBar=element('mcp-legacy-bar'),play=element<HTMLButtonElement>('mcp-play'),
  field=element<HTMLInputElement>('mcp-invite'),copy=element('mcp-copy'),joinWeb=element<HTMLAnchorElement>('mcp-join-web'),
  backToFeed=element('mcp-back-feed'),web=element<HTMLButtonElement>('mcp-web'),
@@ -36,7 +38,8 @@ let view:MountedView|null=null,mode:'inline'|'fullscreen'='inline';
 let live:LiveInvitation|null=null,knownLive:LivePhase='running',origin='';
 let strategyPractice=false,practiceKey:string|undefined,strategySeat:Team|undefined;
 let strategyDriver:StrategyDriver='autopilot',multiplayerActive=false,pendingAutoStart=false;
-let telemetry=false,setupBusy=false,hasActiveRace=false,menuAutoCollapsed=false;
+let expectedLobby:{circuit:CircuitId;laps:number;driver:StrategyDriver}|null=null;
+let telemetry=false,setupBusy=false,stopBusy=false,joinBusy=false,hasActiveRace=false,menuAutoCollapsed=false;
 let mountSequence=0;
 document.documentElement.dataset.mcpApp='true';
 
@@ -46,6 +49,12 @@ const selectedLaps=()=>{
  return value===10?10:CHAT_STRATEGY_LAPS;
 };
 const selectedDriver=():StrategyDriver=>setup.querySelector<HTMLInputElement>('[name="driver"]:checked')?.value==='human'?'human':'autopilot';
+
+function isRaceStarted(){
+ const phase=view?.connection.state?.race.phase;
+ if(phase!=='lights'&&phase!=='racing')return false;
+ return !live||knownLive==='running';
+}
 
 function setRadio(name:string,value:string){
  const input=setup.querySelector<HTMLInputElement>(`[name="${name}"][value="${value}"]`);
@@ -57,14 +66,35 @@ function setMenuOpen(open:boolean){
  menuToggle.setAttribute('aria-expanded',String(open));
  backToFeed.hidden=!hasActiveRace||!open;
  menuClose.hidden=!hasActiveRace;
+ refreshSetup();
 }
 
 function refreshSetup(){
- const locked=!origin||setupBusy;
+ const running=isRaceStarted();
+ const locked=!origin||setupBusy||running;
  for(const group of setup.querySelectorAll<HTMLFieldSetElement>('fieldset'))group.disabled=locked;
  multiplayerToggle.disabled=locked;
  acceptButton.disabled=locked;
- acceptButton.textContent=setupBusy?'Starting…':'Accept';
+ const acceptLabel=setupBusy?'Starting…':'Accept';
+ if(acceptButton.textContent!==acceptLabel)acceptButton.textContent=acceptLabel;
+ joinField.disabled=running||joinBusy;
+ joinSubmit.disabled=running||joinBusy;
+
+ const canStopStrategy=Boolean(live&&strategyPractice&&practiceKey&&strategySeat!=='b'&&knownLive==='running');
+ const canStopOwner=Boolean(live&&!strategyPractice&&knownLive==='running');
+ const canResetLegacy=Boolean(!live&&hosted&&(controllers.some(c=>c.canReset)||view?.connection.canReset));
+ const showStop=running&&(canStopStrategy||canStopOwner||canResetLegacy);
+ const showOwnerEnded=Boolean(live&&!strategyPractice&&knownLive!=='running');
+ const stopLabel=stopBusy?'Stopping…':canStopOwner?'Stop live race ↗':'Stop race';
+
+ ownerControl.hidden=!showStop&&!showOwnerEnded;
+ ownerControl.disabled=stopBusy;
+ const modalStopLabel=showStop?stopLabel:'Owner page ↗';
+ if(ownerControl.textContent!==modalStopLabel)ownerControl.textContent=modalStopLabel;
+
+ headerStopButton.hidden=!showStop||!menu.hidden;
+ headerStopButton.disabled=stopBusy;
+ if(headerStopButton.textContent!==stopLabel)headerStopButton.textContent=stopLabel;
 }
 
 function syncFormFromStructuredContent(data:unknown){
@@ -105,9 +135,16 @@ function updateStatus(){
    setMenuOpen(false);
   }
   if(pendingAutoStart&&live&&strategyPractice&&practiceKey&&strategySeat==='a'&&race.phase==='lobby'&&snapshot.connected.a&&snapshot.connected.b&&snapshot.strategyWebhook==='connected'){
+   const configSynced=!expectedLobby||(
+    race.circuit===expectedLobby.circuit&&
+    race.laps===expectedLobby.laps&&
+    (snapshot.driverMode?.a??'autopilot')===expectedLobby.driver&&
+    (strategyDriver==='human'||document.body.dataset.circuit===expectedLobby.circuit)
+   );
    const feedView=document.getElementById('viewport')?.getAttribute('data-feed-view');
-   if(strategyDriver==='human'||feedView!=='loading'){
+   if(configSynced&&(strategyDriver==='human'||feedView!=='loading')){
     pendingAutoStart=false;
+    expectedLobby=null;
     connection?.send({type:'start',startKey:practiceKey});
    }
   }
@@ -141,8 +178,6 @@ function updateStatus(){
   else if(connection?.status==='INVALID LIVE INVITATION')message='Invitation is invalid or expired';
   else if(!snapshot)message+=' · Connecting…';
   updateMultiplayerBar(snapshot);
-  ownerControl.hidden=strategyPractice&&(!practiceKey||strategySeat==='b'||knownLive!=='running');
-  ownerControl.textContent=strategyPractice?'Stop race':knownLive==='running'?'Stop live race ↗':'Owner page ↗';
  }else if(hosted){
   const label=player==='both'?'Both teams':player==='spectator'?'Spectator':`Team ${player.toUpperCase()}`;
   const remote=player==='a'?'B':'A';
@@ -160,6 +195,7 @@ function updateStatus(){
   multiplayerBar.hidden=true;
  }
  if((view||hosted)&&status.textContent!==message)status.textContent=message;
+ refreshSetup();
 }
 
 function stopControllers(){
@@ -216,20 +252,31 @@ function setLegacyInvitation(invite:string,label:string,button:string){
 }
 
 async function showLive(invite:LiveInvitation,phase:LivePhase='running',strategyKey?:string,settings?:{
- practice:boolean;seat?:Team;guestInvitation?:string;driver?:StrategyDriver;multiplayer?:boolean;collapseMenu?:boolean;autoStart?:boolean;
+ practice:boolean;seat?:Team;guestInvitation?:string;circuit?:CircuitId;laps?:number;driver?:StrategyDriver;multiplayer?:boolean;collapseMenu?:boolean;autoStart?:boolean;
 }){
  if(!isRoomId(invite.room)||!isLiveKey(invite.key))throw new Error('Invalid race invitation');
+ const nextPractice=settings?.practice===true;
+ const nextSeat=settings?.seat;
+ const nextDriver:StrategyDriver=settings?.driver==='human'?'human':'autopilot';
+ const nextKey=nextPractice?strategyKey:undefined;
+ const nextDriveView=Boolean(nextPractice&&nextDriver==='human'&&nextSeat&&strategyKey);
+ const prevDriveView=Boolean(strategyPractice&&strategyDriver==='human'&&strategySeat&&practiceKey);
+ const reuseView=Boolean(view&&live&&live.room===invite.room&&live.key===invite.key&&
+  strategyPractice===nextPractice&&strategySeat===nextSeat&&practiceKey===nextKey&&nextDriveView===prevDriveView);
  const seq=++mountSequence;
  stopControllers();
- clearRaceView();
+ if(!reuseView)clearRaceView();
  live=invite;
  knownLive=phase;
- strategyPractice=settings?.practice===true;
- strategySeat=settings?.seat;
- practiceKey=strategyPractice?strategyKey:undefined;
- strategyDriver=settings?.driver==='human'?'human':'autopilot';
+ strategyPractice=nextPractice;
+ strategySeat=nextSeat;
+ practiceKey=nextKey;
+ strategyDriver=nextDriver;
  multiplayerActive=Boolean(settings?.multiplayer&&settings?.guestInvitation);
  pendingAutoStart=Boolean(settings?.autoStart&&strategyPractice&&strategyKey&&strategySeat==='a'&&!multiplayerActive);
+ expectedLobby=pendingAutoStart&&settings?.circuit&&settings?.laps
+  ?{circuit:settings.circuit,laps:settings.laps,driver:nextDriver}
+  :null;
  guestInvite.value=settings?.guestInvitation??'';
  guestCopy.textContent='Copy Team B invite';
  player='spectator';
@@ -244,18 +291,20 @@ async function showLive(invite:LiveInvitation,phase:LivePhase='running',strategy
  web.textContent='Open spectator ↗';
  hosted={room:invite.room,token:invite.key,links:null,origin,live:true};
 
- const canStart=()=>Boolean(strategyKey&&strategySeat==='a');
- const startReady=(state:{strategyWebhook?:string})=>state.strategyWebhook==='connected';
- const onStart=()=>view?.connection.send({type:'start',startKey:strategyKey});
+ if(!reuseView){
+  const canStart=()=>Boolean(strategyKey&&strategySeat==='a');
+  const startReady=(state:{strategyWebhook?:string})=>state.strategyWebhook==='connected';
+  const onStart=()=>view?.connection.send({type:'start',startKey:strategyKey});
 
- if(strategyPractice&&strategyDriver==='human'&&strategySeat&&strategyKey){
-  const {mountDrive}=await import('./race/drive-view');
-  if(disposed||seq!==mountSequence)return;
-  const driverRoom:HostedRoom={room:invite.room,token:strategyKey,links:null,origin,live:true};
-  view=mountDrive(driverRoom,{team:strategySeat,embedded:true,canStart,startReady,onStart,autostart:pendingAutoStart});
- }else{
-  if(disposed||seq!==mountSequence)return;
-  view=mountRace(hosted,{team:null,controller:false,openLink,telemetry,strategySeat,canStart,startReady,onStart});
+  if(nextDriveView&&strategySeat&&strategyKey){
+   const {mountDrive}=await import('./race/drive-view');
+   if(disposed||seq!==mountSequence)return;
+   const driverRoom:HostedRoom={room:invite.room,token:strategyKey,links:null,origin,live:true};
+   view=mountDrive(driverRoom,{team:strategySeat,embedded:true,canStart,startReady,onStart,autostart:pendingAutoStart});
+  }else{
+   if(disposed||seq!==mountSequence)return;
+   view=mountRace(hosted,{team:null,controller:false,openLink,telemetry,strategySeat,canStart,startReady,onStart});
+  }
  }
  setMenuOpen(!settings?.collapseMenu);
  refreshSetup();
@@ -292,13 +341,17 @@ async function applyResult(result:Result,options:{collapseMenu?:boolean;autoStar
  if(liveInvite){
   origin=raceOrigin(String(result._meta?.origin));
   const meta=result._meta!;
-  const structured=result.structuredContent as {driver?:unknown;multiplayer?:unknown}|undefined;
+  const structured=result.structuredContent as {circuit?:unknown;laps?:unknown;driver?:unknown;multiplayer?:unknown}|undefined;
+  const circuit=isCircuit(structured?.circuit)?structured.circuit:undefined;
+  const laps=typeof meta.laps==='number'?meta.laps:typeof structured?.laps==='number'?structured.laps:undefined;
   const driver:StrategyDriver=(meta.driver==='human'||structured?.driver==='human')?'human':'autopilot';
   const multiplayer=Boolean(meta.multiplayer===true||structured?.multiplayer===true);
   await showLive(liveInvite,meta.phase as LivePhase|undefined,isLiveKey(meta.strategyKey)?meta.strategyKey:undefined,{
    practice:meta.strategyPractice===true,
    seat:meta.strategySeat==='a'||meta.strategySeat==='b'?meta.strategySeat:undefined,
    guestInvitation:typeof meta.guestInvitation==='string'?meta.guestInvitation:undefined,
+   circuit,
+   laps,
    driver,
    multiplayer,
    collapseMenu:options.collapseMenu,
@@ -318,6 +371,7 @@ async function applyResult(result:Result,options:{collapseMenu?:boolean;autoStar
  practiceKey=undefined;
  multiplayerActive=false;
  pendingAutoStart=false;
+ expectedLobby=null;
  guestInvite.value='';
  multiplayerBar.hidden=true;
  crew.hidden=true;
@@ -454,39 +508,70 @@ setup.onsubmit=async event=>{
  setupBusy=true;
  refreshSetup();
  try{
-  await openFromWidget('open_grand_prix_strategy',{circuit,laps,driver,multiplayer},{collapseMenu:true,autoStart:!multiplayer});
+  const snapshot=view?.connection.state;
+  const canConfigureLobby=Boolean(live&&strategyPractice&&practiceKey&&strategySeat==='a'&&knownLive==='running'&&(!snapshot||snapshot.race.phase==='lobby'));
+  let configured=false;
+  if(canConfigureLobby&&live&&practiceKey){
+   try{
+    const result=await app.callServerTool({
+     name:'configure_grand_prix_strategy',
+     arguments:{room:live.room,key:practiceKey,circuit,laps,driver,multiplayer},
+    });
+    if(!result.isError){
+     await applyResult(result,{collapseMenu:true,autoStart:!multiplayer});
+     const filter=parseEventFilter((result.structuredContent as {event_filter?:unknown}|undefined)?.event_filter);
+     if(filter)await shareEventFilter(filter);
+     configured=true;
+    }
+   }catch{/* Fall back to opening a fresh strategy lobby if the existing room is no longer configurable. */}
+  }
+  if(!configured){
+   await openFromWidget('open_grand_prix_strategy',{circuit,laps,driver,multiplayer},{collapseMenu:true,autoStart:!multiplayer});
+  }
  }catch(e){error.textContent=e instanceof Error?e.message:'Could not start race.';}
  finally{setupBusy=false;refreshSetup();}
 };
-ownerControl.onclick=async()=>{
- if(!live)return;
- if(!strategyPractice){
+async function stopActiveRace(){
+ if(stopBusy)return;
+ const error=element('mcp-join-error');
+ error.textContent='';
+ if(live&&!strategyPractice){
   void openLink(ownerRaceURL(origin,live.room));
   return;
  }
- if(!practiceKey||strategySeat==='b')return;
- const error=element('mcp-join-error');
- error.textContent='';
- ownerControl.disabled=true;
- try{
-  const result=await app.callServerTool({name:'stop_grand_prix_chat_strategy',arguments:{room:live.room,key:practiceKey}});
-  if(result.isError)throw new Error('Could not stop the race.');
- }catch{error.textContent='Could not stop the race.';}
- finally{ownerControl.disabled=false;}
-};
+ if(live&&strategyPractice){
+  if(!practiceKey||strategySeat==='b')return;
+  stopBusy=true;
+  refreshSetup();
+  try{
+   const result=await app.callServerTool({name:'stop_grand_prix_chat_strategy',arguments:{room:live.room,key:practiceKey}});
+   if(result.isError)throw new Error('Could not stop the race.');
+   knownLive='stopped';
+  }catch{error.textContent='Could not stop the race.';}
+  finally{stopBusy=false;refreshSetup();updateStatus();}
+  return;
+ }
+ if(!live&&hosted){
+  const controller=controllers.find(c=>c.canReset)??(view?.connection.canReset?view.connection:null);
+  if(controller)controller.send({type:'reset'});
+ }
+}
+ownerControl.onclick=()=>{void stopActiveRace();};
+headerStopButton.onclick=()=>{void stopActiveRace();};
 joinForm.onsubmit=async event=>{
  event.preventDefault();
+ if(joinBusy||isRaceStarted())return;
  const error=element('mcp-join-error');
  error.textContent='';
- const button=joinForm.querySelector('button')!;
- button.disabled=true;
+ joinBusy=true;
+ refreshSetup();
  try{
   const driver=selectedDriver();
   await openFromWidget('open_grand_prix',{invite:joinField.value.trim(),driver},{collapseMenu:true,autoStart:false});
   joinField.value='';
   joinPanel.open=false;
  }catch(e){error.textContent=e instanceof Error?e.message:'Unable to join race';}
- finally{button.disabled=false;}
+ finally{joinBusy=false;refreshSetup();}
 };
 
 await app.connect();

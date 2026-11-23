@@ -45,6 +45,16 @@ const gateway:RaceGateway={
   strategyRooms.set(id,{room:r,guestInviteKey,seats:{a:seatA}});
   return {room:id,key:r.viewerKey,phase:'running',strategyKey:seatA.key,subscriptionKey:seatA.subscriptionKey,guestInviteKey,laps,driver};
  },
+ configureChatPractice:async (room,key,circuit,lapsInput=CHAT_STRATEGY_LAPS,driver:StrategyDriver='autopilot')=>{
+  const entry=strategyRooms.get(room);
+  if(!entry||entry.room.expiresAt<=Date.now()||entry.room.live!=='running'||entry.room.race.phase!=='lobby'||entry.seats.a?.key!==key)return null;
+  const laps=Number.isFinite(lapsInput)&&lapsInput>=3&&lapsInput<=CHAT_STRATEGY_MAX_LAPS?Math.round(lapsInput):CHAT_STRATEGY_LAPS;
+  const r=entry.room;
+  if(!r.configureStrategyLobby(circuit,laps,driver))return null;
+  r.expiresAt=Math.max(r.expiresAt,Date.now()+strategyTimeBudgetMs(laps));
+  const seatA=entry.seats.a;
+  return {room:r.id,key:r.viewerKey!,phase:'running',strategyKey:seatA.key,subscriptionKey:seatA.subscriptionKey,guestInviteKey:entry.guestInviteKey,circuit:r.race.circuit,laps:r.race.laps,driver};
+ },
  joinChatPractice:async (invite,driver:StrategyDriver='autopilot')=>{
   const entry=strategyRooms.get(invite.room);
   if(!entry||entry.room.expiresAt<=Date.now()||entry.room.live!=='running'||entry.guestInviteKey!==invite.key)return null;
@@ -63,9 +73,9 @@ const gateway:RaceGateway={
   entry.room.finishLive('stopped');
   return true;
  },
- strategyEvent:async (room,eventId)=>{
+ strategyEvent:async (room,eventId,team)=>{
   const r=rooms.get(room);
-  return r&&r.live&&r.expiresAt>Date.now()?r.readStrategyEvent(eventId)??null:null;
+  return r&&r.live&&r.expiresAt>Date.now()?r.readLiveStrategyEvent(eventId,team)??null:null;
  },
  submitStrategy:async input=>{
   const r=rooms.get(input.room);
@@ -128,6 +138,6 @@ server.on('upgrade',(req,socket,head)=>{const u=new URL(req.url??'/',origin),mat
  const heartbeat=setInterval(()=>{if(Date.now()>r.expiresAt){ws.close(ROOM_EXPIRED_CLOSE_CODE,'Room expired');}else if(Date.now()-p.lastSeen>35000){ws.close(1000,'Heartbeat lost');}},2000);ws.on('close',()=>clearInterval(heartbeat));
  });});
 let previous=performance.now(),accumulator=0,realAccumulator=0,lastBroadcast=0;
-const timer=setInterval(()=>{const now=performance.now();const dt=Math.min((now-previous)/1000,.25);accumulator+=dt*speed;realAccumulator+=dt;const realSteps=Math.floor(realAccumulator*120);realAccumulator-=realSteps/120;previous=now;const steps=Math.min(120,Math.floor(accumulator*120));accumulator-=steps/120;for(const [id,r] of rooms){if(Date.now()>r.expiresAt){for(const p of r.peers)p.send({type:'error',message:'Room expired'});rooms.delete(id);strategyRooms.delete(id);continue;}r.advance(r.speed===speed?steps:realSteps);}if(now-lastBroadcast>=1000/30){lastBroadcast=now;for(const r of rooms.values())if(r.peers.size)r.broadcast();}},4);
+const timer=setInterval(()=>{const now=performance.now();const dt=Math.min((now-previous)/1000,.25);accumulator+=dt*speed;realAccumulator+=dt;const realSteps=Math.floor(realAccumulator*120);realAccumulator-=realSteps/120;previous=now;const steps=Math.min(120,Math.floor(accumulator*120));accumulator-=steps/120;for(const [id,r] of rooms){if(Date.now()>r.expiresAt){for(const p of r.peers)p.send({type:'error',message:'Room expired'});rooms.delete(id);strategyRooms.delete(id);continue;}if(!r.live||r.live==='running')r.advance(r.speed===speed?steps:realSteps);}if(now-lastBroadcast>=1000/30){lastBroadcast=now;for(const r of rooms.values())if(r.peers.size)r.broadcast();}},4);
 server.listen(port,'127.0.0.1',()=>console.log(`MCP GRAND PRIX · ${defaultRoom.race.circuit.toUpperCase()} · ${defaultRoom.matchup.toUpperCase()} · ${defaultRoom.mode.toUpperCase()} · ${speed}× race clock\n${origin}/?team=a\n${origin}/?spectate\n${origin}/?team=b\nMCP: ${origin}/mcp`));
 async function shutdown(){clearInterval(timer);for(const ws of wss.clients)ws.terminate();wss.close();server.close();await vite?.close();process.exit(0);}process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

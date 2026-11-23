@@ -1,4 +1,4 @@
-import {strategyEventDefinition,eventInput,radioInput,type StrategyEvent} from '../server/strategy-events';
+import {strategyEventDefinition,eventInput,radioInput,type LiveStrategyRead} from '../server/strategy-events';
 import {STRATEGY_EVENT,WEBHOOK_STRATEGY_RESPONSE_MS,type LiveStrategist} from '../src/race/strategy-events';
 import {postStrategyEvent,subscribeInput,unsubscribeInput,verifyStrategyWebhook,webhookId,type StrategyWebhook} from './strategy-webhook';
 import {DurableObject} from 'cloudflare:workers';
@@ -117,6 +117,12 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
      if(!started.ok)throw new Error('Unable to create a ChatGPT strategy race');
      return started.json<StrategySeatAccess>();
     },
+    configureChatPractice:async(room,key,circuit,laps,driver='autopilot')=>{
+     const configured=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice-configure`,{
+      method:'POST',body:JSON.stringify({key,circuit,laps,driver}),
+     }));
+     return configured.ok?configured.json<StrategySeatAccess&{circuit:CircuitId}>():null;
+    },
     joinChatPractice:async({room,key},driver='autopilot')=>{
      const joined=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-seat`,{method:'POST',body:JSON.stringify({key,driver})}));
      return joined.ok?joined.json<StrategySeatAccess&{circuit:CircuitId}>():null;
@@ -125,11 +131,11 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
      const stopped=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice-stop`,{method:'POST',body:key}));
      return stopped.ok;
     },
-    strategyEvent:async(room,eventId)=>{
+    strategyEvent:async(room,eventId,team)=>{
      const result=await roomStub(env,room).fetch(new Request(`${origin}/internal-strategy-event`,{
-      method:'POST',body:JSON.stringify({room,event_id:eventId}),
+      method:'POST',body:JSON.stringify({room,...(eventId?{event_id:eventId}:{}),...(team?{team}:{})}),
      }));
-     return result.ok?result.json<StrategyEvent>():null;
+     return result.ok?result.json<LiveStrategyRead>():null;
     },
     submitStrategy:async input=>{
      const result=await roomStub(env,input.room).fetch(new Request(`${origin}/internal-strategy-radio`,{
@@ -675,8 +681,8 @@ export class GameRoom extends DurableObject<Env> {
    }
    if(path==='/internal-strategy-event'&&req.method==='POST'){
     const parsed=eventInput.safeParse(await req.json());
-    const event=parsed.success&&parsed.data.room===current.id?current.readStrategyEvent(parsed.data.event_id):null;
-    return event?json(event):json({error:'This strategy event is no longer active.'},410);
+    const event=parsed.success&&parsed.data.room===current.id?current.readLiveStrategyEvent(parsed.data.event_id,parsed.data.team):null;
+    return event?json(event):json({error:'This race is no longer active.'},410);
    }
    if(path==='/internal-strategy-radio'&&req.method==='POST'){
     const parsed=radioInput.safeParse(await req.json());
@@ -686,6 +692,23 @@ export class GameRoom extends DurableObject<Env> {
     return json(result);
    }
    if(path==='/internal-watch'&&req.method==='POST'&&await req.text()===current.viewerKey)return json(current.state());
+   if(path==='/internal-chat-practice-configure'&&req.method==='POST'){
+    const {key,circuit,laps:lapsRaw,driver:driverRaw}=await req.json() as {key:unknown;circuit:unknown;laps?:unknown;driver?:unknown};
+    if(!current.strategyPractice||current.live!=='running'||current.race.phase!=='lobby'||!this.strategySeats.a||key!==this.strategySeats.a.key){
+     return json({error:'Strategy lobby unavailable'},409);
+    }
+    if(!isCircuit(circuit))return json({error:'Invalid circuit'},400);
+    const lapsParam=Number(lapsRaw);
+    const laps=Number.isFinite(lapsParam)&&lapsParam>=3&&lapsParam<=CHAT_STRATEGY_MAX_LAPS?Math.round(lapsParam):CHAT_STRATEGY_LAPS;
+    const driver=driverRaw==='human'?'human':'autopilot';
+    if(!current.configureStrategyLobby(circuit,laps,driver))return json({error:'Strategy lobby unavailable'},409);
+    const now=Date.now();
+    this.liveDeadline=Math.max(this.liveDeadline,now+strategyTimeBudgetMs(current.race.laps));
+    current.expiresAt=this.liveDeadline+FINISHED_GRACE_MS;
+    await this.ctx.storage.setAlarm(this.lobbyDeadline?Math.min(this.liveDeadline,this.lobbyDeadline):this.liveDeadline);
+    await this.save();
+    return json({...this.controls(),...this.strategySeatAccess('a'),circuit:current.race.circuit});
+   }
    if(path==='/internal-chat-practice-stop'&&req.method==='POST'){
     if(!current.strategyPractice||!this.strategySeats.a||await req.text()!==this.strategySeats.a.key)return json({error:'Strategy controller required'},403);
     this.finishLive('stopped');

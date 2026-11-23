@@ -428,4 +428,90 @@ describe('worker DO protection', () => {
   const calls = stub.fetch.mock.calls.map(c => String((c[0] as Request).url));
   expect(calls.some(u => u.includes('/internal-chat-practice') && u.includes('laps=5'))).toBe(true);
  });
+
+ it('reconfigures an unstarted strategy lobby in-place without dropping ChatGPT webhook status or consuming room creation rate limit', async () => {
+  const {RaceRoom} = await import('../server/race-room');
+  const room = new RaceRoom('11111111-1111-4111-8111-111111111111', 'https://example.test', {JEV_MOCK: '1'}, 1, 'jev-vs-jev', {}, 'monza', true, 5, false);
+  room.live = 'running';
+  room.strategyPractice = true;
+  room.driverMode = {a: 'autopilot', b: 'autopilot'};
+  const events = room.enableChatStrategy(undefined, 'a');
+  room.strategyWebhook = 'connected';
+
+  expect(room.configureStrategyLobby('las-vegas', 10, 'human')).toBe(true);
+  expect(room.race.circuit).toBe('las-vegas');
+  expect(room.race.laps).toBe(10);
+  expect(room.race.phase).toBe('lobby');
+  expect(room.drive).toBe(true);
+  expect(room.driverMode.a).toBe('human');
+  expect(room.strategyWebhook).toBe('connected');
+  expect(room.strategyFor('a')).toBe(events);
+
+  expect(room.start()).toBe(true);
+  expect(room.configureStrategyLobby('monza', 5, 'autopilot')).toBe(false);
+  expect(room.race.circuit).toBe('las-vegas');
+
+  const workerModulePath = '../worker/' + 'index';
+  const {createWorker} = await import(/* @vite-ignore */ workerModulePath) as {createWorker: () => {fetch: (req: Request, env: unknown, ctx: unknown) => Promise<Response>}};
+  const mcpCreateCalls: string[] = [];
+  const roomId = '22222222-2222-4222-8222-222222222222';
+  const strategyKey = 'b'.repeat(64);
+  const subscriptionKey = 'c'.repeat(64);
+  const stub = {
+   fetch: vi.fn(async (req: Request) => {
+    const u = new URL(req.url);
+    if (u.pathname === '/internal-chat-practice-configure') {
+     const body = await req.json() as {key: string; circuit: string; laps: number; driver: string};
+     expect(body).toEqual({key: strategyKey, circuit: 'las-vegas', laps: 10, driver: 'human'});
+     return Response.json({
+      room: roomId,
+      key: 'a'.repeat(64),
+      phase: 'running',
+      strategyKey,
+      subscriptionKey,
+      guestInviteKey: 'd'.repeat(64),
+      circuit: 'las-vegas',
+      laps: 10,
+      driver: 'human',
+     });
+    }
+    return Response.json({error: 'Not found'}, {status: 404});
+   }),
+  };
+  const env = {
+   ROOMS: {idFromName: (id: string) => id, get: () => stub},
+   ROOM_CREATION: {limit: async () => ({success: false})},
+   MCP_ROOM_CREATION: {limit: async ({key}: {key: string}) => { mcpCreateCalls.push(key); return {success: false}; }},
+   ASSETS: {fetch: async () => new Response('ok')},
+  };
+  const worker = createWorker();
+  const res = await worker.fetch(new Request('https://example.test/mcp', {
+   method: 'POST',
+   headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/event-stream',
+    'Mcp-Session-Id': 'session-xyz',
+   },
+   body: JSON.stringify({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/call',
+    params: {
+     name: 'configure_grand_prix_strategy',
+     arguments: {room: roomId, key: strategyKey, circuit: 'las-vegas', laps: 10, driver: 'human', multiplayer: true},
+    },
+   }),
+  }), env, {});
+  expect(res.status).toBe(200);
+  expect(mcpCreateCalls).toEqual([]);
+  const payload = await res.json() as {result?: {isError?: boolean; structuredContent?: {room?: string; circuit?: string; laps?: number; driver?: string; event_filter?: {room?: string; subscription_key?: string}}}};
+  expect(payload.result?.isError).not.toBe(true);
+  expect(payload.result?.structuredContent).toMatchObject({
+   room: roomId,
+   circuit: 'las-vegas',
+   laps: 10,
+   driver: 'human',
+   event_filter: {room: roomId, subscription_key: subscriptionKey},
+  });
+ });
 });

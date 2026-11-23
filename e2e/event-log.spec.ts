@@ -20,7 +20,7 @@ test('event log opens by default, hides driver events, filters cleanly, and pres
    id:2,time:15,lap:1,team:'a',
    data:{
     kind:'strategy',agent:'chatgpt',stage:'requested',reasons:['Opening strategy'],
-    summary:{speedKph:312,position:1,tyreWear:98,chargeKJ:3200,projectedFuelKg:18,marginAboveFuelSampleKg:17,distanceToPitCommitmentM:400,dryCompoundRuleSatisfied:false,flag:'green',speedLimitKph:null,safetyCarScheduledLap:null,safetyCarInLap:null,rain:'dry',wetness:0,sectorWetness:[0,0,0],wetGripByCompound:{soft:1,medium:1,hard:1,intermediate:.9,wet:.8}},
+    summary:{speedKph:312,position:1,lapsRemaining:5,compound:'medium',tyreWear:98,availableSets:{soft:2,medium:2,hard:1,intermediate:2,wet:1},chargeKJ:3200,projectedFuelKg:18,marginAboveFuelSampleKg:17,gapAheadSeconds:null,gapBehindSeconds:1.2,damage:false,pitPhase:'none',plannedCompound:null,distanceToPitCommitmentM:400,estimatedRejoinPosition:1,teammateInPitLane:false,dryCompoundRuleSatisfied:false,flag:'green',speedLimitKph:null,safetyCarScheduledLap:null,safetyCarInLap:null,rain:'dry',wetness:0,sectorWetness:[0,0,0],wetGripByCompound:{soft:1,medium:1,hard:1,intermediate:.9,wet:.8}},
    },
   },
   {

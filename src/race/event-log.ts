@@ -5,10 +5,11 @@ import type {Decision,DriverIntent,Instruction,Radio,Team} from './types';
 
 export type StrategyLogData={
  kind:'strategy';agent:'chatgpt'|'pit-wall';
- stage:'requested'|'delivered'|'delivery-failed'|'telemetry-read';
+ stage:'requested'|'delivered'|'delivery-failed'|'telemetry-read'|'rejected';
  reasons:string[];
  summary?:StrategyEventNotice['summary'];
  telemetry?:ReturnType<typeof observeStrategy>;
+ error?:string;
 };
 type DriverLogData={
  kind:'driver';engine:Engine;source:Decision['source'];responseMs:number;sequence:number;

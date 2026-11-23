@@ -339,6 +339,88 @@ test('the simplified MCP race menu fits a narrow host and launches ChatGPT strat
  await expect(app.getByRole('button',{name:'Start race',exact:true})).toBeDisabled();
 });
 
+test('clicking Accept on the race menu keeps an active ChatGPT subscription without resetting the room',async({page,request})=>{
+ const incoming='grand_prix.strategy_required';
+ const endpoint='/webhook/mcp-events/'+crypto.randomUUID();
+ const callback='https://connectors.api.openai.com'+endpoint;
+ const secret='whsec_'+Buffer.alloc(32,7).toString('base64');
+ const rpc=(method:string,params:object)=>request.post('/mcp',{
+  headers:{Accept:'application/json, text/event-stream'},
+  data:{jsonrpc:'2.0',id:method,method,params},
+ }).then(r=>r.json());
+ await page.goto(host+'/?test-messages=1');
+ const app=page.frameLocator('#app-frame').frameLocator('iframe');
+ const menu=app.getByRole('dialog',{name:'Race menu'});
+ await expect(menu).toBeVisible();
+ await expect(page.locator('body')).toHaveAttribute('data-initial-event-filter',/subscription_key/);
+ const initialFilter=JSON.parse((await page.locator('body').getAttribute('data-initial-event-filter'))!) as {room:string;subscription_key:string};
+ await expect(app.locator('body')).toHaveAttribute('data-room',initialFilter.room);
+
+ // ChatGPT subscribes while the Race menu is open.
+ const subscribed=await rpc('events/subscribe',{
+  name:incoming,arguments:initialFilter,delivery:{mode:'webhook',url:callback,secret},
+ });
+ expect(subscribed.error).toBeUndefined();
+ await expect(menu.locator('#mcp-crew')).toHaveText('ChatGPT strategy connected');
+
+ // Change circuit, laps, and enable multiplayer, then click Accept: must keep the same room and subscription.
+ await menu.locator('input[name="circuit"][value="las-vegas"]').check();
+ await menu.locator('input[name="laps"][value="10"]').check();
+ await menu.locator('#mcp-multiplayer').check();
+ await menu.getByRole('button',{name:'Accept',exact:true}).click();
+ await expect(app.getByRole('button',{name:'Race menu',exact:true})).toHaveAttribute('aria-expanded','false');
+ await expect(app.locator('body')).toHaveAttribute('data-room',initialFilter.room);
+ await expect(app.locator('body')).toHaveAttribute('data-circuit','las-vegas');
+ await expect(app.locator('#mcp-status')).toContainText('ChatGPT strategy · Las Vegas · 10 laps · Autopilot');
+ await expect(app.locator('#waiting p')).not.toContainText('Waiting for ChatGPT to subscribe');
+ await expect(app.getByRole('button',{name:'Start race',exact:true})).toBeEnabled();
+
+ // Switch to Manual driving with multiplayer via Race menu: still the same room and subscription.
+ await app.getByRole('button',{name:'Race menu',exact:true}).click();
+ await expect(menu.locator('#mcp-crew')).toHaveText('ChatGPT strategy connected');
+ await menu.locator('input[name="driver"][value="human"]').check();
+ await menu.getByRole('button',{name:'Accept',exact:true}).click();
+ await expect(app.locator('body')).toHaveAttribute('data-room',initialFilter.room);
+ await expect(app.locator('#drive-start-btn')).toBeEnabled();
+ await expect(app.locator('#drive-start-btn')).not.toContainText('Waiting for ChatGPT to subscribe');
+
+ // Switch back to Monza, 5 laps, Autopilot, solo and click Accept: keeps subscription, auto-starts, and delivers telemetry.
+ await app.getByRole('button',{name:'Race menu',exact:true}).click();
+ await expect(menu.locator('#mcp-crew')).toHaveText('ChatGPT strategy connected');
+ await menu.locator('input[name="circuit"][value="monza"]').check();
+ await menu.locator('input[name="laps"][value="5"]').check();
+ await menu.locator('input[name="driver"][value="autopilot"]').check();
+ await menu.locator('#mcp-multiplayer').uncheck();
+ await menu.getByRole('button',{name:'Accept',exact:true}).click();
+ await expect(app.locator('body')).toHaveAttribute('data-room',initialFilter.room);
+ await expect(app.locator('body')).toHaveAttribute('data-phase','racing',{timeout:20_000});
+ const received=()=>request.get(fixture+endpoint).then(r=>r.json());
+ await expect.poll(async()=>(await received()).events.length,{timeout:15_000}).toBeGreaterThan(0);
+ const {events:[event]}=await received();
+ expect(event.data).toMatchObject({room:initialFilter.room,team:'a',lap:1});
+
+ // While race is running: Stop race is in the header; opening Race menu disables Accept and race controls and shows Stop race in the modal.
+ await expect(app.locator('#mcp-stop-header')).toBeVisible();
+ await app.getByRole('button',{name:'Race menu',exact:true}).click();
+ await expect(menu).toBeVisible();
+ await expect(app.locator('#mcp-stop-header')).toBeHidden();
+ await expect(menu.getByRole('button',{name:'Accept',exact:true})).toBeDisabled();
+ await expect(menu.locator('input[name="circuit"][value="las-vegas"]')).toBeDisabled();
+ await expect(menu.locator('input[name="laps"][value="10"]')).toBeDisabled();
+ await expect(menu.locator('input[name="driver"][value="human"]')).toBeDisabled();
+ await expect(menu.locator('#mcp-multiplayer')).toBeDisabled();
+ const stopRace=menu.getByRole('button',{name:'Stop race',exact:true});
+ await expect(stopRace).toBeVisible();
+ await expect(stopRace).toBeEnabled();
+ await stopRace.click();
+ await expect(app.locator('#mcp-status')).toContainText('stopped');
+ await expect(stopRace).toBeHidden();
+ await expect(app.locator('#mcp-stop-header')).toBeHidden();
+ await expect(menu.getByRole('button',{name:'Accept',exact:true})).toBeEnabled();
+ await expect(menu.locator('input[name="circuit"][value="las-vegas"]')).toBeEnabled();
+ await expect(menu.locator('#mcp-multiplayer')).toBeEnabled();
+});
+
 test('multiplayer Team B joins with their own ChatGPT strategist and solo browser play still works',async({browser,request,baseURL})=>{
  const context=await browser.newContext();
  try{

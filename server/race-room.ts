@@ -6,7 +6,7 @@ import {getTrack,isCircuit,type CircuitId} from '../src/race/track';
 import {createRace,dryCompoundRuleSatisfied,DT,FIA_MIN_FUEL_KG,stepRace,event,other,humanInputToControls,type DriverControls} from '../src/race/physics';
 import {TEAMS,type Team,type Race,type RaceState,type Radio,type Decision,type RoomLinks,type Instruction,type ClientMessage,type ServerMessage,type DriverControlMode,type EngineerControlMode,type PeerRole,type HumanControlInput} from '../src/race/types';
 import {mockDriver,mockEngineer,autopilotIntent} from '../src/race/brains';
-import {StrategyEvents,radioInstruction,type RadioInput} from './strategy-events';
+import {StrategyEvents,radioInstruction,strategySummary,type LiveStrategyRead,type RadioInput} from './strategy-events';
 import {createRaceDriver,createRaceEngineer,providerConfig} from './race-brains';
 import {createLunaDriver,lunaConfig} from './luna';
 import {driverRoster} from './race-drivers';
@@ -14,9 +14,12 @@ import {isMatchup,type Matchup,type DriverInfo} from '../src/race/matchup';
 import {invitationCode} from '../src/race/invitation';
 import {applyHazard,compounds,parseHazard,wetnessBand} from '../src/race/race-control';
 import type {RaceLogData,RaceLogEntry,RaceLogKind,RaceLogUpdate} from '../src/race/event-log';
-import type {StrategyEventNotice} from '../src/race/strategy-events';
+import {WEBHOOK_STRATEGY_RESPONSE_MS,type StrategyEventNotice} from '../src/race/strategy-events';
 export interface Peer{send:(m:ServerMessage,raw?:string)=>void;team:Team|null;role?:PeerRole;owner:boolean;joined:boolean;eventLog?:boolean;lastSeen:number;lastDecision:number;sequence:number;accepted:number;busy:boolean;}
 const LOG_LIMIT:Record<RaceLogKind,number>={strategy:60,driver:120,radio:60};
+const RIVAL_PIT_COOLDOWN_S=20;
+const STRATEGY_COALESCE_S=15;
+const PENDING_LAP_REFRESH_S=25;
 export class RaceRoom {
  private audible:Peer|null=null;
  live?:LivePhase;
@@ -42,13 +45,15 @@ export class RaceRoom {
  private observedFieldStops:Record<Team,Map<number,number>>={a:new Map(),b:new Map()};
  private lastSector:Partial<Record<Team,number>>={};
  private engineerWindow:Partial<Record<Team,{lap:number;change:string;controlRevision?:number}>>={};
+ private lastRivalPitEventAt:Partial<Record<Team,number>>={};
+ private lastStrategyOfferAt:Partial<Record<Team,number>>={};
  private pendingBox:Partial<Record<Team,{lap:number;instruction:Instruction;source:'mock'|'live'|'fallback';responseMs:number;strategist?:'chatgpt'}>>={};
  private awaitingChatReply=new Set<Team>();
  private radioRevision={a:0,b:0};private manualUntil={a:0,b:0};private engineerBusy={a:false,b:false};private generation=0;private sequence=0;private jevDriver;private lunaDriver:ReturnType<typeof createLunaDriver>|null=null;private engineer;mode:'mock'|'mixed'|'live';players:Record<Team,DriverInfo>;
  driverMode:Record<Team,DriverControlMode>={a:'jev',b:'jev'};
  engineerMode:Record<Team,EngineerControlMode>={a:'mock',b:'mock'};
  private humanInputs:Partial<Record<Team,{input:HumanControlInput;at:number}>>={};
- constructor(readonly id:string,readonly origin:string,private readonly env:Record<string,string|undefined>={},readonly speed=4,public matchup:Matchup='jev-vs-jev',transports:{luna?:typeof fetch;engineer?:typeof fetch;jev?:Parameters<typeof createRaceDriver>[1]}={},circuit:CircuitId='monza',readonly solo=false,laps=3,readonly drive=false,readonly watchMode=false){
+ constructor(readonly id:string,readonly origin:string,private readonly env:Record<string,string|undefined>={},readonly speed=4,public matchup:Matchup='jev-vs-jev',transports:{luna?:typeof fetch;engineer?:typeof fetch;jev?:Parameters<typeof createRaceDriver>[1]}={},circuit:CircuitId='monza',readonly solo=false,laps=3,public drive=false,readonly watchMode=false){
   this.race=createRace(laps,circuit);const roster=driverRoster(env,matchup);this.mode=roster.mode;this.players=roster.players;this.jevDriver=createRaceDriver(providerConfig(env),transports.jev);this.engineer=createRaceEngineer(env,transports.engineer);if(matchup==='jev-vs-luna')this.lunaDriver=createLunaDriver(lunaConfig(env),transports.luna);
   if(solo&&!this.players.b.mock){
    this.players.b={...this.players.b,mock:true,provider:'mock',intervalMs:200};
@@ -56,7 +61,19 @@ export class RaceRoom {
   }
   if(drive)this.driverMode.a='human';
  }
- private reset(){this.generation++;this.race=createRace(this.race.laps,this.race.circuit);this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerWindow={};this.gapHistory={a:[],b:[]};this.observedFieldStops={a:new Map(),b:new Map()};this.lastSector={};this.pendingBox={};this.radioRevision={a:0,b:0};this.awaitingChatReply.clear();this.latestChatRadio=undefined;this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.humanInputs={};this.captureUntil=0;this.clearEventLog();this.broadcast();}
+ configureStrategyLobby(circuit:CircuitId,laps:number,driver:'autopilot'|'human'):boolean{
+  if(!this.strategyPractice||this.live!=='running'||this.race.phase!=='lobby')return false;
+  const changedRace=this.race.circuit!==circuit||this.race.laps!==laps;
+  this.driverMode.a=driver;
+  this.drive=this.driverMode.a==='human'||this.driverMode.b==='human';
+  if(driver!=='human')delete this.humanInputs.a;
+  if(changedRace){
+   this.race=createRace(laps,circuit);
+  }
+  this.broadcast();
+  return true;
+ }
+ private reset(){this.generation++;this.race=createRace(this.race.laps,this.race.circuit);this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerWindow={};this.lastRivalPitEventAt={};this.lastStrategyOfferAt={};this.gapHistory={a:[],b:[]};this.observedFieldStops={a:new Map(),b:new Map()};this.lastSector={};this.pendingBox={};this.radioRevision={a:0,b:0};this.awaitingChatReply.clear();this.latestChatRadio=undefined;this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.humanInputs={};this.captureUntil=0;this.clearEventLog();this.broadcast();}
 
  connected(){if(this.live||this.watchMode)return {a:true,b:true};let a=false,b=this.solo;for(const p of this.peers){if(p.role==='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;if(a&&b)break;}return {a,b};}
  engineerConnected(){let a=false,b=false;for(const p of this.peers){if(p.role!=='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;}return {a,b};}
@@ -166,9 +183,9 @@ export class RaceRoom {
   let nearbyStopCount=0;
   for(let index=0;index<this.race.field.length;index++){
    const opponent=this.race.field[index];
-   const oppStops=(opponent.stops??0)+Number(opponent.pit==='entry'||opponent.pit==='stopped');
    const stopRange=this.race.laps>4?320:160;
    if((opponent.pit==='entry'||opponent.pit==='stopped')&&Math.abs(opponent.distance-car.distance)<stopRange){
+    const oppStops=opponent.pit==='entry'?(opponent.stops??0)+1:Math.max(1,opponent.stops??0);
     const seen=nearbyStops.get(index)??0;
     if(oppStops>seen)nearbyStops.set(index,oppStops);
    }
@@ -187,6 +204,7 @@ export class RaceRoom {
   }
   const strategyEvents=this.strategyFor(team);
   const controlRevision=this.race.control?.revision??0,previous=this.engineerWindow[team];
+  const prevParts=previous?.change.split('/')??[];
   const controlChange=this.race.control&&(previous?.controlRevision??0)!==controlRevision?this.race.control.change:null;
   if(car.pit!=='none'&&(!strategyEvents||!controlChange))return;
   const track=getTrack(this.race.circuit);
@@ -195,12 +213,14 @@ export class RaceRoom {
   const wetBand=wetnessBand(this.race.control?.wetness??0);
   const fuelThreshold=this.race.laps>=10?FIA_MIN_FUEL_KG:0;
   const projectedFuel=projectFuelAtFlag(this.race,team);
-  const wasFuelTight=(previous?.change.split('/')[5]??'')==='true';
+  const wasFuelTight=(prevParts[5]??'')==='true';
   const fuelTight=wasFuelTight?projectedFuel<fuelThreshold+.15:projectedFuel<fuelThreshold;
   const distToCommit=track.wrap(pitCommitmentPoint(track.PIT_ENTRY)-car.distance);
   const pitWindow=this.race.laps>4&&car.pit==='none'&&car.lap<this.race.laps-1&&!car.instruction.box
    &&distToCommit>60&&distToCommit<=1100&&(car.wear>=.5||wetBand>=1||!dryCompoundRuleSatisfied(this.race,car));
-  const change=strategyEvents?`${baseChange}/${tyreBand}/${fuelTight}/${wetBand}/${pitWindow}`:baseChange;
+  const wasPitWindow=previous?.lap===car.lap&&prevParts[7]==='true';
+  const pitWindowActive=pitWindow||wasPitWindow;
+  const change=strategyEvents?`${baseChange}/${tyreBand}/${fuelTight}/${wetBand}/${pitWindowActive}`:baseChange;
   const window={lap:car.lap,change,controlRevision};
   const pending=this.pendingBox[team];
   if(pending&&car.lap>=pending.lap&&car.pit==='none'){
@@ -220,12 +240,20 @@ export class RaceRoom {
   }
   if(!strategyEvents&&this.engineerMode[team]==='joined')return;
   if(!strategistDue(previous,car.lap,change)||Date.now()<=this.manualUntil[team])return;
-  const prevParts=previous?.change.split('/')??[];
   const curParts=change.split('/');
-  const rivalStopChanged=prevParts.length>=3&&(prevParts[0]!==curParts[0]||prevParts[2]!==curParts[2]);
+  const rawRivalStopChanged=prevParts.length>=3&&(prevParts[0]!==curParts[0]||prevParts[2]!==curParts[2]);
+  const rivalStopCooldown=Boolean(strategyEvents&&this.lastRivalPitEventAt[team]!==undefined&&this.race.time-this.lastRivalPitEventAt[team]!<RIVAL_PIT_COOLDOWN_S);
+  const rivalStopChanged=rawRivalStopChanged&&!rivalStopCooldown;
   const damageAppeared=Boolean(car.damage)&&prevParts[1]!=='true';
   const wetCrossed=prevParts.length>=7&&prevParts[6]!==String(wetBand);
-  const pitWindowOpened=pitWindow&&prevParts[7]!=='true';
+  const pitWindowOpened=pitWindowActive&&!wasPitWindow;
+  const fuelTightOpened=fuelTight&&prevParts[5]!=='true';
+  const tyreBandChanged=prevParts.length>=5&&prevParts[4]!==String(tyreBand);
+  const lapChanged=!previous||previous.lap!==car.lap;
+  if(strategyEvents&&rawRivalStopChanged&&rivalStopCooldown&&!controlChange&&!damageAppeared&&!wetCrossed&&!pitWindowOpened&&!fuelTightOpened&&!tyreBandChanged&&!lapChanged){
+   this.engineerWindow[team]=window;
+   return;
+  }
   const reason=controlChange??(
    !previous?'Opening strategy'
     :damageAppeared?'Car damage'
@@ -243,8 +271,21 @@ export class RaceRoom {
    return;
   }
   if(!strategyEvents){void this.think(team,window,reason);return;}
-  const urgentSupersede=damageAppeared||rivalStopChanged||wetCrossed||pitWindowOpened||(fuelTight&&prevParts[5]!=='true');
-  if(strategyEvents.pending&&strategyEvents.pending.event.observation.raceControl.revision===controlRevision&&!urgentSupersede)return;
+  const recentPending=Boolean(strategyEvents.pending&&this.lastStrategyOfferAt[team]!==undefined&&this.race.time-this.lastStrategyOfferAt[team]!<STRATEGY_COALESCE_S);
+  const staleLapPending=Boolean(
+   strategyEvents.pending
+   &&strategyEvents.pending.window.lap!==car.lap
+   &&this.lastStrategyOfferAt[team]!==undefined
+   &&this.race.time-this.lastStrategyOfferAt[team]!>=PENDING_LAP_REFRESH_S
+  );
+  const urgentSupersede=damageAppeared||pitWindowOpened||fuelTightOpened
+   ||(rivalStopChanged&&!recentPending)
+   ||(wetCrossed&&!recentPending)
+   ||staleLapPending;
+  if(strategyEvents.pending&&strategyEvents.pending.event.observation.raceControl.revision===controlRevision&&!urgentSupersede){
+   if(previous?.lap===car.lap)this.engineerWindow[team]=window;
+   return;
+  }
   const observation=observeStrategy(this.race,team,[...this.gapHistory[team]]);
   const reasons=[reason];
   if(tyreBand&&!reasons.includes('Tyre wear'))reasons.push('Tyre wear');
@@ -252,6 +293,8 @@ export class RaceRoom {
   if(car.damage&&!reasons.includes('Car damage'))reasons.push('Car damage');
   if(pitWindow&&!dryCompoundRuleSatisfied(this.race,car)&&this.race.laps-car.lap<=4)reasons.push('Mandatory two-compound rule');
   this.engineerWindow[team]=window;
+  this.lastStrategyOfferAt[team]=this.race.time;
+  if(rivalStopChanged)this.lastRivalPitEventAt[team]=this.race.time;
   this.engineerCalls[team]++;
   this.updateChatState(team,'requested');
   const ticket=strategyEvents.offer(this.id,{...window,revision:this.radioRevision[team],raceControlChange:Boolean(controlChange)},reasons,observation);
@@ -266,15 +309,20 @@ export class RaceRoom {
   if(team==='a')this.strategyEvents=events;
   else this.guestStrategyEvents=events;
   delete this.engineerWindow[team];
+  delete this.lastRivalPitEventAt[team];
+  delete this.lastStrategyOfferAt[team];
   this.updateChatState(team,'waiting');
   return events;
  }
 
  releaseGuestStrategy(){
+  this.guestStrategyEvents?.clear();
   this.guestStrategyEvents=undefined;
   this.guestChatStrategy=undefined;
   this.guestStrategyWebhook=undefined;
   delete this.engineerWindow.b;
+  delete this.lastRivalPitEventAt.b;
+  delete this.lastStrategyOfferAt.b;
   delete this.pendingBox.b;
   this.broadcast();
  }
@@ -284,13 +332,25 @@ export class RaceRoom {
   else this.guestChatStrategy={state,team};
  }
 
+ private resolveChatTeam(preferred?:Team):Team|undefined{
+  if(preferred)return this.strategyFor(preferred)?preferred:undefined;
+  if(this.strategyEvents&&!this.guestStrategyEvents)return 'a';
+  if(this.guestStrategyEvents&&!this.strategyEvents)return 'b';
+  return undefined;
+ }
+
+ private logStrategyRejection(team:Team|undefined,reason:string,error?:string){
+  if(!team)return;
+  this.log(team,{kind:'strategy',agent:'chatgpt',stage:'rejected',reasons:[reason],...(error?{error}:{})});
+ }
+
  private currentStrategyEvent(events:StrategyEvents|undefined,eventId?:string){
   const pending=events?.pending;
   if(!pending||this.live!=='running'||this.race.phase!=='racing')return undefined;
   const {event,window}=pending,car=this.race.cars[event.team];
-  return (!eventId||event.event_id===eventId)&&event.expiresAt>Date.now()&&car.finishTime===null&&(car.pit==='none'||window.raceControlChange)
+  return (!eventId||event.event_id===eventId)&&event.expiresAt>Date.now()&&car.finishTime===null
    &&event.observation.raceControl.revision===(this.race.control?.revision??0)
-   &&car.lap===window.lap&&this.radioRevision[event.team]===window.revision?pending:undefined;
+   &&this.radioRevision[event.team]===window.revision?pending:undefined;
  }
 
  readStrategyEvent(eventId:string){
@@ -302,30 +362,127 @@ export class RaceRoom {
   return event;
  }
 
+ readLiveStrategyEvent(eventId?:string,team?:Team):LiveStrategyRead|null{
+  if(this.live!=='running'||this.race.phase!=='racing')return null;
+  if(eventId){
+   const exact=this.readStrategyEvent(eventId);
+   if(exact)return exact;
+  }
+  const owner:Team|undefined=eventId
+   ? (this.strategyEvents?.has(eventId)?'a':this.guestStrategyEvents?.has(eventId)?'b':this.resolveChatTeam(team))
+   : this.resolveChatTeam(team);
+  if(!owner)return null;
+  const car=this.race.cars[owner];
+  if(car.finishTime!==null)return null;
+  const events=this.strategyFor(owner);
+  const active=this.currentStrategyEvent(events)?.event;
+  if(active){
+   if(this.loggedTelemetryReads[owner]!==active.event_id){
+    this.loggedTelemetryReads[owner]=active.event_id;
+    this.log(owner,{kind:'strategy',agent:'chatgpt',stage:'telemetry-read',reasons:active.reasons},active.lap);
+   }
+   return eventId&&active.event_id!==eventId?{...active,superseded:true}:active;
+  }
+  const now=Date.now();
+  const observation=observeStrategy(this.race,owner,[...this.gapHistory[owner]]);
+  const summary=strategySummary(observation);
+  this.log(owner,{kind:'strategy',agent:'chatgpt',stage:'telemetry-read',reasons:['Live telemetry check']},car.lap+1);
+  return {
+   room:this.id,team:owner,lap:car.lap+1,reasons:['Live telemetry check'],
+   issuedAt:now,expiresAt:now+WEBHOOK_STRATEGY_RESPONSE_MS,
+   observation,summary,proactive:true,
+  };
+ }
+
  submitStrategyEvent(input:RadioInput){
   if(input.room!==this.id)return {error:'Race does not match this event.'} as const;
-  const events=this.strategyEvents?.pending?.event.event_id===input.event_id?this.strategyEvents:this.guestStrategyEvents;
-  const pending=this.currentStrategyEvent(events,input.event_id);
-  if(!pending)return {error:'This strategy event is no longer active.'} as const;
-  const {event}=pending,car=this.race.cars[event.team];
+  if(this.live!=='running'||this.race.phase!=='racing')return {error:'This race is no longer active.'} as const;
+  let team:Team|undefined;
+  let events:StrategyEvents|undefined;
+  let issuedAt=Date.now();
+  let lap=1;
+  let consumedId:string|undefined;
+
+  if(input.event_id){
+   if(this.strategyEvents?.has(input.event_id)){team='a';events=this.strategyEvents;}
+   else if(this.guestStrategyEvents?.has(input.event_id)){team='b';events=this.guestStrategyEvents;}
+   if(!team||!events){
+    this.logStrategyRejection(this.resolveChatTeam(input.team),'Unknown or expired event');
+    return {error:'This strategy event is no longer active. Omit event_id or read live telemetry to submit a proactive call.'} as const;
+   }
+   if(events.isConsumed(input.event_id)){
+    this.logStrategyRejection(team,'Duplicate radio call');
+    return {error:'This strategy event was already answered.'} as const;
+   }
+   const entry=events.find(input.event_id);
+   if(!entry||entry.event.expiresAt<=Date.now()){
+    this.logStrategyRejection(team,'Strategy event expired');
+    return {error:'This strategy event has expired. Omit event_id or read live telemetry to submit a fresh call.'} as const;
+   }
+   const car=this.race.cars[team];
+   if(car.finishTime!==null){
+    this.logStrategyRejection(team,'Car already finished');
+    return {error:'This car has already finished the race.'} as const;
+   }
+   if(entry.event.observation.raceControl.revision!==(this.race.control?.revision??0)){
+    const latest=this.currentStrategyEvent(events)?.event;
+    const changeLabel=this.race.control?.change||'race control update';
+    this.logStrategyRejection(team,'Race conditions changed',changeLabel);
+    return {error:latest
+     ? `Race conditions changed (${changeLabel}). Resubmit using event_id ${latest.event_id} or omit event_id.`
+     : `Race conditions changed (${changeLabel}). Read live telemetry and resubmit.`} as const;
+   }
+   if(this.radioRevision[team]!==entry.window.revision){
+    this.logStrategyRejection(team,'Superseded by newer radio order');
+    return {error:'A newer radio call was already applied. Omit event_id to send an updated call.'} as const;
+   }
+   issuedAt=entry.event.issuedAt;
+   lap=car.lap+1;
+   consumedId=input.event_id;
+  }else{
+   team=this.resolveChatTeam(input.team);
+   events=team?this.strategyFor(team):undefined;
+   if(!team||!events){
+    const msg=this.strategyEvents&&this.guestStrategyEvents
+     ? 'Specify team ("a" or "b") or event_id in a two-strategist race.'
+     : 'No active ChatGPT strategy seat in this race.';
+    return {error:msg} as const;
+   }
+   const car=this.race.cars[team];
+   if(car.finishTime!==null){
+    this.logStrategyRejection(team,'Car already finished');
+    return {error:'This car has already finished the race.'} as const;
+   }
+   const active=this.currentStrategyEvent(events)?.event;
+   issuedAt=active?.issuedAt??Date.now();
+   lap=car.lap+1;
+   consumedId=active?.event_id;
+  }
+
+  const car=this.race.cars[team];
   const instruction=radioInstruction(this.race,car,input);
-  if(!instruction)return {error:'This order needs a valid sector, tyre, or available energy.'} as const;
-  delete events!.pending; // Consume before broadcasting the authoritative order.
-  this.updateChatState(event.team,'applied');
+  if(!instruction){
+   this.logStrategyRejection(team,'Invalid strategy order','Missing valid sector, tyre, or available energy.');
+   return {error:'This order needs a valid sector, tyre, or available energy.'} as const;
+  }
+  const responseMs=Math.max(0,Date.now()-issuedAt);
+  events.consume(consumedId); // Consume before broadcasting the authoritative order.
+  this.updateChatState(team,'applied');
   const queueNextLap=input.box_lap==='next-lap'&&Boolean(input.tyre)&&(input.action==='box'||input.action==='cover'||input.box===true)&&car.lap+1<this.race.laps;
   if(queueNextLap){
-   this.pendingBox[event.team]={lap:car.lap+1,instruction:structuredClone({...instruction,box:true,tyre:input.tyre!}),source:'live',responseMs:Date.now()-event.issuedAt,strategist:'chatgpt'};
+   this.pendingBox[team]={lap:car.lap+1,instruction:structuredClone({...instruction,box:true,tyre:input.tyre!}),source:'live',responseMs,strategist:'chatgpt'};
   }
-  const transmission=this.radio(event.team,instruction,'live',Date.now()-event.issuedAt,'chatgpt',input.action==='hold'||queueNextLap);
-  (this.latestChatRadio??={})[event.team]={
-   ...transmission,lap:event.lap,...(instruction.line!==transmission.text?{submittedText:instruction.line}:{}),
+  const transmission=this.radio(team,instruction,'live',responseMs,'chatgpt',input.action==='hold'||queueNextLap);
+  (this.latestChatRadio??={})[team]={
+   ...transmission,lap,...(instruction.line!==transmission.text?{submittedText:instruction.line}:{}),
   };
-  this.awaitingChatReply.add(event.team);
+  this.awaitingChatReply.add(team);
   this.broadcast();
-  return {team:event.team,line:car.instruction.line} as const;
+  return {team,line:car.instruction.line} as const;
  }
 
  private expireStrategyEvent(events:StrategyEvents|undefined){
+  events?.prune();
   const pending=events?.pending;
   if(!pending||this.currentStrategyEvent(events))return;
   delete events!.pending;
@@ -370,8 +527,8 @@ export class RaceRoom {
  finishLive(phase:Exclude<LivePhase,'running'>){
   if(this.live!=='running')return;
   this.live=phase;
-  if(this.strategyEvents)delete this.strategyEvents.pending;
-  if(this.guestStrategyEvents)delete this.guestStrategyEvents.pending;
+  this.strategyEvents?.clear();
+  this.guestStrategyEvents?.clear();
   this.generation++;
   this.broadcast();
  }

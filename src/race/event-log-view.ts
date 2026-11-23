@@ -7,7 +7,7 @@ type VisibleLogEntry=RaceLogEntry&{data:Extract<RaceLogEntry['data'],{kind:Visib
 type FilterKey='all'|VisibleLogKind;
 
 const filters:Record<FilterKey,string>={all:'All',strategy:'Strategist',radio:'Radio'};
-const strategyStages={requested:'Strategy requested',delivered:'Event delivered','delivery-failed':'Event delivery failed','telemetry-read':'Telemetry read'};
+const strategyStages={requested:'Strategy requested',delivered:'Event delivered','delivery-failed':'Event delivery failed','telemetry-read':'Telemetry read',rejected:'Radio rejected'};
 const chevronSvg='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg>';
 
 function isVisible(entry:RaceLogEntry):entry is VisibleLogEntry{

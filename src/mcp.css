@@ -29,6 +29,10 @@
 .mcp-brand .brand-mark{width:30px;height:26px;flex:none;border-radius:5px}
 .mcp-brand .brand-mark::before{transform:scale(.85) skewX(-28deg)}
 .mcp-header p{margin:4px 0 0;font-size:12px;line-height:1.45;color:#afbab5}
+.mcp-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mcp-header .mcp-danger{border-color:#8f3a3d;background:#3a191b;color:#ffd2c9}
+.mcp-header .mcp-danger:hover:not(:disabled){background:#4e2023;border-color:#b84c50;color:#fff}
+.mcp-header .mcp-danger[hidden]{display:none}
 
 /* Multiplayer Team B banner */
 .mcp-multiplayer-bar {
@@ -218,6 +222,10 @@
 .mcp-choice:hover{border-color:#49565a;background:#181e21}
 .mcp-choice:has(:checked){border-color:#b2ca70;background:#21281d}
 .mcp-choice:has(:focus-visible){outline:2px solid #d6ef83;outline-offset:2px}
+.mcp-choice-grid:disabled{opacity:.52}
+.mcp-choice-grid:disabled .mcp-choice{cursor:not-allowed}
+.mcp-choice-grid:disabled .mcp-choice:hover{border-color:#313a3d;background:#121719}
+.mcp-choice-grid:disabled .mcp-choice:has(:checked):hover{border-color:#b2ca70;background:#21281d}
 .mcp-choice input{position:absolute;inset:12px auto auto 11px;margin:0;accent-color:#b5d779}
 .mcp-choice strong{font-size:13px;line-height:1.25;color:#f2f1eb}
 .mcp-choice small{font-size:11px;line-height:1.38;color:#9eb0aa}
@@ -236,6 +244,9 @@
 }
 .mcp-addon-toggle:hover{border-color:#3f565b}
 .mcp-addon-toggle:has(:checked){border-color:#2be4cb;background:#122427}
+.mcp-addon-toggle:has(:disabled){opacity:.52;cursor:not-allowed}
+.mcp-addon-toggle:has(:disabled):hover{border-color:#2e3b3f}
+.mcp-addon-toggle:has(:disabled):has(:checked):hover{border-color:#2be4cb}
 .mcp-addon-toggle input {
  width:16px;
  height:16px;
@@ -274,19 +285,36 @@
  color:#9cb2b0;
 }
 
-/* Single Accept CTA */
+/* Accept & Stop race CTAs */
 .mcp-setup-actions {
  display:flex;
- align-items:center;
+ align-items:stretch;
+ gap:8px;
  margin-top:2px;
 }
 .mcp-accept {
- width:100%;
+ flex:1 1 0;
  min-height:42px;
  font-size:14px;
  font-weight:700;
  letter-spacing:.01em;
 }
+.mcp-menu .mcp-stop-cta {
+ flex:1 1 0;
+ margin-left:0;
+ min-height:42px;
+ font-size:14px;
+ font-weight:700;
+ border-color:#8f3a3d;
+ background:#3a191b;
+ color:#ffd2c9;
+}
+.mcp-menu .mcp-stop-cta:hover:not(:disabled) {
+ background:#4e2023;
+ border-color:#b84c50;
+ color:#fff;
+}
+.mcp-menu .mcp-stop-cta[hidden]{display:none}
 
 /* Join Team B collapsible drawer */
 .mcp-join-panel {

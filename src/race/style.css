@@ -203,12 +203,11 @@
 }
 .event-log-entries::-webkit-scrollbar-thumb:hover,.event-log-payload::-webkit-scrollbar-thumb:hover{background:#527082}
 .event-log-row{
- margin:0 0 6px;border:1px solid #22313b;border-left:3px solid #4c6370;border-radius:8px;
+ margin:0 0 6px;border:1px solid #22313b;border-radius:8px;
  background:#121b22;transition:border-color .15s ease,background .15s ease;
 }
-.event-log-row[data-kind="strategy"]{border-left-color:#b7d868}
-.event-log-row[data-kind="radio"]{border-left-color:#f49b82}
-.event-log-row[data-stage="delivery-failed"]{border-left-color:#ff6060;border-color:#5a2b2f}
+.event-log-row[data-stage="delivery-failed"]{border-color:#5a2b2f}
+.event-log-row[data-stage="rejected"]{border-color:#664c24}
 .event-log-row:hover{background:#17232c;border-color:#324957}
 .event-log-summary{
  display:grid;grid-template-columns:54px minmax(0,1fr) 20px;align-items:start;gap:12px;
@@ -231,6 +230,7 @@
 .event-log-row[data-kind="strategy"] .event-log-kind{background:#232f1c;color:#d5ec8b;border:1px solid #445a2f}
 .event-log-row[data-kind="radio"] .event-log-kind{background:#33201c;color:#ffb39d;border:1px solid #6a3d33}
 .event-log-row[data-stage="delivery-failed"] .event-log-kind{background:#3b191c;color:#ff9c9c;border:1px solid #8a363c}
+.event-log-row[data-stage="rejected"] .event-log-kind{background:#3b2c15;color:#ffd28a;border:1px solid #8c672c}
 .event-log-team{
  display:inline-flex;align-items:center;gap:5px;
  font:600 10.5px/1.2 'Space Mono',monospace;color:#d1dfe6;

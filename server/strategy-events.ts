@@ -5,7 +5,12 @@ import {VEHICLE} from '../src/race/vehicle';
 import {compounds,rainLevels} from '../src/race/race-control';
 import type {Car,Compound,Instruction,Race} from '../src/race/types';
 
-export const eventInput=z.object({room:z.string().uuid(),event_id:z.string().uuid()});
+const eventNoticeBase=z.object({room:z.string().uuid(),event_id:z.string().uuid()});
+export const eventInput=z.object({
+ room:z.string().uuid(),
+ event_id:z.string().uuid().optional().describe('Event ID from the webhook notification. Omit to read live telemetry for the active race.'),
+ team:z.enum(['a','b']).optional().describe('Assigned seat (optional in solo races; required only when omitting event_id in a two-strategist race).'),
+});
 export const strategyFilter=z.object({room:z.string().uuid(),subscription_key:z.string().regex(/^[a-f0-9]{64}$/)});
 export const radioInput=eventInput.extend({
  action:z.enum(['hold','attack','defend','save-fuel','yield','push','manage','box','extend','cover','harvest','swap','swap-back']),
@@ -25,24 +30,29 @@ export const radioInput=eventInput.extend({
 });
 export type RadioInput=z.infer<typeof radioInput>;
 
-const wetGripSchema=z.object({
+const compoundNumberSchema=z.object({
  soft:z.number(),medium:z.number(),hard:z.number(),intermediate:z.number(),wet:z.number(),
 });
 
 export const strategyEventDefinition={
  name:STRATEGY_EVENT,
- description:'Telemetry for your strategy seat requires a radio decision. Open that seat with open_grand_prix_strategy and use its event_filter. Read each active event and send one order to its assigned car.',
+ description:'Telemetry for your strategy seat requires a proactive radio decision. Open that seat with open_grand_prix_strategy and use its event_filter. Act immediately from summary using submit_grand_prix_radio when the call is clear, or read full telemetry with get_grand_prix_strategy_event.',
  delivery:['webhook'],
  inputSchema:z.toJSONSchema(strategyFilter),
- payloadSchema:z.toJSONSchema(eventInput.extend({
+ payloadSchema:z.toJSONSchema(eventNoticeBase.extend({
   team:z.enum(['a','b']),lap:z.number().int(),reasons:z.array(z.string()),expiresAt:z.number(),
   summary:z.object({
-   speedKph:z.number(),position:z.number(),tyreWear:z.number(),chargeKJ:z.number(),projectedFuelKg:z.number(),
-   marginAboveFuelSampleKg:z.number(),distanceToPitCommitmentM:z.number(),dryCompoundRuleSatisfied:z.boolean(),
+   speedKph:z.number(),position:z.number(),lapsRemaining:z.number(),
+   compound:z.enum(compounds),tyreWear:z.number(),availableSets:compoundNumberSchema,
+   chargeKJ:z.number(),projectedFuelKg:z.number(),marginAboveFuelSampleKg:z.number(),
+   gapAheadSeconds:z.number().nullable(),gapBehindSeconds:z.number().nullable(),
+   damage:z.boolean(),pitPhase:z.enum(['none','entry','stopped','exit']),plannedCompound:z.enum(compounds).nullable(),
+   distanceToPitCommitmentM:z.number(),estimatedRejoinPosition:z.number(),teammateInPitLane:z.boolean(),
+   dryCompoundRuleSatisfied:z.boolean(),
    flag:z.enum(['green','yellow','safety-car']),speedLimitKph:z.number().nullable(),
    safetyCarScheduledLap:z.number().nullable(),safetyCarInLap:z.number().nullable(),
    rain:z.enum(rainLevels),wetness:z.number(),sectorWetness:z.tuple([z.number(),z.number(),z.number()]),
-   wetGripByCompound:wetGripSchema,
+   wetGripByCompound:compoundNumberSchema,
   }),
  })),
 };
@@ -52,37 +62,105 @@ export interface StrategyEvent extends StrategyEventNotice {
  observation:ReturnType<typeof observeStrategy>;
  issuedAt:number;
 }
-type StrategyWindow={lap:number;change:string;revision:number;raceControlChange?:boolean};
+export type LiveStrategyRead=Omit<StrategyEvent,'event_id'>&{
+ event_id?:string;
+ superseded?:boolean;
+ proactive?:boolean;
+};
+export type StrategyWindow={lap:number;change:string;revision:number;raceControlChange?:boolean};
+export type PendingStrategy={event:StrategyEvent;window:StrategyWindow};
+
+const round2=(n:number|null)=>n===null?null:Math.round(n*100)/100;
+const MAX_RECENT_EVENTS=12;
+const MAX_CONSUMED_IDS=64;
+
+export function strategySummary(observation:StrategyEvent['observation']):StrategyEventNotice['summary']{
+ return {
+  speedKph:observation.telemetry.speedKph,
+  position:observation.telemetry.position,
+  lapsRemaining:observation.lapsRemaining,
+  compound:observation.tyres.compound,
+  tyreWear:observation.tyres.wear,
+  availableSets:{...observation.tyres.availableSets},
+  chargeKJ:observation.energy.chargeKJ,
+  projectedFuelKg:observation.fuel.projectedAtFlagKg,
+  marginAboveFuelSampleKg:observation.fuel.marginAboveSampleKg,
+  gapAheadSeconds:round2(observation.gaps.ahead),
+  gapBehindSeconds:round2(observation.gaps.behind),
+  damage:Boolean(observation.damage),
+  pitPhase:observation.pit.phase,
+  plannedCompound:observation.pit.plannedCompound,
+  distanceToPitCommitmentM:observation.pit.distanceToCommitmentM,
+  estimatedRejoinPosition:observation.pit.estimatedRejoinPosition,
+  teammateInPitLane:observation.pit.teammateInPitLane,
+  dryCompoundRuleSatisfied:observation.tyres.dryCompoundRuleSatisfied,
+  flag:observation.raceControl.flag,
+  speedLimitKph:observation.raceControl.speedLimitKph,
+  safetyCarScheduledLap:observation.raceControl.safetyCarScheduledLap,
+  safetyCarInLap:observation.raceControl.safetyCarInLap,
+  rain:observation.weather.outlook,
+  wetness:observation.weather.wetness,
+  sectorWetness:observation.weather.sectorWetness,
+  wetGripByCompound:observation.weather.wetGripByCompound,
+ };
+}
 
 export class StrategyEvents {
  constructor(private readonly responseMs=STRATEGY_RESPONSE_MS){}
  private listeners=new Set<(event:StrategyEventNotice&{event_id:string})=>void>();
- pending?:{event:StrategyEvent;window:StrategyWindow};
+ pending?:PendingStrategy;
+ private recent=new Map<string,PendingStrategy>();
+ private consumed=new Set<string>();
 
  offer(room:string,window:StrategyWindow,reasons:string[],observation:StrategyEvent['observation'],now=Date.now()){
-  const summary:StrategyEventNotice['summary']={
-   speedKph:observation.telemetry.speedKph,
-   position:observation.telemetry.position,
-   tyreWear:observation.tyres.wear,
-   chargeKJ:observation.energy.chargeKJ,
-   projectedFuelKg:observation.fuel.projectedAtFlagKg,
-   marginAboveFuelSampleKg:observation.fuel.marginAboveSampleKg,
-   distanceToPitCommitmentM:observation.pit.distanceToCommitmentM,
-   dryCompoundRuleSatisfied:observation.tyres.dryCompoundRuleSatisfied,
-   flag:observation.raceControl.flag,
-   speedLimitKph:observation.raceControl.speedLimitKph,
-   safetyCarScheduledLap:observation.raceControl.safetyCarScheduledLap,
-   safetyCarInLap:observation.raceControl.safetyCarInLap,
-   rain:observation.weather.outlook,
-   wetness:observation.weather.wetness,
-   sectorWetness:observation.weather.sectorWetness,
-   wetGripByCompound:observation.weather.wetGripByCompound,
-  };
-  const event={room,team:observation.team,summary,lap:window.lap+1,reasons,observation:structuredClone(observation),issuedAt:now,
+  const summary=strategySummary(observation);
+  const event:StrategyEvent={room,team:observation.team,summary,lap:window.lap+1,reasons,observation:structuredClone(observation),issuedAt:now,
    expiresAt:now+this.responseMs,event_id:crypto.randomUUID()};
-  this.pending={event,window};
+  const entry:PendingStrategy={event,window};
+  this.pending=entry;
+  this.recent.set(event.event_id,entry);
+  while(this.recent.size>MAX_RECENT_EVENTS){
+   const oldest=this.recent.keys().next().value;
+   if(oldest!==undefined)this.recent.delete(oldest);
+  }
   for(const listener of this.listeners)listener(this.notice(event));
   return event;
+ }
+
+ find(eventId:string){
+  if(this.pending?.event.event_id===eventId)return this.pending;
+  return this.recent.get(eventId);
+ }
+
+ has(eventId:string){
+  return this.pending?.event.event_id===eventId||this.recent.has(eventId)||this.consumed.has(eventId);
+ }
+
+ isConsumed(eventId:string){
+  return this.consumed.has(eventId);
+ }
+
+ consume(eventId?:string){
+  if(eventId){
+   this.consumed.add(eventId);
+   while(this.consumed.size>MAX_CONSUMED_IDS){
+    const oldest=this.consumed.keys().next().value;
+    if(oldest!==undefined)this.consumed.delete(oldest);
+   }
+  }
+  delete this.pending;
+  this.recent.clear();
+ }
+
+ clear(){
+  delete this.pending;
+  this.recent.clear();
+ }
+
+ prune(now=Date.now()){
+  for(const [id,entry] of this.recent){
+   if(entry.event.expiresAt<=now)this.recent.delete(id);
+  }
  }
 
  subscribe(listener:(event:StrategyEventNotice&{event_id:string})=>void){

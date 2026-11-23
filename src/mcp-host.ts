@@ -47,6 +47,8 @@ try{
   bridge.sendToolInput({arguments:args});
   const result=await client.callTool({name:'open_grand_prix',arguments:args});
   if(config.testStrategy)result._meta={...result._meta,'jev-grand-prix/telemetry':true};
+  const initialFilter=(result.structuredContent as {event_filter?:unknown}|undefined)?.event_filter;
+  if(testMessages&&initialFilter)document.body.dataset.initialEventFilter=JSON.stringify(initialFilter);
   await bridge.sendToolResult(result);
   status.textContent='Connected · Streamable HTTP · open_grand_prix';diagnostic.hidden=true;close.disabled=false;document.body.dataset.mcpConnected='true';
   close.onclick=async()=>{await bridge!.teardownResource({});await bridge!.close();await client.close();frame.remove();close.disabled=true;status.textContent='App closed · controllers disconnected';document.body.dataset.mcpConnected='false';};

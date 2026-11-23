@@ -14,8 +14,13 @@ export interface StrategyEventNotice {
  reasons:string[];
  expiresAt:number;
  summary:{
-  speedKph:number;position:number;tyreWear:number;chargeKJ:number;projectedFuelKg:number;
-  marginAboveFuelSampleKg:number;distanceToPitCommitmentM:number;dryCompoundRuleSatisfied:boolean;
+  speedKph:number;position:number;lapsRemaining:number;
+  compound:Compound;tyreWear:number;availableSets:Record<Compound,number>;
+  chargeKJ:number;projectedFuelKg:number;marginAboveFuelSampleKg:number;
+  gapAheadSeconds:number|null;gapBehindSeconds:number|null;
+  damage:boolean;pitPhase:'none'|'entry'|'stopped'|'exit';plannedCompound:Compound|null;
+  distanceToPitCommitmentM:number;estimatedRejoinPosition:number;teammateInPitLane:boolean;
+  dryCompoundRuleSatisfied:boolean;
   flag:'green'|'yellow'|'safety-car';speedLimitKph:number|null;
   safetyCarScheduledLap:number|null;safetyCarInLap:number|null;
   rain:RainLevel;wetness:number;sectorWetness:[number,number,number];

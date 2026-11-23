@@ -107,3 +107,18 @@ test('switching off the event feed stops live messages and a new connection sees
  ]));
  expect(entries.map(entry=>entry.id)).toEqual(entries.map(entry=>entry.id).sort((a,b)=>a-b));
 });
+
+test('rejected ChatGPT radio attempts are logged without leaking event IDs',async()=>{
+ const {room,strategy}=liveRoom(),observer=eventPeer(room);
+ await room.message(observer.peer,{type:'join',team:null,token:room.viewerKey!});
+ await observer.subscribe();
+ room.advance(1);
+ const event=strategy.pending!.event;
+ expect(room.submitStrategyEvent({room:room.id,event_id:event.event_id,action:'box',radio:'Box without tyre.'})).toHaveProperty('error');
+ expect(room.submitStrategyEvent({room:room.id,event_id:event.event_id,action:'manage',radio:'Valid order.'})).toMatchObject({team:'a'});
+ expect(room.submitStrategyEvent({room:room.id,event_id:event.event_id,action:'push',radio:'Duplicate.'})).toHaveProperty('error');
+ const rejected=observer.entries().filter(e=>e.data.kind==='strategy'&&e.data.stage==='rejected');
+ expect(rejected).toHaveLength(2);
+ expect(rejected.map(e=>e.data.kind==='strategy'?e.data.reasons[0]:'')).toEqual(['Invalid strategy order','Duplicate radio call']);
+ expect(JSON.stringify(observer.log)).not.toContain(event.event_id);
+});

@@ -191,3 +191,144 @@ test('connected ChatGPT races never emit mock engineer or mock rival radio',()=>
  expect(room.chatStrategy?.state).not.toBe('fallback');
  now.mockRestore();
 });
+
+test('field pit stops do not double-count on box arrival or flood events during a pit wave',()=>{
+ const room=new RaceRoom(crypto.randomUUID(),'http://localhost:5277',{JEV_MOCK:'1'},1,'jev-vs-jev',{},'monza',true,10);
+ room.live='running';
+ room.race.phase='racing';
+ room.race.cars.a.distance=100;
+ const events=room.enableChatStrategy();
+ const notices:string[]=[];
+ events.subscribe(n=>notices.push(`${n.event_id}:${n.reasons.join('|')}`));
+ room.advance(1);
+ const opening=events.pending!.event;
+ expect(room.submitStrategyEvent({room:room.id,event_id:opening.event_id,action:'manage',radio:'Settle in.'})).toMatchObject({team:'a'});
+ room.race.time=25;
+ const f0=room.race.field[0],f1=room.race.field[1],f2=room.race.field[2];
+ f0.distance=room.race.cars.a.distance+50;
+ f0.pit='entry';
+ f0.stops=0;
+ room.advance(1);
+ expect(events.pending?.event.reasons).toContain('Nearby rival pitted');
+ const afterEntry=notices.length;
+ // Same car arrives at pit box (field-physics sets pit='stopped' AND stops=1 simultaneously): must NOT fire again.
+ f0.pit='stopped';
+ f0.stops=1;
+ room.advance(1);
+ expect(notices.length).toBe(afterEntry);
+ // Additional field cars pitting in the same wave within cooldown must NOT flood duplicate events.
+ f1.distance=room.race.cars.a.distance+40;f1.pit='entry';f1.stops=0;
+ f2.distance=room.race.cars.a.distance+60;f2.pit='entry';f2.stops=0;
+ room.advance(1);
+ expect(notices.length).toBe(afterEntry);
+ // Answer the pit-wave event, advance past 20s cooldown, and a later rival stop can trigger cleanly.
+ expect(room.submitStrategyEvent({room:room.id,event_id:events.pending!.event.event_id,action:'extend',radio:'Stay out.'})).toMatchObject({team:'a'});
+ room.race.time+=21;
+ const f3=room.race.field[3];
+ f3.distance=room.race.cars.a.distance+30;f3.pit='entry';f3.stops=0;
+ room.advance(1);
+ expect(notices.length).toBe(afterEntry+1);
+ expect(events.pending?.event.reasons).toContain('Nearby rival pitted');
+});
+
+test('in-flight strategy events survive lap rollovers, pit-lane entry, and non-hazard supersedes',()=>{
+ const room=new RaceRoom(crypto.randomUUID(),'http://localhost:5277',{JEV_MOCK:'1'},1,'jev-vs-jev',{},'monza',true,10);
+ room.live='running';
+ room.race.phase='racing';
+ const track=getTrack('monza'),car=room.race.cars.a;
+ car.distance=track.PIT_ENTRY-400;
+ const events=room.enableChatStrategy();
+ room.advance(1);
+ const opening=events.pending!.event;
+ expect(opening.summary).toMatchObject({
+  compound:'soft',lapsRemaining:10,damage:false,pitPhase:'none',
+  availableSets:expect.objectContaining({soft:expect.any(Number),wet:expect.any(Number)}),
+  estimatedRejoinPosition:expect.any(Number),teammateInPitLane:false,
+ });
+
+ // Crossing into lap 2 does NOT invalidate the unanswered L1 ticket.
+ car.lap=1;
+ car.distance=track.LENGTH+50;
+ room.advance(1);
+ expect(events.pending?.event.event_id).toBe(opening.event_id);
+
+ // Even after a non-hazard urgent event supersedes opening, submitting opening's event_id still succeeds!
+ car.wear=.60;
+ car.distance=track.LENGTH+track.PIT_ENTRY-500;
+ room.advance(1);
+ const pitEvt=events.pending!.event;
+ expect(pitEvt.event_id).not.toBe(opening.event_id);
+ // Passing 60m before commitment on the same lap does NOT trigger a spurious window-close event.
+ car.distance=track.LENGTH+track.PIT_ENTRY-130;
+ room.advance(1);
+ expect(events.pending!.event.event_id).toBe(pitEvt.event_id);
+
+ // Even if the car is in the pit lane, the superseded non-hazard ticket still applies cleanly.
+ car.pit='entry';
+ expect(room.submitStrategyEvent({room:room.id,event_id:opening.event_id,action:'manage',radio:'Manage tyres on the out-lap.'})).toMatchObject({team:'a'});
+ expect(events.pending).toBeUndefined();
+ // Duplicate submission of the consumed event_id is still rejected.
+ expect(room.submitStrategyEvent({room:room.id,event_id:opening.event_id,action:'push',radio:'Duplicate.'})).toHaveProperty('error');
+});
+
+test('readLiveStrategyEvent self-heals on superseded or omitted event_id and submitStrategyEvent supports proactive calls',()=>{
+ const room=new RaceRoom(crypto.randomUUID(),'http://localhost:5277',{JEV_MOCK:'1'},1,'jev-vs-jev',{},'monza',true,10);
+ room.live='running';
+ room.race.phase='racing';
+ const track=getTrack('monza'),car=room.race.cars.a;
+ car.distance=200;
+ const events=room.enableChatStrategy();
+ room.advance(1);
+ const opening=events.pending!.event;
+
+ // Supersede with pre-pit commitment window.
+ car.wear=.60;
+ car.distance=track.PIT_ENTRY-500;
+ room.advance(1);
+ const newer=events.pending!.event;
+ expect(newer.event_id).not.toBe(opening.event_id);
+
+ // readLiveStrategyEvent heals stale event_id by returning the newer active event.
+ const healed=room.readLiveStrategyEvent(opening.event_id);
+ expect(healed).toMatchObject({event_id:newer.event_id,superseded:true,team:'a'});
+
+ // Answer newer, leaving no pending event.
+ expect(room.submitStrategyEvent({room:room.id,event_id:newer.event_id,action:'push',radio:'Push now.'})).toMatchObject({team:'a'});
+ expect(events.pending).toBeUndefined();
+
+ // Omitting event_id pulls fresh proactive live telemetry and allows proactive radio calls.
+ const live=room.readLiveStrategyEvent();
+ expect(live).toMatchObject({team:'a',proactive:true,reasons:['Live telemetry check']});
+ expect(live?.event_id).toBeUndefined();
+ expect(room.submitStrategyEvent({room:room.id,action:'attack',budget_kj:400,radio:'Proactive attack with 400 kJ.'})).toMatchObject({team:'a'});
+ expect(car.instruction.energy).toMatchObject({priority:'attack',budgetKJ:400});
+
+ // In two-strategist mode, omitting event_id requires team to avoid ambiguity.
+ room.enableChatStrategy(undefined,'b');
+ expect(room.submitStrategyEvent({room:room.id,action:'manage',radio:'Ambiguous.'})).toHaveProperty('error');
+ expect(room.submitStrategyEvent({room:room.id,team:'b',action:'manage',radio:'Mercedes, manage tyres.'})).toMatchObject({team:'b'});
+});
+
+test('a stale unanswered event refreshes on a new lap after cooldown without killing the prior ticket',()=>{
+ const room=new RaceRoom(crypto.randomUUID(),'http://localhost:5277',{JEV_MOCK:'1'},1,'jev-vs-jev',{},'monza',true,10);
+ room.live='running';
+ room.race.phase='racing';
+ const track=getTrack('monza'),car=room.race.cars.a;
+ car.distance=200;
+ const events=room.enableChatStrategy(120_000);
+ room.advance(1);
+ const lap1Event=events.pending!.event;
+
+ // Advance race clock by 30s and cross into lap 2 without answering lap 1: a fresh New lap nudge fires.
+ room.race.time+=30;
+ car.lap=1;
+ car.distance=track.LENGTH+100;
+ room.advance(1);
+ const lap2Event=events.pending!.event;
+ expect(lap2Event.event_id).not.toBe(lap1Event.event_id);
+ expect(lap2Event.reasons).toContain('New lap');
+
+ // If ChatGPT was still answering lap1Event, it is still accepted rather than dropped.
+ expect(room.submitStrategyEvent({room:room.id,event_id:lap1Event.event_id,action:'manage',radio:'Manage tyres.'})).toMatchObject({team:'a'});
+ expect(events.pending).toBeUndefined();
+});

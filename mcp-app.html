@@ -12,7 +12,10 @@
    <div class="mcp-brand"><span class="brand-mark" aria-hidden="true"></span><strong>MCP Grand Prix</strong></div>
    <p id="mcp-status" role="status">Connecting to MCP host…</p>
   </div>
-  <button id="mcp-menu-toggle" type="button" aria-controls="mcp-menu" aria-expanded="true">Race menu</button>
+  <div class="mcp-header-actions">
+   <button id="mcp-stop-header" type="button" class="mcp-danger" hidden>Stop race</button>
+   <button id="mcp-menu-toggle" type="button" aria-controls="mcp-menu" aria-expanded="true">Race menu</button>
+  </div>
  </header>
  <section id="mcp-multiplayer-bar" class="mcp-multiplayer-bar" aria-label="Team B multiplayer invitation" hidden>
   <div class="mcp-multiplayer-meta">
@@ -73,6 +76,7 @@
     </label>
     <div class="mcp-setup-actions">
      <button id="mcp-accept" type="submit" class="mcp-primary mcp-accept" disabled>Accept</button>
+     <button id="mcp-owner" type="button" class="mcp-danger mcp-stop-cta" hidden>Stop race</button>
     </div>
    </form>
    <details id="mcp-join-panel" class="mcp-join-panel">
@@ -89,7 +93,6 @@
     <button id="mcp-back-feed" type="button" hidden>Back to race</button>
     <button id="mcp-web" type="button" disabled>Open spectator ↗</button>
     <button id="mcp-fullscreen" type="button" hidden>Expand</button>
-    <button id="mcp-owner" type="button" class="mcp-danger" hidden>Stop race</button>
    </div>
    <p id="mcp-join-error" role="alert"></p>
   </div>
