@@ -7,6 +7,8 @@ Real-time Formula 1 strategy and racing powered by **MCP Apps** and **native MCP
 
 Team A races Lewis Hamilton’s **#44 Ferrari**. Team B races George Russell’s **#63 Mercedes**. The other 20 drivers from the 2026 F1 grid start alongside them and compete for the same 22-car classification. Open **Full grid** in the timing tower to follow every driver.
 
+![Monza Day live race broadcast with timing tower, camera switcher, minimap, and telemetry strip](docs/screenshots/hero-monza-broadcast.png)
+
 ---
 
 ## How it works
@@ -38,6 +40,8 @@ flowchart LR
 
 Open **Race menu** at any time (floating modal overlay; dismiss with `×`, backdrop click, or `Esc` without shifting the race view):
 
+![Race setup modal overlay in the MCP App widget](docs/screenshots/race-setup-modal.png)
+
 | Option | Choices | Notes |
 | --- | --- | --- |
 | **Mode** | **ChatGPT strategy** (default) | Native MCP Events webhook drives live pit-wall calls. |
@@ -48,7 +52,9 @@ Open **Race menu** at any time (floating modal overlay; dismiss with `×`, backd
 
 ### Multiplayer (Team A vs Team B)
 
-Enable **Add Multiplayer** in Race setup and click **Accept**. A persistent **Team B invitation** banner appears at the top of the widget:
+Enable **Add Multiplayer** in Race setup and click **Accept**. A persistent **Team B invitation** banner appears at the top of the widget alongside the **Stop race** header control once racing starts:
+
+![Multiplayer Team B invitation banner, Stop race button, and live onboard Ferrari vs Mercedes battle](docs/screenshots/multiplayer-team-b.png)
 
 - Share the invitation with a second player.
 - They can either paste it into **Join as Team B with an invitation** inside their widget, or pass `invite` to `open_grand_prix_strategy` in their own ChatGPT Work chat and subscribe to `grand_prix.strategy_required` using their returned `event_filter`.
@@ -61,6 +67,8 @@ Enable **Add Multiplayer** in Race setup and click **Accept**. A persistent **Te
 ### 1. Proactive ChatGPT strategy & composable radio calls
 
 The server publishes `grand_prix.strategy_required` webhooks at race start, on lap boundaries, and whenever tyre wear, fuel margin, traffic, damage, weather, or race control changes meaningfully.
+
+![Pinned ChatGPT Radio waveform banner and live Event Log with Strategist and Radio filters and expandable JSON payload](docs/screenshots/chatgpt-radio-event-log.png)
 
 Each webhook carries a rich telemetry **summary** (`compound`, `tyreWear`, `availableSets`, `lapsRemaining`, `gapAheadSeconds`, `gapBehindSeconds`, `chargeKJ`, `marginAboveFuelSampleKg`, `damage`, `pitPhase`, `distanceToPitCommitmentM`, `estimatedRejoinPosition`, `teammateInPitLane`, `flag`, `rain`, `wetness`, `sectorWetness`, `wetGripByCompound`), allowing ChatGPT to act immediately in a single step via `submit_grand_prix_radio`, pull full standings/splits via `get_grand_prix_strategy_event`, or omit `event_id` on either tool to check live telemetry and send proactive mid-race calls at any time.
 
@@ -91,6 +99,8 @@ Each webhook carries a rich telemetry **summary** (`compound`, `tyreWear`, `avai
 
 Open **Open spectator ↗** in a browser during a live race to access the **Race control** panel:
 
+![Live Race Control panel with Safety Car deployed and heavy rain falling on Ferrari 44 T-cam view](docs/screenshots/race-control-rain.png)
+
 - **Safety Car:** Deploy immediately or queue for the start of the next leader lap; call **Safety car in next lap** to clear the neutralised queue.
 - **Full-Course Yellow:** Neutralises the field with speed limits for 30 race seconds (or until cleared).
 - **Rain & track wetness:** Switch between **Dry**, **Light**, **Moderate**, and **Heavy** rain. Wetness evolves dynamically with per-sector drying/wetting rates (`sectorWetness`) and compound grip curves so strategists must judge the slick ↔ intermediate ↔ wet crossover themselves.
@@ -100,6 +110,10 @@ Every race control change triggers a fresh strategy event for subscribed strateg
 ### 5. Manual cockpit driving
 
 Choose **Manual** under **Who’s driving** in the MCP Race menu—or open `/?drive` in any browser (runs locally at 1× with zero server overhead by default)—to drive the car yourself with keyboard, gamepad, or touch controls while ChatGPT (or the pit wall) calls strategy over the radio:
+
+![Manual driver's-eye cockpit view with steering wheel dash, physical halo, mirrors, MFD, and live telemetry HUD](docs/screenshots/manual-cockpit-drive.png)
+
+![Drive Mode controls and assists menu showing Gearbox, Traction Control, ABS, Dynamic Racing Line, Pit Assist, and keyboard shortcuts](docs/screenshots/manual-cockpit-controls.png)
 
 | Input | Action |
 | --- | --- |
@@ -113,7 +127,7 @@ Choose **Manual** under **Who’s driving** in the MCP Race menu—or open `/?dr
 | `G` | Switch Driver Mode (Manual / Autopilot) |
 | `Esc` | Cockpit Menu |
 
-Configurable assists include **Traction Control** (`off` / `medium` / `full`), **ABS**, and **Pit Assist**.
+Configurable assists include **Gearbox** (`auto` / `manual`), **Traction Control** (`off` / `medium` / `full`), **Anti-Lock Brakes (ABS)**, **Dynamic Racing Line**, and **Pit Assist**.
 
 ### 6. Broadcast cameras, ChatGPT Radio & Event Log
 
@@ -121,6 +135,10 @@ Configurable assists include **Traction Control** (`off` / `medium` / `full`), *
 - **Instant Replay:** Captures and replays the closest on-track lead change at `0.65×` speed.
 - **ChatGPT Radio:** Pinned radio banner inside the race feed with car number, team waveform, progressive transcript, and optional browser speech readout when audio is unmuted.
 - **Event Log:** Open by default below the broadcast with filter pills (**All**, **Strategist**, **Radio**), unread counter / jump-to-latest button, preserved scroll position, and expandable formatted JSON payloads with one-click copy.
+
+![Las Vegas Night floodlit street circuit broadcast with Strip hotels, 22-car pack, and Sphere / The Strip cameras](docs/screenshots/las-vegas-night.png)
+
+![Interactive 3D Showroom explorer showing the custom Ferrari 44 model with Colour, Clay, and Wireframe finishes](docs/screenshots/showroom-ferrari.png)
 
 ---
 
