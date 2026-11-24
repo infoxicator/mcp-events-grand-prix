@@ -1,6 +1,7 @@
 import {strategyEventDefinition,eventInput,radioInput,type LiveStrategyRead} from '../server/strategy-events';
 import {STRATEGY_EVENT,WEBHOOK_STRATEGY_RESPONSE_MS,type LiveStrategist} from '../src/race/strategy-events';
-import {postStrategyEvent,subscribeInput,unsubscribeInput,verifyStrategyWebhook,webhookId,type StrategyWebhook} from './strategy-webhook';
+import {postStrategyEvent,postSepStrategyEvent,postSepTermination,subscribeInput,unsubscribeInput,verifyStrategyWebhook,webhookId,subscriptionId,type CallbackFailure,type SepStrategyWebhook,type StrategyWebhook} from './strategy-webhook';
+import {registerSepEvents,sepRequestAuthorized,sepCallbackTransport,sepEventHeaderError,sepEventsEnabled,SEP_AUTH_REQUIRED,SEP_EVENTS_PATH,SEP_EVENTS_PRINCIPAL,type SepEventsBindings,type SepSubscribe,type SepUnsubscribe} from './sep-events';
 import {DurableObject} from 'cloudflare:workers';
 import {createMcpHandler,isLegacyRequest,WebStandardStreamableHTTPServerTransport} from '@modelcontextprotocol/server';
 import {RaceRoom,type Peer} from '../server/race-room';
@@ -18,7 +19,7 @@ const EXPIRED_ROOM_CACHE_TTL_MS=10*60_000;
 const EXPIRED_ROOM_CACHE_MAX=2000;
 const expiredResponse=()=>Response.json({error:'Race expired'},{status:404,headers:{...privateHeaders,'X-Race-Expired':'1'}});
 
-export interface Env extends LiveBindings {
+export interface Env extends LiveBindings, SepEventsBindings {
  ASSETS: Fetcher;
  ROOMS: DurableObjectNamespace<GameRoom>;
  ROOM_CREATION: RateLimit;
@@ -63,7 +64,8 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
   const allowCreate=()=>env.ROOM_CREATION.limit({key:req.headers.get('CF-Connecting-IP')??'local'});
   const allowMcpCreate=()=>{
    const limiter=env.MCP_ROOM_CREATION??env.ROOM_CREATION;
-   const key=req.headers.get('Mcp-Session-Id')||req.headers.get('CF-Connecting-IP')||'local';
+   const connectingIP=req.headers.get('CF-Connecting-IP')||'local';
+   const key=path===SEP_EVENTS_PATH?'sep-create:'+connectingIP:req.headers.get('Mcp-Session-Id')||connectingIP;
    return limiter.limit({key});
   };
   if(path==='/api/default'||path==='/api/rooms'&&req.method==='POST'){
@@ -74,14 +76,22 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
    const isDrive=path==='/api/rooms'&&searchParams.has('drive');const isWatch=path==='/api/rooms'&&searchParams.has('watch')&&!isDrive;const lapsParam=Number(searchParams.get('laps'));const laps=Number.isFinite(lapsParam)&&lapsParam>=1&&lapsParam<=20?Math.round(lapsParam):3;const created=await create(env,origin,'jev-vs-jev',circuit,isWatch||isDrive?1:4,path==='/api/rooms'&&(searchParams.has('solo')||(isDrive&&!searchParams.has('multiplayer'))),isDrive,laps,isWatch);expiredRooms.delete(created.links.room);return json(created.links);
   }
 
-  if(path==='/mcp'){
-   const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type, MCP-Protocol-Version, MCP-Session-Id, Mcp-Method, Mcp-Name','Access-Control-Allow-Methods':'POST, OPTIONS'};
+  if(path==='/mcp'||path===SEP_EVENTS_PATH){
+   const sep=path===SEP_EVENTS_PATH;
+   if(sep&&!sepEventsEnabled(env))return json({error:'Not found'},404);
+   const requestOrigin=req.headers.get('Origin');
+   if(sep&&requestOrigin&&requestOrigin!==origin)return json({error:'Invalid MCP origin'},403);
+   const cors={'Access-Control-Allow-Origin':sep?origin:'*','Access-Control-Allow-Headers':`Content-Type, MCP-Protocol-Version, MCP-Session-Id, Mcp-Method, Mcp-Name${sep?', Authorization':''}`,'Access-Control-Allow-Methods':'POST, OPTIONS'};
    if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
    if(req.method!=='POST')return new Response('Use POST',{status:405,headers:cors});
    const rpc=await req.clone().json().catch(()=>null) as {
     jsonrpc?:unknown;id?:string|number;method?:string;params?:{name?:unknown;arguments?:{room?:unknown};_meta?:Record<string,unknown>};
    }|null;
-   if(rpc?.jsonrpc==='2.0'&&['events/list','events/subscribe','events/unsubscribe','events/stream'].includes(rpc.method??'')){
+   if(sep&&rpc?.jsonrpc==='2.0'){
+    const headerError=sepEventHeaderError(req,rpc);
+    if(headerError)return new Response(headerError.body,{status:400,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
+   }
+   if(!sep&&rpc?.jsonrpc==='2.0'&&['events/list','events/subscribe','events/unsubscribe','events/stream'].includes(rpc.method??'')){
     const id=rpc.id;
     if(typeof id!=='string'&&typeof id!=='number')return Response.json({jsonrpc:'2.0',id:null,error:{code:-32600,message:'An event request needs an ID.'}},{headers:cors,status:400});
     if(rpc.method==='events/list')return Response.json({jsonrpc:'2.0',id,result:{events:[strategyEventDefinition]}},{headers:cors});
@@ -97,7 +107,15 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
     // Older open widgets stop polling when their former stream returns 403.
     return Response.json({jsonrpc:'2.0',id,error:{code:-32024,message:'Subscribe through native MCP Events in ChatGPT Work.'}},{headers:cors,status:403});
    }
+   const authenticated=sep&&sepRequestAuthorized(req,env);
+   if(sep&&!authenticated&&rpc?.jsonrpc==='2.0'&&rpc.method==='tools/call'){
+    return Response.json({jsonrpc:'2.0',id:rpc.id??null,error:{code:-32024,message:SEP_AUTH_REQUIRED}},
+     {status:401,headers:{...cors,'WWW-Authenticate':'Bearer','Cache-Control':'no-store'}});
+   }
+   const credentialHeaders=authenticated?{Authorization:`Bearer ${env.SEP_EVENTS_AUTH_TOKEN}`}:undefined;
+   const sepQuery=sep?'?sep=1':'';
    const factory=()=>createRaceMcp(origin,{
+    sepEvents:sep,
     create:async (matchup,circuit,solo)=>{
      if(!(await allowMcpCreate()).success)throw new Error('Room creation limit');
      const created=await create(env,origin,matchup,circuit,4,solo);
@@ -113,33 +131,33 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
      expiredRooms.delete(room);
      const lapQuery=laps!==undefined?`&laps=${laps}`:'';
      const driverQuery=`&driver=${driver}`;
-     const started=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice?room=${room}&circuit=${circuit}${lapQuery}${driverQuery}`,{method:'POST'}));
+     const started=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice?room=${room}&circuit=${circuit}${lapQuery}${driverQuery}${sep?'&sep=1':''}`,{method:'POST'}));
      if(!started.ok)throw new Error('Unable to create a ChatGPT strategy race');
      return started.json<StrategySeatAccess>();
     },
     configureChatPractice:async(room,key,circuit,laps,driver='autopilot')=>{
-     const configured=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice-configure`,{
+     const configured=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice-configure${sepQuery}`,{
       method:'POST',body:JSON.stringify({key,circuit,laps,driver}),
      }));
      return configured.ok?configured.json<StrategySeatAccess&{circuit:CircuitId}>():null;
     },
     joinChatPractice:async({room,key},driver='autopilot')=>{
-     const joined=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-seat`,{method:'POST',body:JSON.stringify({key,driver})}));
+     const joined=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-seat${sepQuery}`,{method:'POST',body:JSON.stringify({key,driver})}));
      return joined.ok?joined.json<StrategySeatAccess&{circuit:CircuitId}>():null;
     },
     stopChatPractice:async(room,key)=>{
-     const stopped=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice-stop`,{method:'POST',body:key}));
+     const stopped=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice-stop${sepQuery}`,{method:'POST',body:key}));
      return stopped.ok;
     },
     strategyEvent:async(room,eventId,team)=>{
-     const result=await roomStub(env,room).fetch(new Request(`${origin}/internal-strategy-event`,{
-      method:'POST',body:JSON.stringify({room,...(eventId?{event_id:eventId}:{}),...(team?{team}:{})}),
+     const result=await roomStub(env,room).fetch(new Request(`${origin}/internal-strategy-event${sepQuery}`,{
+      method:'POST',headers:credentialHeaders,body:JSON.stringify({room,...(eventId?{event_id:eventId}:{}),...(team?{team}:{})}),
      }));
      return result.ok?result.json<LiveStrategyRead>():null;
     },
     submitStrategy:async input=>{
-     const result=await roomStub(env,input.room).fetch(new Request(`${origin}/internal-strategy-radio`,{
-      method:'POST',body:JSON.stringify(input),
+     const result=await roomStub(env,input.room).fetch(new Request(`${origin}/internal-strategy-radio${sepQuery}`,{
+      method:'POST',headers:credentialHeaders,body:JSON.stringify(input),
      }));
      return result.json<{team:'a'|'b';line:string}|{error:string}>();
     },
@@ -154,7 +172,18 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
     },
    });
    let response:Response;
-   if(await isLegacyRequest(req,rpc)){
+   if(sep){
+    response=await createMcpHandler(()=>{
+     const server=factory();
+     registerSepEvents(server,authenticated,async(input,method)=>{
+      const result=await roomStub(env,input.arguments.room).fetch(new Request(`${origin}/internal-sep-${method}`,{
+       method:'POST',headers:credentialHeaders,body:JSON.stringify(input),
+      }));
+      return result.json();
+     });
+     return server;
+    },{legacy:'reject'}).fetch(req);
+   }else if(await isLegacyRequest(req,rpc)){
     const server=factory(),transport=new WebStandardStreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
     try{
      await server.connect(transport);
@@ -167,7 +196,7 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
    for(const [key,value] of Object.entries(cors))headers.set(key,value);
    headers.set('Cache-Control','no-store');
    // MCP Events is a draft capability and isn't in the SDK's handshake schema yet.
-   if(response.ok&&(rpc?.method==='initialize'||rpc?.method==='server/discover')){
+   if(!sep&&response.ok&&(rpc?.method==='initialize'||rpc?.method==='server/discover')){
     const body=await response.json() as {result?:{capabilities?:Record<string,unknown>}};
     if(body.result?.capabilities)body.result.capabilities.events={};
     headers.delete('Content-Length');
@@ -200,11 +229,15 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
 
 export default createWorker();
 
-interface SavedStrategySeat {key:string;subscriptionKey?:string;webhook?:StrategyWebhook}
+interface SavedStrategySeat {key:string;subscriptionKey?:string;webhook?:StrategyWebhook;sep?:true;sepWebhook?:SepStrategyWebhook}
 interface StrategySeat extends SavedStrategySeat {
  webhookVerification?:{url:string};
  webhookAbort?:AbortController;
+ sepChange?:Promise<void>;
 }
+
+const strategyWebhook=(seat:SavedStrategySeat|undefined)=>seat?.sep?seat.sepWebhook:seat?.webhook;
+type SepVerificationReply={failure:CallbackFailure|null}|{error:{code:number;message:string;data?:object}};
 
 interface Saved {
  speed?:number;solo?:boolean;drive?:boolean;watchMode?:boolean;driverMode?:RaceRoom['driverMode'];engineerMode?:RaceRoom['engineerMode'];matchup?:Matchup;id:string;origin:string;race:Race;tokens:RaceRoom['tokens'];mcpToken:string;expiresAt:number;
@@ -223,6 +256,8 @@ export class GameRoom extends DurableObject<Env> {
  private checkpointAt=0;
  private pairing?:{challenge:string;expiresAt:number;chat:boolean};
  private strategySeats:Partial<Record<Team,StrategySeat>>={};
+ private sepVerifiedUntil=0;
+ private sepVerification?:Promise<SepVerificationReply>;
  private strategyDeliveries:Partial<Record<Team,string>>={};
  private guestInviteKey?:string;
  private liveDeadline=0;
@@ -279,9 +314,9 @@ export class GameRoom extends DurableObject<Env> {
     this.lobbyDeadline=saved.live.lobbyDeadline??0;
     if(restoreLobby)for(const team of TEAMS){
      const seat=this.strategySeats[team];
-     if(!seat||(team==='b'&&!seat.webhook))continue;
+     if(!seat||(team==='b'&&!strategyWebhook(seat)))continue;
      this.activateStrategySeat(team,seat);
-     if(seat.webhook&&seat.webhook.expiresAt>Date.now()){
+     if((strategyWebhook(seat)?.expiresAt??0)>Date.now()){
       seat.webhookAbort=new AbortController();
       this.setWebhookStatus(team,'connected');
      }
@@ -313,7 +348,7 @@ export class GameRoom extends DurableObject<Env> {
   const strategySeats:Partial<Record<Team,SavedStrategySeat>>={};
   for(const team of TEAMS){
    const seat=this.strategySeats[team];
-   if(seat)strategySeats[team]={key:seat.key,subscriptionKey:seat.subscriptionKey,webhook:seat.webhook};
+   if(seat)strategySeats[team]={key:seat.key,subscriptionKey:seat.sep?undefined:seat.subscriptionKey,webhook:seat.webhook,sep:seat.sep,sepWebhook:seat.sepWebhook};
   }
   const saved:Saved={
    speed:room.speed,solo:room.solo,drive:room.drive,watchMode:room.watchMode,driverMode:room.driverMode,engineerMode:room.engineerMode,matchup:room.matchup,id:room.id,origin:room.origin,race:room.race,tokens:room.tokens,
@@ -345,10 +380,7 @@ export class GameRoom extends DurableObject<Env> {
  private async expireNow(){
   this.stopClock();
   this.liveAbort?.abort();
-  for(const seat of Object.values(this.strategySeats)){
-   seat.webhookAbort?.abort();
-   seat.webhook=undefined;
-  }
+  this.closeStrategyWebhooks();
   for(const ws of this.peers.keys())ws.close(ROOM_EXPIRED_CLOSE_CODE,'Room expired');
   this.peers.clear();
   this.room=null;
@@ -362,12 +394,20 @@ export class GameRoom extends DurableObject<Env> {
   if(room.live!=='running')return;
   this.stopClock();
   this.liveAbort?.abort();
-  for(const seat of Object.values(this.strategySeats)){
-   seat.webhookAbort?.abort();
-   seat.webhook=undefined;
-  }
+  this.closeStrategyWebhooks();
   room.finishLive(phase);
   this.tightenFinishedExpiry();
+ }
+
+ private closeStrategyWebhooks(){
+  for(const seat of Object.values(this.strategySeats)){
+   seat.webhookAbort?.abort();
+   if(seat.sepWebhook&&seat.sepWebhook.expiresAt>Date.now()){
+    this.ctx.waitUntil(postSepTermination(sepCallbackTransport(this.env,this.outbound.bind(this)),seat.sepWebhook));
+   }
+   seat.webhook=undefined;
+   seat.sepWebhook=undefined;
+  }
  }
 
  private activate(confirmed=false){
@@ -384,13 +424,15 @@ export class GameRoom extends DurableObject<Env> {
     return;
    }
    const guest=this.strategySeats.b;
-   if(guest?.webhook&&guest.webhook.expiresAt<=now){
+   const guestWebhook=strategyWebhook(guest);
+   if(guest&&guestWebhook&&guestWebhook.expiresAt<=now){
     guest.webhookAbort?.abort();
     guest.webhook=undefined;
+    guest.sepWebhook=undefined;
     room.releaseGuestStrategy();
    }
    if(room.strategyPractice&&room.live==='running'){
-    const hasActiveWebhook=TEAMS.some(t=>{const w=this.strategySeats[t]?.webhook;return Boolean(w&&w.expiresAt>now);});
+    const hasActiveWebhook=TEAMS.some(t=>(strategyWebhook(this.strategySeats[t])?.expiresAt??0)>now);
     if(this.peers.size===0){
      if(this.emptyViewersSince===null)this.emptyViewersSince=now;
      if(!hasActiveWebhook||(now-this.emptyViewersSince>=STRATEGY_IDLE_STOP_MS&&now-this.lastStrategyRadioAt>=STRATEGY_IDLE_STOP_MS)){
@@ -500,21 +542,21 @@ export class GameRoom extends DurableObject<Env> {
   room.strategyPractice=true;
   room.driverMode={a:driver,b:'autopilot'};
   this.guestInviteKey=newLiveKey();
-  this.strategySeats.a=this.newStrategySeat();
+  this.strategySeats.a=this.newStrategySeat(url.searchParams.get('sep')==='1');
   room.strategyDriverKeys={a:this.strategySeats.a.key};
   this.activateStrategySeat('a',this.strategySeats.a);
   return this.prepareLiveRace(room);
  }
 
- private newStrategySeat():StrategySeat{
-  return {key:newLiveKey(),subscriptionKey:newLiveKey()};
+ private newStrategySeat(sep=false):StrategySeat{
+  return {key:newLiveKey(),...(sep?{sep:true}:{subscriptionKey:newLiveKey()})};
  }
 
  private strategySeatAccess(team:Team){
   const seat=this.strategySeats[team]!;
   return {
    strategyKey:seat.key,
-   subscriptionKey:seat.subscriptionKey,
+   subscriptionKey:seat.sep?undefined:seat.subscriptionKey,
    laps:this.room!.race.laps,
    driver:this.room!.driverMode[team]==='human'?'human':'autopilot',
    ...(team==='a'?{guestInviteKey:this.guestInviteKey}:{}),
@@ -529,19 +571,32 @@ export class GameRoom extends DurableObject<Env> {
  private activateStrategySeat(team:Team,seat:StrategySeat){
   const room=this.room!,existing=room.strategyFor(team);
   if(existing)return existing;
-  const events=room.enableChatStrategy(seat.subscriptionKey?WEBHOOK_STRATEGY_RESPONSE_MS:undefined,team);
-  if(seat.subscriptionKey){
+  const usesWebhook=seat.sep||seat.subscriptionKey;
+  const events=room.enableChatStrategy(usesWebhook?WEBHOOK_STRATEGY_RESPONSE_MS:undefined,team);
+  if(usesWebhook){
    this.setWebhookStatus(team,'waiting');
-   events.subscribe(event=>{
-    const subscription=seat.webhook;
+   events.subscribe((event,issuedAt)=>{
+    const subscription=strategyWebhook(seat);
     if(subscription&&subscription.expiresAt>Date.now()){
      this.strategyDeliveries[team]=event.event_id;
      this.setWebhookStatus(team,'connected');
-     this.ctx.waitUntil(this.deliverStrategy(team,seat,subscription,event));
+     this.ctx.waitUntil(seat.sepWebhook===subscription
+      ?this.deliverSepStrategy(team,seat,subscription,event,issuedAt)
+      :this.deliverStrategy(team,seat,subscription,event));
     }else this.setWebhookStatus(team,'waiting');
    });
   }
   return events;
+ }
+
+ private async deliverSepStrategy(team:Team,seat:StrategySeat,subscription:SepStrategyWebhook,event:Parameters<typeof postSepStrategyEvent>[2],issuedAt:number){
+  const signal=seat.webhookAbort!.signal;
+  const delivered=await postSepStrategyEvent(sepCallbackTransport(this.env,this.outbound.bind(this)),subscription,event,issuedAt,signal);
+  const room=this.room!;
+  if(signal.aborted||seat.sepWebhook!==subscription||room.live!=='running'||this.strategyDeliveries[team]!==event.event_id)return;
+  this.setWebhookStatus(team,delivered?'delivered':'failed');
+  room.logStrategyDelivery(event,delivered);
+  room.broadcast();
  }
 
  private async deliverStrategy(team:Team,seat:StrategySeat,subscription:StrategyWebhook,event:Parameters<typeof postStrategyEvent>[2]){
@@ -573,7 +628,7 @@ export class GameRoom extends DurableObject<Env> {
  private async changeStrategySubscription(req:Request,subscribing:boolean){
   const parsed=(subscribing?subscribeInput:unsubscribeInput).safeParse(await req.json());
   const room=this.room,filter=parsed.data?.arguments;
-  const team=filter&&TEAMS.find(team=>this.strategySeats[team]?.subscriptionKey===filter.subscription_key);
+  const team=filter&&TEAMS.find(team=>!this.strategySeats[team]?.sep&&this.strategySeats[team]?.subscriptionKey===filter.subscription_key);
   const seat=team&&this.strategySeats[team];
   if(!parsed.success||!room?.live||!team||!seat||filter?.room!==room.id){
    return json({error:{code:-32024,message:'This race event filter is invalid or expired.'}});
@@ -627,8 +682,107 @@ export class GameRoom extends DurableObject<Env> {
   }
  }
 
+ private scopeStrategyInput<T extends {team?:Team;event_id?:string}>(req:Request,url:URL,input:T):T|null{
+  const sep=Boolean(this.strategySeats.a?.sep);
+  if(sep!==(url.searchParams.get('sep')==='1'))return null;
+  if(!sep)return input;
+  if(!sepRequestAuthorized(req,this.env)||(input.team&&!this.strategySeats[input.team]?.sep))return null;
+  const eventId=input.event_id;
+  if(!eventId)return input;
+  const team=TEAMS.find(team=>this.strategySeats[team]?.sep&&this.room?.strategyFor(team)?.has(eventId));
+  if(!team||(input.team&&input.team!==team))return null;
+  return {...input,team};
+ }
+
+ private async changeSepSubscription(req:Request,subscribing:boolean){
+  const input=await req.json<SepSubscribe|SepUnsubscribe>();
+  if(!sepRequestAuthorized(req,this.env))return json({error:{code:-32024,message:SEP_AUTH_REQUIRED}});
+  const room=this.room,team=input.arguments.team;
+  const seat=this.strategySeats[team];
+  const forbidden=()=>json({error:{code:-32024,message:'This SEP race seat is unavailable.'}});
+  if(!room||!seat?.sep||input.arguments.room!==room.id)return forbidden();
+  const url=new URL(input.delivery.url).href;
+  const previousChange=seat.sepChange;
+  let release!:()=>void;
+  const change=seat.sepChange=new Promise<void>(resolve=>{release=resolve;});
+  try{
+   await previousChange;
+   if(this.room!==room)return forbidden();
+   const current=seat.sepWebhook;
+   const active=current&&current.expiresAt>Date.now()?current:undefined;
+   if(!subscribing){
+    if(active?.url!==url)return json({error:{code:-32023,message:'Subscription not found.',data:{kind:'subscription'}}});
+    seat.webhookAbort?.abort();
+    seat.sepWebhook=undefined;
+    if(team==='b')room.releaseGuestStrategy();
+    else this.setWebhookStatus(team,'waiting');
+    await this.save();
+    room.broadcast();
+    return json({result:{}});
+   }
+   if(room.live!=='running'||Date.now()>=this.liveDeadline)return forbidden();
+   if(active&&active.url!==url)return json({error:{code:-32025,message:'This seat already has a subscription.',data:{limit:'subscriptions',max:1}}});
+   const {delivery:{secret},ttlMs}=input as SepSubscribe;
+   const id=active?.id??await subscriptionId([SEP_EVENTS_PRINCIPAL,url,STRATEGY_EVENT,{room:room.id,team}]);
+   const subscription={id,url,secret,expiresAt:this.liveDeadline};
+   const verificationKey=await subscriptionId([SEP_EVENTS_PRINCIPAL,url]);
+   const verified=await roomStub(this.env,`sep-verification:${verificationKey}`).fetch(new Request(new URL('/internal-sep-verify',req.url),{
+    method:'POST',headers:{Authorization:req.headers.get('Authorization')!},body:JSON.stringify(subscription),
+   }));
+   const verification=await verified.json<SepVerificationReply>();
+   if('error' in verification)return json(verification);
+   if(verification.failure)return json({error:{code:-32027,message:'The callback endpoint did not verify.',data:{reason:verification.failure}}});
+   const now=Date.now();
+   if(this.room!==room||room.live!=='running'||now>=this.liveDeadline||this.strategySeats[team]!==seat)return forbidden();
+   const expiresAt=subscription.expiresAt=Math.min(this.liveDeadline,now+(ttlMs??strategyTimeBudgetMs(room.race.laps)));
+   if(active&&seat.sepWebhook===active&&active.expiresAt>Date.now()){
+    if(active.secret!==secret)active.previousSecret={value:active.secret,expiresAt:Date.now()+60_000};
+    else if(active.previousSecret&&active.previousSecret.expiresAt<=Date.now())delete active.previousSecret;
+    active.secret=secret;
+    active.expiresAt=expiresAt;
+   }else{
+    seat.webhookAbort?.abort();
+    seat.webhookAbort=new AbortController();
+    seat.sepWebhook=subscription;
+   }
+   this.activateStrategySeat(team,seat);
+   await this.save();
+   if(room.live==='running'&&seat.sepWebhook){
+    if(!active)this.setWebhookStatus(team,'connected');
+    room.broadcast();
+   }
+   return json({result:{id,refreshBefore:new Date(expiresAt).toISOString(),cursor:null,truncated:false}});
+  }finally{
+   release();
+   if(seat.sepChange===change)delete seat.sepChange;
+  }
+ }
+
+ private async verifySepCallback(req:Request){
+  if(!sepRequestAuthorized(req,this.env))return json({error:{code:-32024,message:SEP_AUTH_REQUIRED}});
+  const subscription=await req.json<SepStrategyWebhook>();
+  if(this.sepVerifiedUntil>Date.now())return json({failure:null});
+  // This object is addressed by principal and callback URL, so rooms share verification.
+  this.sepVerification??=this.checkSepCallback(subscription);
+  const checking=this.sepVerification;
+  try{return json(await checking);}
+  finally{if(this.sepVerification===checking)this.sepVerification=undefined;}
+ }
+
+ private async checkSepCallback(subscription:SepStrategyWebhook):Promise<SepVerificationReply>{
+  const limiter=this.env.MCP_ROOM_CREATION??this.env.ROOM_CREATION;
+  const hostname=new URL(subscription.url).hostname.replace(/\.$/,'');
+  if(!(await limiter.limit({key:`sep-verify:${hostname}`})).success){
+   return {error:{code:-32025,message:'The callback verification limit was reached.',data:{limit:'callback_verifications'}}};
+  }
+  const failure=await verifyStrategyWebhook(sepCallbackTransport(this.env,this.outbound.bind(this)),subscription,true);
+  if(!failure)this.sepVerifiedUntil=Date.now()+5*60_000;
+  return {failure};
+ }
+
  private async internal(req:Request,url:URL){
   const path=url.pathname;
+  if(path==='/internal-sep-verify'&&req.method==='POST')return this.verifySepCallback(req);
   if(path==='/internal-chat-practice'&&req.method==='POST')return this.startChatPractice(url);
   if(path==='/internal-start'&&req.method==='POST')return this.startLive(req,url);
   if(path==='/internal-pair'&&req.method==='POST'){
@@ -642,13 +796,16 @@ export class GameRoom extends DurableObject<Env> {
    if(!this.paired(await req.text()))return json({error:'Pairing expired'},410);
    if(!this.room?.live)return json({pending:true},202);
    const seat=this.strategySeats.a;
-   return json({...this.controls(),...(this.room.live==='running'&&seat?.subscriptionKey?{
+   return json({...this.controls(),...(this.room.live==='running'&&!seat?.sep&&seat?.subscriptionKey?{
     strategyKey:seat.key,eventFilter:{room:this.room.id,subscription_key:seat.subscriptionKey},
    }:{})});
   }
   const room=this.room;
   if(path==='/internal-strategy-subscribe'||path==='/internal-strategy-unsubscribe'){
    return this.changeStrategySubscription(req,path.endsWith('-subscribe'));
+  }
+  if(req.method==='POST'&&(path==='/internal-sep-subscribe'||path==='/internal-sep-unsubscribe')){
+   return this.changeSepSubscription(req,path.endsWith('-subscribe'));
   }
   if(path==='/internal-live'){
    if(room?.live&&room.expiresAt>Date.now())return json(this.controls());
@@ -665,13 +822,14 @@ export class GameRoom extends DurableObject<Env> {
   const current=this.room;
   if(!current||current.expiresAt<=Date.now())return json({error:'Race expired'},404);
   if(current.live){
+   const matchingStrategyEndpoint=Boolean(this.strategySeats.a?.sep)===(url.searchParams.get('sep')==='1');
    if(path==='/internal-chat-seat'&&req.method==='POST'){
     const {key,driver}=await req.json() as {key:unknown;driver?:unknown};
-    if(!current.strategyPractice||current.live!=='running'||!this.guestInviteKey||key!==this.guestInviteKey)return json({error:'Invalid strategy invitation'},403);
+    if(!matchingStrategyEndpoint||!current.strategyPractice||current.live!=='running'||!this.guestInviteKey||key!==this.guestInviteKey)return json({error:'Invalid strategy invitation'},403);
     const seat=this.strategySeats.b;
-    if(!seat?.subscriptionKey){
+    if(!(seat?.sep||seat?.subscriptionKey)){
      if(current.strategyFor('b')||seat?.webhookVerification)return json({error:'Mercedes already uses a different connection'},409);
-     this.strategySeats.b=this.newStrategySeat();
+     this.strategySeats.b=this.newStrategySeat(this.strategySeats.a?.sep);
     }
     const nextDriver=driver==='human'?'human':'autopilot';
     current.driverMode.b=nextDriver;
@@ -681,20 +839,23 @@ export class GameRoom extends DurableObject<Env> {
    }
    if(path==='/internal-strategy-event'&&req.method==='POST'){
     const parsed=eventInput.safeParse(await req.json());
-    const event=parsed.success&&parsed.data.room===current.id?current.readLiveStrategyEvent(parsed.data.event_id,parsed.data.team):null;
+    const input=parsed.success&&parsed.data.room===current.id?this.scopeStrategyInput(req,url,parsed.data):null;
+    const event=input?current.readLiveStrategyEvent(input.event_id,input.team):null;
     return event?json(event):json({error:'This race is no longer active.'},410);
    }
    if(path==='/internal-strategy-radio'&&req.method==='POST'){
     const parsed=radioInput.safeParse(await req.json());
     if(!parsed.success)return json({error:'Invalid strategy order.'},400);
-    const result=current.submitStrategyEvent(parsed.data);
+    const input=this.scopeStrategyInput(req,url,parsed.data);
+    if(!input)return json({error:'This credential does not authorize the race seat.'},403);
+    const result=current.submitStrategyEvent(input);
     if('line' in result&&result.team){this.lastStrategyRadioAt=Date.now();this.consecutiveWebhookFailures[result.team]=0;await this.save();}
     return json(result);
    }
    if(path==='/internal-watch'&&req.method==='POST'&&await req.text()===current.viewerKey)return json(current.state());
    if(path==='/internal-chat-practice-configure'&&req.method==='POST'){
     const {key,circuit,laps:lapsRaw,driver:driverRaw}=await req.json() as {key:unknown;circuit:unknown;laps?:unknown;driver?:unknown};
-    if(!current.strategyPractice||current.live!=='running'||current.race.phase!=='lobby'||!this.strategySeats.a||key!==this.strategySeats.a.key){
+    if(!matchingStrategyEndpoint||!current.strategyPractice||current.live!=='running'||current.race.phase!=='lobby'||!this.strategySeats.a||key!==this.strategySeats.a.key){
      return json({error:'Strategy lobby unavailable'},409);
     }
     if(!isCircuit(circuit))return json({error:'Invalid circuit'},400);
@@ -710,7 +871,7 @@ export class GameRoom extends DurableObject<Env> {
     return json({...this.controls(),...this.strategySeatAccess('a'),circuit:current.race.circuit});
    }
    if(path==='/internal-chat-practice-stop'&&req.method==='POST'){
-    if(!current.strategyPractice||!this.strategySeats.a||await req.text()!==this.strategySeats.a.key)return json({error:'Strategy controller required'},403);
+    if(!matchingStrategyEndpoint||!current.strategyPractice||!this.strategySeats.a||await req.text()!==this.strategySeats.a.key)return json({error:'Strategy controller required'},403);
     this.finishLive('stopped');
     await this.save();
     return json({stopped:true});
@@ -761,7 +922,7 @@ export class GameRoom extends DurableObject<Env> {
    }
    if(room.live&&message.type==='start'){
     const host=this.strategySeats.a;
-    if(peer.joined&&host?.webhook&&host.webhook.expiresAt>Date.now()&&message.startKey===host.key&&Date.now()<this.liveDeadline&&room.start()){
+    if(peer.joined&&host&&(strategyWebhook(host)?.expiresAt??0)>Date.now()&&message.startKey===host.key&&Date.now()<this.liveDeadline&&room.start()){
      const now=Date.now();
      this.lobbyDeadline=0;
      this.lastStrategyRadioAt=now;

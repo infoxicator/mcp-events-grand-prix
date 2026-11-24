@@ -9,6 +9,7 @@ const choices={line:'hold',pace:'normal',brake:'normal',ers:'no',drs:'yes',reply
 const answer=(choice:string)=>({type:'choice',choice,confidence:1,probabilities:{[choice]:1}});
 const calls={jev:0,luna:0,engineer:0,keys:0};
 const webhooks=new Map<string,{id:string;verifications:number;events:unknown[]}>();
+const sepWebhooks=new Map<string,{verifications:number;attempts:{id:string;signatures:number;value:Record<string,unknown>;status:number}[]}>();
 let badKeys=false,badEngineer=false;
 createServer(async(req,res)=>{
  const url=new URL(req.url!,'http://127.0.0.1:8798');
@@ -36,6 +37,32 @@ createServer(async(req,res)=>{
   if(url.searchParams.has('tampered'))signature[0]^=255;
   return send({token:`${signed}.${signature.toString('base64url')}`});
  }
+ if(url.pathname==='/sep-egress/deliver'&&req.method==='POST'){
+  if(req.headers.authorization!==`Bearer ${'f'.repeat(64)}`)return send({error:'Incorrect egress credential'},403);
+  let raw='';
+  for await(const chunk of req)raw+=chunk;
+  const {url:destination,headers,body}=JSON.parse(raw);
+  const callback=new URL(destination);
+  if(callback.protocol!=='https:'||!callback.pathname.startsWith('/sep-callback/'))return send({error:'Incorrect fixture callback URL'},400);
+  const id=headers['webhook-id'],timestamp=headers['webhook-timestamp'],subscription=headers['x-mcp-subscription-id'];
+  const signatures=[7,9].map(byte=>'v1,'+createHmac('sha256',Buffer.alloc(32,byte)).update(`${id}.${timestamp}.${body}`).digest('base64'));
+  const provided=headers['webhook-signature']?.split(' ') as string[]|undefined;
+  const verified=provided?.filter(value=>signatures.includes(value)).length??0;
+  if(!id||!timestamp||!subscription||!provided?.length||verified!==provided.length)return send({error:'Invalid signature'},401);
+  const value=JSON.parse(body);
+  const received=sepWebhooks.get(callback.pathname)??{verifications:0,attempts:[]};
+  sepWebhooks.set(callback.pathname,received);
+  if(value.type==='verification'){
+   received.verifications++;
+   res.writeHead(200,{'X-SEP-Callback-Status':200});
+   return res.end(JSON.stringify({challenge:callback.pathname.endsWith('-reject')?'incorrect':value.challenge}));
+  }
+  const status=value.type==='terminated'?200:callback.pathname.endsWith('-gone')?410:received.attempts.length===0?503:200;
+  received.attempts.push({id,signatures:verified,value,status});
+  res.writeHead(200,{'X-SEP-Callback-Status':status});
+  return res.end('{}');
+ }
+ if(url.pathname.startsWith('/sep-callback/')&&req.method==='GET')return send(sepWebhooks.get(url.pathname)??{verifications:0,attempts:[]});
  if(url.pathname.startsWith('/webhook/mcp-events/')){
   if(req.method==='GET')return send(webhooks.get(url.pathname)??{verifications:0,events:[]});
   if(req.method!=='POST')return send({error:'Expected POST'},405);

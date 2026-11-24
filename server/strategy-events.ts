@@ -107,7 +107,7 @@ export function strategySummary(observation:StrategyEvent['observation']):Strate
 
 export class StrategyEvents {
  constructor(private readonly responseMs=STRATEGY_RESPONSE_MS){}
- private listeners=new Set<(event:StrategyEventNotice&{event_id:string})=>void>();
+ private listeners=new Set<(event:StrategyEventNotice&{event_id:string},issuedAt:number)=>void>();
  pending?:PendingStrategy;
  private recent=new Map<string,PendingStrategy>();
  private consumed=new Set<string>();
@@ -123,7 +123,7 @@ export class StrategyEvents {
    const oldest=this.recent.keys().next().value;
    if(oldest!==undefined)this.recent.delete(oldest);
   }
-  for(const listener of this.listeners)listener(this.notice(event));
+  for(const listener of this.listeners)listener(this.notice(event),event.issuedAt);
   return event;
  }
 
@@ -163,9 +163,9 @@ export class StrategyEvents {
   }
  }
 
- subscribe(listener:(event:StrategyEventNotice&{event_id:string})=>void){
+ subscribe(listener:(event:StrategyEventNotice&{event_id:string},issuedAt:number)=>void){
   this.listeners.add(listener);
-  if(this.pending&&this.pending.event.expiresAt>Date.now())listener(this.notice(this.pending.event));
+  if(this.pending&&this.pending.event.expiresAt>Date.now())listener(this.notice(this.pending.event),this.pending.event.issuedAt);
   return ()=>{this.listeners.delete(listener);};
  }
 

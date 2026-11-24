@@ -3,6 +3,7 @@ import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client
 import {WebSocket} from 'ws';
 import {liveInvitation,liveSpectatorURL,newLiveKey,pairingChallenge,parseLiveInvitation} from '../src/race/live';
 import type {RaceState,ServerMessage} from '../src/race/types';
+import {createSepWebhookEgress,isPublicCallbackAddress} from '../server/sep-webhook-egress';
 
 const fixture='http://127.0.0.1:8798';
 const host='http://127.0.0.1:8799';
@@ -22,6 +23,145 @@ async function pair(request:APIRequestContext,chat=false){
 
 const readCalls=(request:APIRequestContext)=>request.get(fixture+'/fixture').then(r=>r.json()) as Promise<{jev:number;luna:number;engineer:number;keys:number}>;
 const counts=({jev,luna,engineer}:Awaited<ReturnType<typeof readCalls>>)=>({jev,luna,engineer});
+
+test('SEP-3415 reuses server authentication across races and signs and retries webhook deliveries',async({request,baseURL})=>{
+ const origin=baseURL!, incoming='grand_prix.strategy_required',version='2026-07-28';
+ const extension='io.modelcontextprotocol/events';
+ const token='e'.repeat(64),wrongToken='d'.repeat(64);
+ const rpc=async(method:string,params:Record<string,unknown>={},token?:string,nameHeader?:string|null,path='/mcp/sep-events')=>{
+  const name=nameHeader===undefined&&typeof params.name==='string'?params.name:nameHeader;
+  const response=await request.post(path,{
+   headers:{Accept:'application/json, text/event-stream','Mcp-Protocol-Version':version,'Mcp-Method':method,
+    ...(name?{'Mcp-Name':name}:{}),...(token?{Authorization:`Bearer ${token}`}:{})},
+   data:{jsonrpc:'2.0',id:crypto.randomUUID(),method,params:{...params,_meta:{
+    'io.modelcontextprotocol/protocolVersion':version,
+    'io.modelcontextprotocol/clientInfo':{name:'SEP regression client',version:'1'},
+    'io.modelcontextprotocol/clientCapabilities':{},
+   }}},
+  });
+  return {status:response.status(),...await response.json()};
+ };
+ const discovery=await rpc('server/discover');
+ expect(discovery.result.capabilities.extensions[extension]).toEqual({});
+ const legacyDiscovery=await rpc('server/discover',{},undefined,undefined,'/mcp');
+ expect(legacyDiscovery.result.capabilities.events).toEqual({});
+ expect(legacyDiscovery.result.capabilities.extensions?.[extension]).toBeUndefined();
+ const listed=await rpc('events/list');
+ expect(listed.result).toMatchObject({resultType:'complete',events:[{name:incoming,delivery:['webhook'],inputSchema:{required:['room','team']}}]});
+
+ const open={name:'open_grand_prix_strategy',arguments:{multiplayer:true}};
+ expect(await rpc('tools/call',open)).toMatchObject({status:401,error:{code:-32024}});
+ const opening=await rpc('tools/call',open,token);
+ expect(opening).toHaveProperty('result');
+ const opened=opening.result;
+ expect(opened.isError).toBeFalsy();
+ const {room,key}=opened._meta.liveInvitation;
+ const {strategyKey,guestInvitation}=opened._meta;
+ const filter=opened.structuredContent.event_filter;
+ expect(filter).toEqual({room,team:'a'});
+ expect(opened._meta).not.toHaveProperty('eventBearerToken');
+ expect(JSON.stringify(opened)).not.toContain(token);
+ const localPath='/sep-callback/'+crypto.randomUUID();
+ const url='https://callback.example.test'+localPath;
+ const secret=(byte:number)=>'whsec_'+Buffer.alloc(32,byte).toString('base64');
+ const subscription={name:incoming,arguments:filter,delivery:{mode:'webhook',url,secret:secret(7)},cursor:null,ttlMs:null};
+ const probe=watch(origin,room,key);
+ const received=(path=localPath)=>request.get(fixture+path).then(response=>response.json());
+ try{
+  expect((await rpc('events/subscribe',subscription)).error.code).toBe(-32024);
+  expect((await rpc('events/subscribe',subscription,wrongToken)).error.code).toBe(-32024);
+  expect(await rpc('events/subscribe',subscription,token,null)).toMatchObject({status:400,error:{code:-32020}});
+  expect(await rpc('events/subscribe',subscription,token,'wrong')).toMatchObject({status:400,error:{code:-32020}});
+  expect((await rpc('events/subscribe',{...subscription,name:'unknown.event'},token)).error).toMatchObject({code:-32023,data:{kind:'event'}});
+  expect((await rpc('events/poll',{name:incoming,arguments:filter},token)).error).toMatchObject({code:-32026,data:{value:'poll'}});
+  expect((await rpc('events/stream',{name:incoming,arguments:filter},token)).error).toMatchObject({code:-32026,data:{value:'push'}});
+  expect((await rpc('events/subscribe',{...subscription,delivery:{...subscription.delivery,url:url+'-reject'}},token)).error).toMatchObject({code:-32027,data:{reason:'challenge_failed'}});
+  expect((await rpc('events/subscribe',{...subscription,delivery:{...subscription.delivery,url:'http://callback.example.test'+localPath}},token)).error.code).toBe(-32602);
+  const competing=await Promise.all([rpc('events/subscribe',subscription,token),rpc('events/subscribe',subscription,token)]);
+  const subscribed=competing[0].result;
+  expect(subscribed).toMatchObject({resultType:'complete',id:expect.stringMatching(/^sub_/),refreshBefore:expect.any(String),cursor:null,truncated:false});
+  expect(competing[1].result.id).toBe(subscribed.id);
+  const rotated=await rpc('events/subscribe',{...subscription,delivery:{...subscription.delivery,secret:secret(9)}},token);
+  expect(rotated.result.id).toBe(subscribed.id);
+  expect((await received()).verifications).toBe(1);
+
+  const otherRace=(await rpc('tools/call',open,token)).result;
+  const otherFilter=otherRace.structuredContent.event_filter;
+  try{
+   expect(otherFilter).toEqual({room:expect.any(String),team:'a'});
+   expect(otherFilter.room).not.toBe(room);
+   const otherSubscription={...subscription,arguments:otherFilter};
+   const other=(await rpc('events/subscribe',otherSubscription,token)).result;
+   expect(other).toMatchObject({resultType:'complete',id:expect.stringMatching(/^sub_/)});
+   expect(other.id).not.toBe(subscribed.id);
+   expect((await received()).verifications).toBe(1);
+   expect((await rpc('events/unsubscribe',{...otherSubscription,delivery:{url}},token)).result).toMatchObject({resultType:'complete'});
+  }finally{
+   await rpc('tools/call',{name:'stop_grand_prix_chat_strategy',arguments:{room:otherFilter.room,key:otherRace._meta.strategyKey}},token);
+  }
+
+  const joined=(await rpc('tools/call',{name:'open_grand_prix_strategy',arguments:{invite:guestInvitation}},token)).result;
+  const guestPath=localPath+'-gone';
+  const guest={name:incoming,arguments:joined.structuredContent.event_filter,delivery:{...subscription.delivery,url:'https://another-callback.example.test'+guestPath}};
+  expect((await rpc('events/subscribe',guest,token)).result.id).not.toBe(subscribed.id);
+  await expect.poll(()=>probe.state()?.strategyWebhook).toBe('connected');
+  probe.ws.send(JSON.stringify({type:'start',startKey:strategyKey}));
+  await expect.poll(async()=>(await received()).attempts.length,{timeout:15_000}).toBeGreaterThanOrEqual(2);
+  const {attempts:[first,retry]}=await received();
+  expect(first).toMatchObject({id:expect.stringMatching(/^msg_/),signatures:2,status:503,value:{name:incoming,cursor:null,data:{room,team:'a'}}});
+  expect(first.id).not.toBe(first.value.eventId);
+  expect(retry).toEqual({...first,status:200});
+  await expect.poll(async()=>(await received(guestPath)).attempts[0]?.status).toBe(410);
+  const rejectedDelivery=(await received(guestPath)).attempts[0].id;
+  const guestUnsubscribe={...guest,delivery:{url:guest.delivery.url}};
+  expect((await rpc('events/unsubscribe',guestUnsubscribe,wrongToken)).error.code).toBe(-32024);
+  expect((await rpc('events/unsubscribe',guestUnsubscribe,token)).result).toMatchObject({resultType:'complete'});
+  expect((await rpc('events/unsubscribe',guestUnsubscribe,token)).error).toMatchObject({code:-32023,data:{kind:'subscription'}});
+  const short=(await rpc('events/subscribe',{...guest,ttlMs:1000},token)).result;
+  await expect.poll(()=>Date.now()).toBeGreaterThan(Date.parse(short.refreshBefore));
+  expect((await rpc('events/unsubscribe',guestUnsubscribe,token)).error.code).toBe(-32023);
+  expect((await received(guestPath)).attempts.filter((attempt:{id:string})=>attempt.id===rejectedDelivery)).toHaveLength(1);
+  const eventId=first.value.eventId;
+  const radio={name:'submit_grand_prix_radio',arguments:{room,event_id:eventId,action:'manage',radio:'Manage the tyres on the opening stint.'}};
+  expect(await rpc('tools/call',radio,wrongToken)).toMatchObject({status:401,error:{code:-32024}});
+  expect((await rpc('tools/call',{...radio,arguments:{...radio.arguments,team:'b'}},token)).result.isError).toBe(true);
+  expect((await rpc('tools/call',radio,token,undefined,'/mcp')).result.isError).toBe(true);
+  expect((await rpc('tools/call',radio,token)).result.isError).toBeFalsy();
+  await expect.poll(()=>probe.state()?.race.radio.some(r=>r.text===radio.arguments.radio)).toBe(true);
+  await rpc('tools/call',{name:'stop_grand_prix_chat_strategy',arguments:{room,key:strategyKey}},token);
+  await expect.poll(async()=>(await received()).attempts.some((a:{value:{type?:string}})=>a.value.type==='terminated')).toBe(true);
+ }finally{
+  probe.ws.close();
+  await rpc('tools/call',{name:'stop_grand_prix_chat_strategy',arguments:{room,key:strategyKey}},token);
+ }
+});
+
+test('SEP webhook egress requires authentication and blocks private DNS results',async()=>{
+ const token='a'.repeat(64);
+ const server=createSepWebhookEgress(token);
+ await new Promise<void>(resolve=>{server.listen(0,'127.0.0.1',resolve);});
+ const address=server.address();
+ if(!address||typeof address==='string')throw new Error('Expected a local egress listener.');
+ const relay=`http://127.0.0.1:${address.port}/deliver`;
+ try{
+  const deliver=(url:string,credential=token)=>fetch(relay,{method:'POST',headers:{Authorization:`Bearer ${credential}`},body:JSON.stringify({
+   url,body:'{}',headers:{'webhook-id':'msg_test','webhook-timestamp':'1','webhook-signature':'v1,test','x-mcp-subscription-id':'sub_test'},
+  })});
+  expect((await deliver('https://localhost/callback','x')).status).toBe(403);
+  for(const url of ['https://localhost/callback','https://127.0.0.1/callback','https://[::1]/callback','http://example.com/callback']){
+   const rejected=await deliver(url);
+   expect(rejected.status).toBe(400);
+   expect(rejected.headers.get('X-SEP-Callback-Error')).toBe('challenge_failed');
+  }
+  for(const ip of ['127.0.0.1','169.254.169.254','100.64.0.1','::1','::ffff:127.0.0.1','fd00::1','2001:db8::1']){
+   expect(isPublicCallbackAddress(ip),ip).toBe(false);
+  }
+  expect(isPublicCallbackAddress('8.8.8.8')).toBe(true);
+  expect(isPublicCallbackAddress('2606:4700:4700::1111')).toBe(true);
+ }finally{
+  await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+ }
+});
 
 async function mcp(origin:string){
  const client=new Client({name:'Grand Prix Worker verification',version:'1'});

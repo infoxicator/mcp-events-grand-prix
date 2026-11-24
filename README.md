@@ -156,6 +156,16 @@ Endpoint: `POST /mcp` (Streamable HTTP + native MCP Events JSON-RPC).
   - `stop_grand_prix_chat_strategy` *(app-only)* — Stop an active ChatGPT strategy race
   - `grand_prix_status` — Read telemetry for a public room
 
+### SEP-3415 Events endpoint
+
+Independent MCP `2026-07-28` clients can use `POST /mcp/sep-events` for the [MCP Events extension](https://github.com/modelcontextprotocol/ext-events/blob/main/specification/beta/events/events.mdx). ChatGPT continues to use `POST /mcp` and its existing subscription flow.
+
+1. Configure `Authorization: Bearer <SEP_EVENTS_AUTH_TOKEN>` once in your MCP client. Discover `io.modelcontextprotocol/events` and call `open_grand_prix_strategy`. The result includes `{room, team}` in `structuredContent.event_filter`.
+2. Send `events/subscribe` with that filter, the same bearer token, and `delivery: {mode: "webhook", url, secret}`. Set `Mcp-Name` to `grand_prix.strategy_required` on subscribe and unsubscribe. The endpoint verifies the callback with a signed challenge. Each seat has one callback at a time.
+3. Start the race in the widget. Keep the same bearer token for telemetry, radio calls, refresh before `refreshBefore`, and unsubscribe. For a new race, use its new filter. Strategy events are live and have `cursor: null`.
+
+The hosted Worker enables the route when `SEP_EVENTS_EGRESS_URL` points to the relay's HTTPS `/deliver` endpoint and `SEP_EVENTS_AUTH_TOKEN` and `SEP_EVENTS_EGRESS_TOKEN` are set as separate Worker secrets. Generate each token as 32 random bytes encoded in lowercase hexadecimal. The auth token grants access to SEP races on the server until you rotate it. Run the relay with `node --import tsx server/sep-webhook-egress.ts` behind HTTPS, using only the matching egress token. The relay listens on `127.0.0.1:8788` by default. Clients can supply their own public HTTPS callback hostname. The server verifies the receiver with a signed challenge, and the relay checks the resolved addresses on every attempt and connects to a validated address using the original TLS hostname.
+
 ---
 
 ## Run locally

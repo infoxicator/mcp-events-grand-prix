@@ -8,13 +8,16 @@
     "ACCESS_OWNER_EMAIL": "owner@example.test",
     "TYPESAFE_API_KEY": "fixture-only",
     "AI_GATEWAY_API_KEY": "fixture-only",
-    "OPENAI_API_KEY": "fixture-only"
+    "OPENAI_API_KEY": "fixture-only",
+    "SEP_EVENTS_AUTH_TOKEN": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "SEP_EVENTS_EGRESS_URL": "https://egress.example.test/sep-egress/deliver",
+    "SEP_EVENTS_EGRESS_TOKEN": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
   },
   "compatibility_date": "2026-11-13",
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/mcp", "/owner/*", "/health", "/internal*"]
+    "run_worker_first": ["/api/*", "/mcp", "/mcp/sep-events", "/owner/*", "/health", "/internal*"]
   },
   "durable_objects": {
     "bindings": [
