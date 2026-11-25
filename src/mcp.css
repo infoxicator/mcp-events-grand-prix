@@ -404,3 +404,11 @@
 @media(max-width:440px){
  .mcp-choice-grid{grid-template-columns:minmax(0,1fr)}
 }
+
+.mcp-setup-note {
+ margin: 8px 0 0;
+ font-size: 12px;
+ line-height: 1.4;
+ color: #f0a8a0;
+ overflow-wrap: anywhere;
+}

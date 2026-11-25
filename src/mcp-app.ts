@@ -437,9 +437,22 @@ async function openLink(url:string){
 
 app.onhostcontextchanged=context;
 app.ontoolinput=()=>{if(!hosted)status.textContent='MCP connected · Preparing race setup…';};
+// Which parts of a tool result reached the view (key names only), shown when setup can't unlock.
+const resultShape=(result:Result)=>`content: ${(result.content??[]).map(c=>c.type).join(',')||'none'} · structuredContent: ${result.structuredContent?Object.keys(result.structuredContent).length+' keys':'none'} · _meta: ${result._meta?Object.keys(result._meta).join(',')||'empty':'none'}`;
+function showSetupNote(text:string){
+ const note=element('mcp-setup-note');
+ note.textContent=text;
+ note.hidden=!text;
+}
+// No result at all within a few seconds means the host never delivered one.
+setTimeout(()=>{if(!origin&&element('mcp-setup-note').hidden)showSetupNote('No tool result reached the widget yet.');},6000);
 app.ontoolresult=result=>{
  if(hosted&&!result._meta?.connection&&!result._meta?.liveInvitation)return;
- void applyResult(result).catch(error=>{status.textContent=error instanceof Error?error.message:'Unable to open race';});
+ void applyResult(result).then(()=>showSetupNote('')).catch(error=>{
+  const message=error instanceof Error?error.message:'Unable to open race';
+  status.textContent=message;
+  showSetupNote(`${message} (${resultShape(result)})`);
+ });
 };
 const observer=new IntersectionObserver(([entry])=>{
  const hidden=!entry.isIntersecting;
