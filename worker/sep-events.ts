@@ -2,10 +2,10 @@ import {timingSafeEqual} from 'node:crypto';
 import {ProtocolError, type McpServer} from '@modelcontextprotocol/server';
 import {z} from 'zod';
 import {strategyEventDefinition} from '../server/strategy-events';
-import {httpsCallbackUrl} from '../server/sep-webhook-policy';
+import {httpsCallbackUrl} from './sep-webhook';
 import {STRATEGY_EVENT} from '../src/race/strategy-events';
 import {isLiveKey} from '../src/race/live';
-import {CallbackTransportError,webhookSecret} from './strategy-webhook';
+import {webhookSecret} from './strategy-webhook';
 
 export const SEP_EVENTS_PATH='/mcp/sep-events';
 export const SEP_EVENTS_PRINCIPAL='configured-client';
@@ -29,35 +29,10 @@ export type SepUnsubscribe=z.infer<typeof unsubscribe>;
 
 export interface SepEventsBindings {
  SEP_EVENTS_AUTH_TOKEN?:string;
- SEP_EVENTS_EGRESS_URL?:string;
- SEP_EVENTS_EGRESS_TOKEN?:string;
 }
 
 export function sepEventsEnabled(env:SepEventsBindings){
- return Boolean(httpsCallbackUrl(env.SEP_EVENTS_EGRESS_URL??'')&&isLiveKey(env.SEP_EVENTS_EGRESS_TOKEN)&&
-  isLiveKey(env.SEP_EVENTS_AUTH_TOKEN)&&env.SEP_EVENTS_AUTH_TOKEN!==env.SEP_EVENTS_EGRESS_TOKEN);
-}
-
-export function sepCallbackTransport(env:SepEventsBindings,fetcher:typeof fetch):typeof fetch{
- return async (input,init)=>{
-  const url=String(input);
-  if(!sepEventsEnabled(env)||!httpsCallbackUrl(url))throw new CallbackTransportError('challenge_failed');
-  const headers:Record<string,string>={};
-  new Headers(init?.headers).forEach((value,key)=>{headers[key]=value;});
-  const response=await fetcher(env.SEP_EVENTS_EGRESS_URL!,{
-   method:'POST',redirect:'manual',signal:init?.signal,
-   headers:{'Authorization':`Bearer ${env.SEP_EVENTS_EGRESS_TOKEN}`,'Content-Type':'application/json'},
-   body:JSON.stringify({url,headers,body:init?.body}),
-  });
-  const status=Number(response.headers.get('X-SEP-Callback-Status'));
-  if(response.ok&&Number.isInteger(status)&&status>=200&&status<=599){
-   if(status===204||status===205||status===304){await response.body?.cancel();return new Response(null,{status});}
-   return new Response(response.body,{status});
-  }
-  await response.body?.cancel();
-  const reason=response.headers.get('X-SEP-Callback-Error');
-  throw new CallbackTransportError(reason==='timeout'||reason==='tls_error'||reason==='challenge_failed'?reason:'connection_refused');
- };
+ return isLiveKey(env.SEP_EVENTS_AUTH_TOKEN);
 }
 
 export function sepRequestAuthorized(request:Request,env:SepEventsBindings){

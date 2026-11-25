@@ -70,13 +70,29 @@ async function signedPost(fetcher:typeof fetch,subscription:SepStrategyWebhook,i
  });
 }
 
+async function readSepChallenge(response:Response):Promise<{challenge?:unknown}|null>{
+ const reader=response.body?.getReader();
+ if(!reader)return null;
+ const body=new Uint8Array(8192);
+ let offset=0;
+ try{
+  for(;;){
+   const {done,value}=await reader.read();
+   if(done)return JSON.parse(new TextDecoder().decode(body.subarray(0,offset)));
+   if(offset+value.byteLength>body.length){await reader.cancel();return null;}
+   body.set(value,offset);
+   offset+=value.byteLength;
+  }
+ }finally{reader.releaseLock();}
+}
+
 export async function verifyStrategyWebhook(fetcher:typeof fetch,subscription:StrategyWebhook,sep=false):Promise<CallbackFailure|null>{
  const challenge=crypto.randomUUID(),signal=AbortSignal.timeout(6000);
  try{
   const id=(sep?'msg_verification_':'msg_')+crypto.randomUUID();
   const response=await signedPost(fetcher,subscription,id,{type:'verification',challenge},signal,sep);
   if(!response.ok){await response.body?.cancel();return sep?(response.status>=500?'http_5xx':'http_4xx'):'challenge_failed';}
-  const reply=await response.json() as {challenge?:unknown}|null;
+  const reply=sep?await readSepChallenge(response):await response.json() as {challenge?:unknown}|null;
   const echo=reply?.challenge;
   if(typeof echo!=='string'||echo.length!==challenge.length)return 'challenge_failed';
   let difference=0;

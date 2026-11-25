@@ -3,7 +3,7 @@ import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client
 import {WebSocket} from 'ws';
 import {liveInvitation,liveSpectatorURL,newLiveKey,pairingChallenge,parseLiveInvitation} from '../src/race/live';
 import type {RaceState,ServerMessage} from '../src/race/types';
-import {createSepWebhookEgress,isPublicCallbackAddress} from '../server/sep-webhook-egress';
+import {sepCallbackTransport} from '../worker/sep-webhook';
 
 const fixture='http://127.0.0.1:8798';
 const host='http://127.0.0.1:8799';
@@ -76,6 +76,9 @@ test('SEP-3415 reuses server authentication across races and signs and retries w
   expect((await rpc('events/poll',{name:incoming,arguments:filter},token)).error).toMatchObject({code:-32026,data:{value:'poll'}});
   expect((await rpc('events/stream',{name:incoming,arguments:filter},token)).error).toMatchObject({code:-32026,data:{value:'push'}});
   expect((await rpc('events/subscribe',{...subscription,delivery:{...subscription.delivery,url:url+'-reject'}},token)).error).toMatchObject({code:-32027,data:{reason:'challenge_failed'}});
+  expect((await rpc('events/subscribe',{...subscription,delivery:{...subscription.delivery,url:url+'-oversize'}},token)).error).toMatchObject({code:-32027,data:{reason:'challenge_failed'}});
+  expect((await rpc('events/subscribe',{...subscription,delivery:{...subscription.delivery,url:'https://private-callback.example.test'+localPath+'-private'}},token)).error).toMatchObject({code:-32027,data:{reason:'challenge_failed'}});
+  expect((await received(localPath+'-private')).verifications).toBe(0);
   expect((await rpc('events/subscribe',{...subscription,delivery:{...subscription.delivery,url:'http://callback.example.test'+localPath}},token)).error.code).toBe(-32602);
   const competing=await Promise.all([rpc('events/subscribe',subscription,token),rpc('events/subscribe',subscription,token)]);
   const subscribed=competing[0].result;
@@ -136,31 +139,20 @@ test('SEP-3415 reuses server authentication across races and signs and retries w
  }
 });
 
-test('SEP webhook egress requires authentication and blocks private DNS results',async()=>{
- const token='a'.repeat(64);
- const server=createSepWebhookEgress(token);
- await new Promise<void>(resolve=>{server.listen(0,'127.0.0.1',resolve);});
- const address=server.address();
- if(!address||typeof address==='string')throw new Error('Expected a local egress listener.');
- const relay=`http://127.0.0.1:${address.port}/deliver`;
- try{
-  const deliver=(url:string,credential=token)=>fetch(relay,{method:'POST',headers:{Authorization:`Bearer ${credential}`},body:JSON.stringify({
-   url,body:'{}',headers:{'webhook-id':'msg_test','webhook-timestamp':'1','webhook-signature':'v1,test','x-mcp-subscription-id':'sub_test'},
-  })});
-  expect((await deliver('https://localhost/callback','x')).status).toBe(403);
-  for(const url of ['https://localhost/callback','https://127.0.0.1/callback','https://[::1]/callback','http://example.com/callback']){
-   const rejected=await deliver(url);
-   expect(rejected.status).toBe(400);
-   expect(rejected.headers.get('X-SEP-Callback-Error')).toBe('challenge_failed');
-  }
-  for(const ip of ['127.0.0.1','169.254.169.254','100.64.0.1','::1','::ffff:127.0.0.1','fd00::1','2001:db8::1']){
-   expect(isPublicCallbackAddress(ip),ip).toBe(false);
-  }
-  expect(isPublicCallbackAddress('8.8.8.8')).toBe(true);
-  expect(isPublicCallbackAddress('2606:4700:4700::1111')).toBe(true);
- }finally{
-  await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+test('SEP callback transport checks DNS before each POST and preserves the signed request',async()=>{
+ const requests:{url:string;redirect?:RequestRedirect;body?:BodyInit|null}[]=[];
+ let addresses=['8.8.8.8','2606:4700:4700::1111'];
+ const deliver=sepCallbackTransport(async(input,init)=>{
+  requests.push({url:String(input),redirect:init?.redirect,body:init?.body});
+  return new Response(null,{status:204});
+ },async()=>addresses);
+ const url='https://callback.example.test/receive';
+ await deliver(url,{method:'POST',redirect:'follow',body:'{}'});
+ for(const address of ['127.0.0.1','169.254.169.254','100.64.0.1','::1','::ffff:127.0.0.1','fd00::1','2001:db8::1']){
+  addresses=['8.8.8.8',address];
+  await expect(deliver(url)).rejects.toMatchObject({reason:'challenge_failed'});
  }
+ expect(requests).toEqual([{url,redirect:'manual',body:'{}'}]);
 });
 
 async function mcp(origin:string){

@@ -1,7 +1,8 @@
 import {strategyEventDefinition,eventInput,radioInput,type LiveStrategyRead} from '../server/strategy-events';
 import {STRATEGY_EVENT,WEBHOOK_STRATEGY_RESPONSE_MS,type LiveStrategist} from '../src/race/strategy-events';
 import {postStrategyEvent,postSepStrategyEvent,postSepTermination,subscribeInput,unsubscribeInput,verifyStrategyWebhook,webhookId,subscriptionId,type CallbackFailure,type SepStrategyWebhook,type StrategyWebhook} from './strategy-webhook';
-import {registerSepEvents,sepRequestAuthorized,sepCallbackTransport,sepEventHeaderError,sepEventsEnabled,SEP_AUTH_REQUIRED,SEP_EVENTS_PATH,SEP_EVENTS_PRINCIPAL,type SepEventsBindings,type SepSubscribe,type SepUnsubscribe} from './sep-events';
+import {registerSepEvents,sepRequestAuthorized,sepEventHeaderError,sepEventsEnabled,SEP_AUTH_REQUIRED,SEP_EVENTS_PATH,SEP_EVENTS_PRINCIPAL,type SepEventsBindings,type SepSubscribe,type SepUnsubscribe} from './sep-events';
+import {resolveSepCallback,sepCallbackTransport} from './sep-webhook';
 import {DurableObject} from 'cloudflare:workers';
 import {createMcpHandler,isLegacyRequest,WebStandardStreamableHTTPServerTransport} from '@modelcontextprotocol/server';
 import {RaceRoom,type Peer} from '../server/race-room';
@@ -335,6 +336,12 @@ export class GameRoom extends DurableObject<Env> {
   return fetch(input,init);
  }
 
+ protected resolveCallback(hostname:string){
+  return resolveSepCallback(hostname);
+ }
+
+ private readonly outboundSep=sepCallbackTransport(this.outbound.bind(this),this.resolveCallback.bind(this));
+
  private attach(ws:WebSocket,meta?:Pick<Peer,'team'|'role'|'owner'|'joined'>){
   const peer=this.room!.add((message,raw)=>{try{ws.send(raw??JSON.stringify(message));}catch{/* closed */}});
   if(meta)Object.assign(peer,meta);
@@ -403,7 +410,7 @@ export class GameRoom extends DurableObject<Env> {
   for(const seat of Object.values(this.strategySeats)){
    seat.webhookAbort?.abort();
    if(seat.sepWebhook&&seat.sepWebhook.expiresAt>Date.now()){
-    this.ctx.waitUntil(postSepTermination(sepCallbackTransport(this.env,this.outbound.bind(this)),seat.sepWebhook));
+    this.ctx.waitUntil(postSepTermination(this.outboundSep,seat.sepWebhook));
    }
    seat.webhook=undefined;
    seat.sepWebhook=undefined;
@@ -591,7 +598,7 @@ export class GameRoom extends DurableObject<Env> {
 
  private async deliverSepStrategy(team:Team,seat:StrategySeat,subscription:SepStrategyWebhook,event:Parameters<typeof postSepStrategyEvent>[2],issuedAt:number){
   const signal=seat.webhookAbort!.signal;
-  const delivered=await postSepStrategyEvent(sepCallbackTransport(this.env,this.outbound.bind(this)),subscription,event,issuedAt,signal);
+  const delivered=await postSepStrategyEvent(this.outboundSep,subscription,event,issuedAt,signal);
   const room=this.room!;
   if(signal.aborted||seat.sepWebhook!==subscription||room.live!=='running'||this.strategyDeliveries[team]!==event.event_id)return;
   this.setWebhookStatus(team,delivered?'delivered':'failed');
@@ -775,7 +782,7 @@ export class GameRoom extends DurableObject<Env> {
   if(!(await limiter.limit({key:`sep-verify:${hostname}`})).success){
    return {error:{code:-32025,message:'The callback verification limit was reached.',data:{limit:'callback_verifications'}}};
   }
-  const failure=await verifyStrategyWebhook(sepCallbackTransport(this.env,this.outbound.bind(this)),subscription,true);
+  const failure=await verifyStrategyWebhook(this.outboundSep,subscription,true);
   if(!failure)this.sepVerifiedUntil=Date.now()+5*60_000;
   return {failure};
  }
