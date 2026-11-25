@@ -25,6 +25,7 @@ export interface RaceGateway {
  startChatPractice?:(circuit:CircuitId,laps?:number,driver?:StrategyDriver)=>Promise<StrategySeatAccess>;
  configureChatPractice?:(room:string,key:string,circuit:CircuitId,laps?:number,driver?:StrategyDriver)=>Promise<(StrategySeatAccess&{circuit:CircuitId})|null>;
  joinChatPractice?:(invite:LiveInvitation,driver?:StrategyDriver)=>Promise<(StrategySeatAccess&{circuit:CircuitId})|null>;
+ claimChatPractice?:(room:string)=>Promise<(StrategySeatAccess&{circuit:CircuitId})|null>;
  stopChatPractice?:(room:string,key:string)=>Promise<boolean>;
  strategyEvent?:(room:string,eventId?:string,team?:Team)=>Promise<LiveStrategyRead|null>;
  submitStrategy?:(input:RadioInput)=>Promise<{team:Team;line:string}|{error:string}>;
@@ -130,6 +131,22 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
    const configured=await gateway.configureChatPractice!(room,key,circuit,laps,driver);
    if(!configured)return {isError:true,content:[{type:'text' as const,text:'This strategy lobby can no longer be updated.'}]};
    return strategySeatResult(configured,circuit,'a',laps,driver,multiplayer);
+  });
+ }
+
+ if(gateway.claimChatPractice){
+  server.registerTool('claim_grand_prix_strategy_seat',{
+   title:'Claim ChatGPT strategy seat',
+   description:'Hand the widget its unstarted strategy seat once, for MCP Apps hosts that drop the tool result\'s _meta.',
+   inputSchema:z.object({room:z.string().uuid()}),
+   _meta:{ui:{visibility:['app']}},
+   annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
+  },async({room})=>{
+   const claimed=await gateway.claimChatPractice!(room);
+   if(!claimed)return {isError:true,content:[{type:'text' as const,text:'This strategy seat can no longer be claimed.'}]};
+   const seat=strategySeatResult(claimed,claimed.circuit,'a',claimed.laps,claimed.driver);
+   // App-only result: the seat also rides in structuredContent in case this host drops _meta here too.
+   return {...seat,structuredContent:{...seat.structuredContent,seat:seat._meta}};
   });
  }
 

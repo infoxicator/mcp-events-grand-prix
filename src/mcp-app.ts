@@ -360,6 +360,14 @@ async function applyResult(result:Result,options:{collapseMenu?:boolean;autoStar
   return;
  }
  const connection=result._meta?.connection as {origin:string;token:string;hosted:HostedRoom}|undefined;
+ const seatRoom=(result.structuredContent as {room?:unknown;strategyPractice?:unknown}|undefined);
+ if(!connection&&seatRoom?.strategyPractice===true&&isRoomId(seatRoom.room)){
+  // Some MCP Apps hosts drop _meta from the tool result; claim the unstarted seat once instead.
+  const claimed=await app.callServerTool({name:'claim_grand_prix_strategy_seat',arguments:{room:seatRoom.room}});
+  const seat=claimed.isError?undefined:(claimed._meta?.liveInvitation?claimed._meta:(claimed.structuredContent as {seat?:Result['_meta']}|undefined)?.seat);
+  if(!seat?.liveInvitation)throw new Error('Missing race connection');
+  return applyResult({...result,_meta:seat},options);
+ }
  if(!connection?.hosted)throw new Error('Missing race connection');
  origin=raceOrigin(connection.origin);
  ++mountSequence;

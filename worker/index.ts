@@ -146,6 +146,10 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
      const joined=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-seat${sepQuery}`,{method:'POST',body:JSON.stringify({key,driver})}));
      return joined.ok?joined.json<StrategySeatAccess&{circuit:CircuitId}>():null;
     },
+    claimChatPractice:async room=>{
+     const claimed=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice-claim${sepQuery}`,{method:'POST'}));
+     return claimed.ok?claimed.json<StrategySeatAccess&{circuit:CircuitId}>():null;
+    },
     stopChatPractice:async(room,key)=>{
      const stopped=await roomStub(env,room).fetch(new Request(`${origin}/internal-chat-practice-stop${sepQuery}`,{method:'POST',body:key}));
      return stopped.ok;
@@ -231,7 +235,7 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
 
 export default createWorker();
 
-interface SavedStrategySeat {key:string;subscriptionKey?:string;webhook?:StrategyWebhook;sep?:true;sepWebhook?:SepStrategyWebhook}
+interface SavedStrategySeat {key:string;subscriptionKey?:string;webhook?:StrategyWebhook;sep?:true;sepWebhook?:SepStrategyWebhook;claimed?:true}
 interface StrategySeat extends SavedStrategySeat {
  webhookVerification?:{url:string};
  webhookAbort?:AbortController;
@@ -356,7 +360,7 @@ export class GameRoom extends DurableObject<Env> {
   const strategySeats:Partial<Record<Team,SavedStrategySeat>>={};
   for(const team of TEAMS){
    const seat=this.strategySeats[team];
-   if(seat)strategySeats[team]={key:seat.key,subscriptionKey:seat.sep?undefined:seat.subscriptionKey,webhook:seat.webhook,sep:seat.sep,sepWebhook:seat.sepWebhook};
+   if(seat)strategySeats[team]={key:seat.key,subscriptionKey:seat.sep?undefined:seat.subscriptionKey,webhook:seat.webhook,sep:seat.sep,sepWebhook:seat.sepWebhook,claimed:seat.claimed};
   }
   const saved:Saved={
    speed:room.speed,solo:room.solo,drive:room.drive,watchMode:room.watchMode,driverMode:room.driverMode,engineerMode:room.engineerMode,matchup:room.matchup,id:room.id,origin:room.origin,race:room.race,tokens:room.tokens,
@@ -875,6 +879,16 @@ export class GameRoom extends DurableObject<Env> {
     this.liveDeadline=Math.max(this.liveDeadline,now+strategyTimeBudgetMs(current.race.laps));
     current.expiresAt=this.liveDeadline+FINISHED_GRACE_MS;
     await this.ctx.storage.setAlarm(this.lobbyDeadline?Math.min(this.liveDeadline,this.lobbyDeadline):this.liveDeadline);
+    await this.save();
+    return json({...this.controls(),...this.strategySeatAccess('a'),circuit:current.race.circuit});
+   }
+   // One-time seat handoff for MCP Apps hosts that drop the tool result's _meta (the widget then has no key).
+   if(path==='/internal-chat-practice-claim'&&req.method==='POST'){
+    const seat=this.strategySeats.a;
+    if(!matchingStrategyEndpoint||!current.strategyPractice||current.live!=='running'||current.race.phase!=='lobby'||!seat||seat.claimed){
+     return json({error:'Strategy lobby unavailable'},409);
+    }
+    seat.claimed=true;
     await this.save();
     return json({...this.controls(),...this.strategySeatAccess('a'),circuit:current.race.circuit});
    }
