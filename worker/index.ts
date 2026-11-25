@@ -183,7 +183,8 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
       return result.json();
      });
      return server;
-    },{legacy:'reject'}).fetch(req);
+    // Default legacy fallback: 2025-era clients (e.g. MCP Apps hosts that still send initialize) negotiate down instead of getting -32022.
+    }).fetch(req);
    }else if(await isLegacyRequest(req,rpc)){
     const server=factory(),transport=new WebStandardStreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
     try{
