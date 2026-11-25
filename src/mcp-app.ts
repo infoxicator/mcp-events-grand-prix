@@ -332,10 +332,23 @@ async function openFromWidget(name:string,args:Record<string,unknown>,options:{c
  if(filter)await shareEventFilter(filter);
 }
 
+function structuredFromText(result:Result):Result['structuredContent']{
+ for(const block of result.content??[]){
+  if(block.type!=='text')continue;
+  try{
+   const parsed:unknown=JSON.parse(block.text);
+   if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed as Result['structuredContent'];
+  }catch{/* Plain-text block. */}
+ }
+ return undefined;
+}
+
 async function applyResult(result:Result,options:{collapseMenu?:boolean;autoStart?:boolean}={}){
  if(disposed)return;
  if(result.isError)throw new Error(result.content?.filter(c=>c.type==='text').map(c=>c.text).join(' ')||'Unable to join race');
  if(result._meta?.['jev-grand-prix/telemetry']===true)telemetry=true;
+ // Hosts that drop structuredContent may still pass it as the JSON text block the model saw.
+ if(!result.structuredContent)result={...result,structuredContent:structuredFromText(result)};
  syncFormFromStructuredContent(result.structuredContent);
  const liveInvite=result._meta?.liveInvitation as LiveInvitation|undefined;
  if(liveInvite){
@@ -364,7 +377,8 @@ async function applyResult(result:Result,options:{collapseMenu?:boolean;autoStar
  if(!connection&&seatRoom?.strategyPractice===true&&isRoomId(seatRoom.room)){
   // Some MCP Apps hosts drop _meta from the tool result; claim the unstarted seat once instead.
   const claimed=await app.callServerTool({name:'claim_grand_prix_strategy_seat',arguments:{room:seatRoom.room}});
-  const seat=claimed.isError?undefined:(claimed._meta?.liveInvitation?claimed._meta:(claimed.structuredContent as {seat?:Result['_meta']}|undefined)?.seat);
+  const claimedContent=(claimed.structuredContent??structuredFromText(claimed)) as {seat?:Result['_meta']}|undefined;
+  const seat=claimed.isError?undefined:(claimed._meta?.liveInvitation?claimed._meta:claimedContent?.seat);
   if(!seat?.liveInvitation)throw new Error('Missing race connection');
   return applyResult({...result,_meta:seat},options);
  }

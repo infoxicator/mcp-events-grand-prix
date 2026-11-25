@@ -145,8 +145,9 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
    const claimed=await gateway.claimChatPractice!(room);
    if(!claimed)return {isError:true,content:[{type:'text' as const,text:'This strategy seat can no longer be claimed.'}]};
    const seat=strategySeatResult(claimed,claimed.circuit,'a',claimed.laps,claimed.driver);
-   // App-only result: the seat also rides in structuredContent in case this host drops _meta here too.
-   return {...seat,structuredContent:{...seat.structuredContent,seat:seat._meta}};
+   // App-only result: the seat also rides in structuredContent and the text block, for hosts that drop _meta or both.
+   const structuredContent={...seat.structuredContent,seat:seat._meta};
+   return {...seat,content:[{type:'text' as const,text:JSON.stringify(structuredContent)}],structuredContent};
   });
  }
 
