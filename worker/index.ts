@@ -222,11 +222,18 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
   }
   if(path.startsWith('/api/')||path.startsWith('/internal')||path.startsWith('/owner/'))return json({error:'Not found'},404);
   if(path.startsWith('/mcp/assets/')){
-   const response=await env.ASSETS.fetch(req);
+   let response=await env.ASSETS.fetch(req),stale=false;
+   // MCP Apps hosts cache the ui:// page, which can outlive a deploy's hashed entry files: serve the current ones.
+   const entry=!response.ok&&path.match(/^\/mcp\/assets\/(mcp-app|event-log-view)-[\w-]{8}\.(js|css)$/);
+   if(entry){
+    const page=await env.ASSETS.fetch(new Request(`${origin}/mcp/mcp-app.html`));
+    const current=page.ok?(await page.text()).match(new RegExp(`\\./assets/(${entry[1]}-[\\w-]{8}\\.${entry[2]})"`))?.[1]:undefined;
+    if(current){response=await env.ASSETS.fetch(new Request(`${origin}/mcp/assets/${current}`));stale=response.ok;}
+   }
    const headers=new Headers(response.headers);
    headers.set('Access-Control-Allow-Origin','*');
    headers.set('Cross-Origin-Resource-Policy','cross-origin');
-   if(response.ok)headers.set('Cache-Control','public, max-age=31536000, immutable');
+   if(response.ok)headers.set('Cache-Control',stale?'public, max-age=300':'public, max-age=31536000, immutable');
    return new Response(response.body,{status:response.status,headers});
   }
   return env.ASSETS.fetch(req);
