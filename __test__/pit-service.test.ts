@@ -4,7 +4,7 @@ import {kerbHeight} from '../src/race/suspension';
 import {grid,opponents} from '../src/race/grid';
 import {advanceField} from '../src/race/field-physics';
 import {getTrack} from '../src/race/track';
-import {BOX_OFFSET,garageVisits,pitRoute,cornerService,frontJackPose,jackLift,pitBox,releaseGreen} from '../src/race/pit-service';
+import {BOX_OFFSET,canRelease,garageVisits,pitRoute,cornerService,frontJackPose,jackLift,pitBox,releaseGreen,serviceClock} from '../src/race/pit-service';
 
 describe('pit service',()=>{
  it.each(['monza','las-vegas'] as const)('services simultaneous arrivals in separate boxes on %s',id=>{
@@ -116,6 +116,15 @@ describe('pit service',()=>{
   }
   expect(releaseGreen(2.55)).toBe(false);
   expect(releaseGreen(2.57)).toBe(true);
+ });
+ it('holds the jack and release signal throughout a damage repair',()=>{
+  const car={distance:0,pit:'stopped',pitTime:5,totalStop:8.6};
+  expect(jackLift(car)).toBeCloseTo(.086);
+  expect(releaseGreen(serviceClock(car))).toBe(false);
+  car.pitTime=8.57;
+  expect(jackLift(car)).toBe(0);
+  expect(canRelease(car)).toBe(false);
+  car.pitTime=8.6;expect(canRelease(car)).toBe(true);
  });
  it('keeps the car lifted while any wheel is off and clears the guns before release',()=>{
   for(let i=0;i<4;i++){

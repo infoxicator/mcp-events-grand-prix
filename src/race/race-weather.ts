@@ -28,12 +28,12 @@ function rainfall(scene:T.Scene,budget:number,night:boolean){
  for(let i=0;i<drops.length;i++)drops[i]=random();
  g.setAttribute('drop',new T.InstancedBufferAttribute(drops,4));
  const uniforms={clock:{value:0},strength:{value:0},travel:{value:new T.Vector3()},pixelsHigh:{value:600},
-  lamps:{value:Array.from({length:4},()=>new T.Vector4())},tint:{value:new T.Color(night?'#d4e1f0':'#dce6ec')}};
+  lamps:{value:Array.from({length:6},()=>new T.Vector4())},tint:{value:new T.Color(night?'#d4e1f0':'#dce6ec')}};
  const m=new T.ShaderMaterial({uniforms,transparent:true,depthWrite:false,side:T.DoubleSide,forceSinglePass:true,
   vertexShader:`
    attribute vec4 drop;
    uniform float clock,strength,pixelsHigh;
-   uniform vec4 lamps[4];
+   uniform vec4 lamps[6];
    uniform vec3 travel;
    varying float opacity;
    varying vec2 shape;
@@ -65,7 +65,7 @@ function rainfall(scene:T.Scene,budget:number,night:boolean){
     opacity=brightFraction*mix(.36,.77,size)*mix(.82,1.,strength)*smoothstep(.52,1.1,-head.z)
       *(1.-smoothstep(.39,.50,boundary));
     ${night?`float lit=0.;
-     for(int i=0;i<4;i++){
+     for(int i=0;i<6;i++){
       vec2 delta=lamps[i].xz-(cameraPosition+offset).xz;
       lit+=lamps[i].w*exp(-dot(delta,delta)/310.);
      }
@@ -298,7 +298,8 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
     float billow=noise(p+vec2(density.z,-density.z*.4))*.65+noise(p*2.7)*.35;
     float falloff=max(0.,1.-dot(patchUV,patchUV));
     float alpha=density.x*falloff*smoothstep(.12,.84,billow+falloff*.25);
-    gl_FragColor=vec4(mist*(.82+.26*billow),alpha);
+    float glow=max(0.,-density.z);
+    gl_FragColor=vec4(mist*(.82+.26*billow)+vec3(.62,.009,.004)*glow,alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
    }`});
@@ -356,6 +357,7 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
      packet.spread=(rear?1.72:.60)*(.62+random())*(.65+water)*(.6+.5*drive);
      packet.alpha=(rear?.34:.44)*(.38+.62*water)*(.65+random()*.5);
      packet.seed=random()*94;
+     if(rear&&Math.floor((time-age)*4)%2===0)packet.seed=-packet.seed;
      live.push(packet);
     }
     prev.remainder[i]=amount-count;
@@ -377,7 +379,7 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
    centers.setXYZW(i,x,y,z,radius);
    const distanceSq=(x-camera.x)**2+(y-camera.y)**2+(z-camera.z)**2;
    if(distanceSq<radius*radius)immersion+=q.alpha*(1-phase)*(1-distanceSq/(radius*radius));
-   profiles.setXYZW(i,.68+.28*phase,q.alpha*Math.min(1,age/.018)*(1-phase)**1.2,q.seed,phase*.6);
+   profiles.setXYZW(i,.68+.28*phase,q.alpha*Math.min(1,age/.018)*(1-phase)**1.2,q.seed,q.seed<0?-(1.-phase)*(1.-phase):phase*.6);
   }
   geometry.instanceCount=live.length;mesh.visible=live.length>0;
   if(mesh.visible){

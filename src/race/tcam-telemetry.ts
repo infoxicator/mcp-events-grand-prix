@@ -13,7 +13,9 @@ export function mountTcamTelemetry(viewport:HTMLElement){
   ${Array.from({length:9},(_,i)=>`<rect x="-16" y="${(491-i*8.3).toFixed(1)}" width="32" height="5.6" rx="1.4"/>`).join('')}
   <text class="caption" y="513">${name.toUpperCase()}</text></g>`;
  root.innerHTML=`<svg class="halo-instruments" viewBox="-1000 0 2000 1000" aria-label="Onboard instruments" role="group">
-  <defs><linearGradient id="tcam-glass" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#233046" stop-opacity=".86"/><stop offset="1" stop-color="#080d16" stop-opacity=".88"/></linearGradient></defs>
+  <defs><linearGradient id="tcam-glass" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#424854" stop-opacity=".91"/><stop offset=".16" stop-color="#20252f" stop-opacity=".94"/><stop offset="1" stop-color="#090c12" stop-opacity=".93"/></linearGradient>
+   <linearGradient id="tcam-rim" x2="0" y2="1"><stop stop-color="#c4cad5"/><stop offset=".42" stop-color="#646c78"/><stop offset="1" stop-color="#333943"/></linearGradient>
+   <linearGradient id="tcam-revs" gradientUnits="userSpaceOnUse" x1="-88" x2="88" y1="25" y2="25"><stop stop-color="#39de9c"/><stop offset=".65" stop-color="#ffd160"/><stop offset="1" stop-color="#ff3950"/></linearGradient></defs>
   <path class="glass full-wing-left" d="M-110 414 C-250 418 -362 522 -445 645 Q-454 657 -442 667 L-377 716 Q-366 724 -357 710 C-298 621 -215 516 -92 517 Z"/>
   <path class="glass full-wing-right" d="M200 414 C356 427 492 516 604 619 Q615 629 605 640 L549 701 Q539 711 528 700 C439 608 323 523 186 517 Z"/>
   <path class="glass compact-wing-left" d="M-110 414 C-171 422 -232 441 -283 476 Q-295 484 -287 496 L-245 562 Q-237 574 -225 566 C-188 536 -142 518 -92 517 Z"/>

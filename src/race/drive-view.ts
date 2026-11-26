@@ -169,25 +169,6 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
     </div>
    </div>
 
-   <div class="drive-timing" id="drive-timing">
-    <div class="drive-timing-head">
-     <div class="drive-pos"><small>POS</small><strong id="drive-pos-val">P1</strong></div>
-     <div class="drive-lap-box"><span>LAP</span><b id="drive-lap-val">1 / 3</b></div>
-    </div>
-    <div class="drive-clock-row">
-     <span class="drive-cur-lap" id="drive-cur-lap">0:00.000</span>
-     <span class="drive-delta" id="drive-flag-chip">GREEN</span>
-    </div>
-    <div class="drive-best-row">
-     <span>BEST <b id="drive-best-lap">—:—.———</b></span>
-     <span class="drive-invalid-tag" id="drive-pen-tag" hidden>+5s</span>
-    </div>
-    <div class="drive-sectors" id="drive-sectors">
-     <i data-state="idle">S1</i><i data-state="idle">S2</i><i data-state="idle">S3</i>
-    </div>
-    <div class="drive-standings" id="drive-standings"></div>
-   </div>
-
    <div class="drive-radio-stack" id="drive-radio-stack">
     <div class="drive-strategy-strip" id="drive-strategy-strip">
      <span class="dst-tag" id="dst-pace">PACE: BALANCED</span>
@@ -223,6 +204,26 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
    <div class="drive-rear-chip" id="drive-rear-chip" hidden>◀ REAR VIEW ▶</div>
 
    <div class="drive-left-stack">
+   <div class="drive-timing" id="drive-timing">
+    <div class="drive-timing-head">
+     <div class="drive-pos"><small>POS</small><strong id="drive-pos-val">P1</strong></div>
+     <div class="drive-lap-box"><span>LAP</span><b id="drive-lap-val">1 / 3</b></div>
+    </div>
+    <div class="drive-clock-row">
+     <span class="drive-cur-lap" id="drive-cur-lap">0:00.000</span>
+     <span class="drive-delta" id="drive-flag-chip">GREEN</span>
+    </div>
+    <div class="drive-best-row">
+     <span>BEST <b id="drive-best-lap">—:—.———</b></span>
+     <span class="drive-invalid-tag" id="drive-pen-tag" hidden>+5s</span>
+    </div>
+    <div class="drive-sectors" id="drive-sectors">
+     <i data-state="idle">S1</i><i data-state="idle">S2</i><i data-state="idle">S3</i>
+    </div>
+    <div class="drive-standings" id="drive-standings"></div>
+   </div>
+
+
     <div class="drive-minimap">
      <svg id="drive-map-svg" viewBox="0 0 1000 1000" aria-label="Circuit minimap">
       <path class="dm-track" id="dm-track"/>
@@ -288,6 +289,11 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
    <div class="drive-tacho" id="drive-tacho">
     <div class="drive-shift-leds" id="drive-shift-leds">${'<i></i>'.repeat(15)}</div>
     <div class="drive-tacho-main">
+     <svg class="tach-arc" viewBox="0 0 240 94" aria-hidden="true">
+      <defs><linearGradient id="drive-rev-spectrum"><stop stop-color="#29e5a1"/><stop offset=".48" stop-color="#f5c95a"/><stop offset=".78" stop-color="#ff3548"/><stop offset="1" stop-color="#ed64ff"/></linearGradient></defs>
+      <path class="tach-track" d="M13 83 C28 -9 211 -9 227 83"/>
+      <path id="drive-rev-arc" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100" d="M13 83 C28 -9 211 -9 227 83"/>
+     </svg>
      <div class="drive-pedal-col">
       <div class="drive-pedal-track"><div class="drive-pedal-fill brake" id="drive-brk-bar"></div></div>
       <small>BRK</small>
@@ -536,6 +542,8 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
  const resultsEl = el('drive-results');
  const lightsEl = el('drive-lights');
  const lightPods = Array.from(lightsEl.querySelectorAll<HTMLElement>('.drive-light-pod'));
+ const revArc=el('drive-rev-arc');
+ let previousRev=-1;
  const shiftLeds = Array.from(el('drive-shift-leds').querySelectorAll<HTMLElement>('i'));
  const sectorChips = Array.from(el('drive-sectors').querySelectorAll<HTMLElement>('i'));
  const tcam = mountTcamTelemetry(viewport);
@@ -1183,7 +1191,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
    const gapSec = idx === 0 ? 'LEAD' : `+${(Math.max(0, leaderDist - row.car.distance) / Math.max(30, row.car.speed)).toFixed(1)}s`;
    const col = constructors[row.entry.team]?.[0] ?? '#ed3446';
    const comp = (row.car.compound ?? 'medium') as Compound;
-   return `<div class="drive-st-row${isPlayer ? ' is-player' : ''}"><span class="drive-st-pos">${idx + 1}</span><i class="drive-st-bar" style="background:${col}"></i><span class="drive-st-code">${row.entry.code}${isPlayer ? ` · ${DRIVER_LABELS[dMode]}` : ''}</span><span class="drive-st-gap">${row.car.finishTime !== null ? 'FIN' : gapSec}</span><span class="drive-st-tyre" data-c="${comp}">${COMPOUND_SHORT[comp]}</span></div>`;
+   return `<div class="drive-st-row${isPlayer ? ' is-player' : ''}"><span class="drive-st-pos">${idx + 1}</span><i class="drive-st-bar" style="background:${col}"></i><span class="drive-st-code">${row.entry.code}${isPlayer ? ` <small>${DRIVER_LABELS[dMode]}</small>` : ''}</span><span class="drive-st-gap">${row.car.finishTime !== null ? 'FIN' : gapSec}</span><span class="drive-st-tyre" data-c="${comp}">${COMPOUND_SHORT[comp]}</span></div>`;
   }).join('');
   if (stHtml !== lastStandingsHtml) {
    lastStandingsHtml = stHtml;
@@ -1211,6 +1219,8 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   el('drive-brk-bar').style.height = `${Math.round(car.brake * 100)}%`;
 
   const rpmRatio = clamp((car.rpm - 8500) / (12800 - 8500), 0, 1);
+  const rev=Math.round(clamp((car.rpm-3500)/9300,0,1)*100);
+  if(rev!==previousRev){revArc.setAttribute('stroke-dashoffset',String(100-rev));previousRev=rev;}
   const litLeds = Math.round(rpmRatio * 15);
   el('drive-shift-leds').classList.toggle('flash', car.rpm >= 12650);
   for (let i = 0; i < 15; i++) {
@@ -1249,7 +1259,8 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
 
   el('drive-fuel-val').textContent = `${car.fuel.toFixed(1)} KG`;
   el('drive-bb-val').textContent = `${brakeBias}%`;
-  el('drive-tyre-badge').textContent = car.compound.toUpperCase();
+  const tyreBadge=el('drive-tyre-badge');
+  if(tyreBadge.dataset.compound!==car.compound){tyreBadge.dataset.compound=car.compound;tyreBadge.textContent=car.compound.toUpperCase();}
 
   // MFD Car & Pit updates
   const tyreLife = Math.round((1 - car.wear) * 100);

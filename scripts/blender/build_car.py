@@ -96,8 +96,6 @@ def wing(name,span,z,y,chord,m,parent=body,sweep=.15,lift=.05,side=0,root_width=
   nx,n=(30 if side else 54),17
  elif name in ('Rear main plane','DRS flap'):
   nx,n=42,10
- elif name=='Beam wing':
-  nx,n=26,7
  section=[]
  for surface in [1,-1]:
   samples=8 if name.startswith('Front') and surface<0 else n
@@ -155,13 +153,13 @@ fence_laminate=carbon.copy();fence_laminate.name='FloorFence'
 # A single formed sheet runs over both tunnels. Its return at the exit
 # closes only the laminate thickness, leaving the air passages open.
 def ramp_height(z,u):
- progress=max(0,min(1,(-z-1.48)/1.24))
- def shoulder(t):
-  t=max(0,min(1,t))
-  return t*t*(3-2*t)
- crown=shoulder((abs(u)-.11)/.22)*shoulder((1-abs(u))/.13)
- return progress**1.62*(.029+.202*crown)
-sections=interp([[-2.72,.704,.074,.013],[-2.40,.716,.071,.017],[-2.05,.754,.068,.023],
+ # Flat ahead of the rear axle approach, then a progressive expansion.
+ # The central spine blends into the impact structure below the exhaust.
+ progress=max(0,min(1,(-z-1.54)/1.18))
+ span=min(1,abs(u)/.27)
+ span=span*span*(3-2*span)
+ return progress**1.65*(.145+.116*span-.021*abs(u)**5)
+sections=interp([[-2.72,.775,.074,.010],[-2.40,.571,.071,.014],[-2.05,.545,.068,.018],
                  [-1.48,.87,.065,.029],[-.72,.89,.065,.034],[-.10,.913,.065,.031],[.36,.979,.064,.028],[.67,1.007,.064,.023],[.90,.995,.076,.021]],7)
 # Keep the panel flow roughly uniform as the forward station spacing opens up.
 floor_rows=[]
@@ -171,7 +169,7 @@ for a,b in zip(sections,sections[1:]):
 sections=floor_rows+[sections[-1]]
 # The illuminated outer edge in frame 007 fixes the planform independently
 # of the slant of the rows in the floor skin. Keep the tunnel centres in place.
-edge_stations=interp([[-2.72,.704],[-2.40,.716],[-2.05,.734],[-1.82,.659],[-1.65,.640],
+edge_stations=interp([[-2.72,.775],[-2.53,.704],[-2.40,.571],[-2.22,.546],[-2.05,.544],[-1.82,.546],[-1.65,.612],
                       [-1.49,.655],[-1.28,.720],[-.94,.787],[-.63,.835],[-.38,.847],
                       [-.18,.850],[.12,.856],[.23,.867],[.37,.900],[.515,.943],
                       [.67,.997],[.82,1.045],[.90,1.040]],4)
@@ -258,49 +256,37 @@ for s in [-1,1]:
    for k in range(7):
     a=(j-1)*7+k;b=(j-1)*7+(k+1)%7;fs.append((a,b,b+7,a+7))
  mesh('Rounded outer floor cheek',vs,fs,fence_laminate,floor)
-# The strakes grow down from the local tunnel roof and splay aft.
+# Recess each fence into the underside. Sample its root from the same sheet
+# as the deck so no fence can pierce the upper surface as the mouth flares.
 for side in (-1,1):
- for lane in (.30,.57,.82):
+ for outer in (False,True):
   vv=[];ff=[]
   for z,w,base,gauge in reversed(sections):
-   if z>-1.75:continue
-   u=lane+.055*(-z-1.75)
+   if z>-1.76 or (not outer and z<-2.675):continue
+   run=min(1,(-z-1.76)/.96)
+   u=.988 if outer else .30+.045*run
    roof=base+ramp_height(z,u)
-   bottom=base+.012+.031*max(0,(-z-2.34)/.38)**2
-   centre=side*u*w
-   for dx,y in [(-.0035,roof+.002),(.0035,roof+.002),(.0016,bottom),(-.0016,bottom)]:
+   floor_y=min(roof-.003,base+.009+.018*run)
+   centre=side*u*(w+(floor_width(z)-w)*u*u)
+   for dx,y in [(-.003,roof+.001),(.003,roof+.001),(.002,floor_y),(-.002,floor_y)]:
     vv.append((centre+dx,y,z))
-   if len(vv)>4:
-    k=len(vv)-8
+   k=len(vv)-8
+   if k>=0:
     for i in range(4):ff.append((k+i,k+(i+1)%4,k+(i+1)%4+4,k+i+4))
   ff.extend([(3,2,1,0),tuple(range(len(vv)-4,len(vv)))])
-  mesh('Diffuser outlet strake',vv,ff,carbon,floor)
-
-# Shallow guide vanes moulded into the upper exit ramp.
-for side in (-1,1):
- for lane,end_z in ((.497,-2.260),(.612,-2.249),(.809,-2.256),(.895,-2.260)):
-  vv=[];ff=[]
-  outline=[]
-  for a,b in zip(sections,sections[1:]):
-   if a[0]>=end_z:break
-   outline.append(a)
-   if b[0]>=end_z:
-    t=(end_z-a[0])/(b[0]-a[0])
-    outline.append([end_z,*[a[k]+t*(b[k]-a[k]) for k in (1,2,3)]])
-  for z,w,base,gauge in outline:
-   if z>end_z:break
-   run=(end_z-z)/(end_z+2.72)
-   u=lane-.023*run-.015*math.sin(math.pi*run)
-   deck=base+gauge*(1-.70*u**3)+ramp_height(z,u)+.005*u**12
-   x=side*u*w
-   # The squared termination casts a narrow shadow across the satin ramp.
-   h=.010+.009*math.sin(math.pi*run)
-   vv.extend([(x-.003,deck-.001,z),(x-.002,deck+h,z),(x+.002,deck+h,z),(x+.003,deck-.001,z)])
-   if len(vv)>4:
-    k=len(vv)-8
-    ff.extend([(k+i,k+i+1,k+i+5,k+i+4) for i in range(3)])
-  ff.extend([(3,2,1,0),tuple(range(len(vv)-4,len(vv)))])
-  mesh('Exit ramp guide vane',vv,ff,carbon,floor)
+  mesh('Diffuser outer end wall' if outer else 'Recessed diffuser strake',vv,ff,carbon,floor)
+ # One narrow folded flange traces the trailing edge on each side of the lamp.
+ vs=[];fs=[];z,w,base,gauge=sections[0]
+ for k in range(22):
+  u=.092+.908*k/21
+  x=side*u*(w+(floor_width(z)-w)*u*u)
+  top=base+ramp_height(z,u)+gauge*(1-.70*u**3)+.005*u**12
+  for dz,dy in [(0,-.002),(-.0015,.008),(.002,.009),(.004,0)]:vs.append((x,top+dy,z+dz))
+  if k:
+   for j in range(4):
+    i=(k-1)*4+j;n=(k-1)*4+(j+1)%4;fs.append((i,n,n+4,i+4))
+ fs.extend([(3,2,1,0),tuple(range(len(vs)-4,len(vs)))])
+ mesh('Diffuser trailing flange',vs,fs,carbon,floor)
 
 # Raised tapering nose; no box-shaped body.
 # Full survival cell from the rear bulkhead to the deformable nose cone.
@@ -641,12 +627,15 @@ def stamp_flap(foil,rect,slot):
   obj=mesh('Front '+('foil blue badge' if slot==0 else 'lower flap print'),pts,faces,flap_ink,decals)
   base=obj.data.uv_layers.new(name='UVMap')
   ink=obj.data.uv_layers.new(name='Printed ink')
-  for loop in obj.data.loops:ink.data[loop.index].uv=tex[loop.vertex_index]
+  for loop in obj.data.loops:
+   u,v=tex[loop.vertex_index]
+   # Reflect within this mark's half of the atlas when mirroring the foil.
+   ink.data[loop.index].uv=(slot+.5-u if side>0 else u,v)
   obj.data.uv_layers.active=base
 scale=shot['width']/shot['distance']
 stamp_flap(upper_foils[-1],(580,296,628,324),0)
 stamp_flap(lower_foils[-1],(672,311,724,351),1)
-# Rear wing, twin swan necks, actuator, two beam elements.
+# Rear wing, twin swan necks and active-aero actuator.
 wing('Rear main plane',1.58,-2.395,.762,.390,carbon,sweep=.026,lift=.041)
 wing('DRS flap',1.57,-.114,-.021,.283,carbon,flap,sweep=.021,lift=.036)
 rear_flap=bpy.data.objects['DRS flap']
@@ -672,7 +661,6 @@ for side in [-1,1]:
    quad.append((xx,pt.y+.0023,zz))
   strips.extend(quad)
  mesh('Rear flap printed monogram',strips,[tuple(range(i,i+4)) for i in [0,4,8]],silver,flap)
-for z,y in [(-2.28,.35),(-2.44,.405)]:wing('Beam wing',1.2,z,y,.15,carbon,sweep=.03,lift=.025)
 fence_carbon=mat('RearFenceCarbon','242426',.46,.17)
 for s in [-1,1]:
  # Long upper rail, near-vertical trailing edge and swept lower leading edge.
@@ -701,7 +689,7 @@ for s in [-1,1]:
  print_grid('Rear fence sponsor print',fence_ink,fence_sample,1,1,reverse=s>0)
 box('DRS hydraulic pod',(0,.885,-2.3),(.065,.075,.19),carbon,r=.025);rod('DRS ram',(0,.88,-2.32),(0,.89,-2.46),.009,metal)
 # Rear impact attenuator supports the tail lamp between the two tunnel exits.
-loft('Rear carbon impact casing',[[-2.705,0,.034,.197,.258],[-2.61,0,.056,.187,.276],
+loft('Rear carbon impact casing',[[-2.736,0,.071,.198,.291],[-2.61,0,.083,.182,.301],
  [-2.42,0,.086,.154,.330],[-2.20,0,.135,.132,.358]],carbon,n=16,power=.43)
 heat=mat('OxidisedTitanium','615a50',.32,.77)
 gear_steel=mat('Ground steel','a8aeb0',.21,.91)
@@ -900,9 +888,12 @@ for z,cy,rx in [(-2.47,.438,.059),(-2.575,.445,.061)]:
 for side in [-1,1]:
  rod('Tailpipe stay',(side*.039,.417,-2.49),(side*.088,.313,-2.44),.006,metal,vertices=7)
  rod('Rear casing fastener',(side*.061,.291,-2.606),(side*.061,.295,-2.613),.010,metal,vertices=6)
-box('Tail lamp seal',(0,.231,-2.705),(.107,.113,.024),black,r=.007)
-box('Recessed tail lens',(0,.231,-2.720),(.090,.091,.009),mat('TailLens','46080a',.27),r=.005)
+box('Tail lamp seal',(0,.245,-2.735),(.134,.082,.008),black,r=.007)
+box('Recessed tail lens',(0,.245,-2.739),(.120,.069,.006),mat('TailLens','46080a',.27),r=.005)
 lens=mat('TailOptic','be1d13',.24,.08)
+tail_shader=lens.node_tree.nodes['Principled BSDF']
+tail_shader.inputs['Emission Color'].default_value=(1,.009,.002,1)
+tail_shader.inputs['Emission Strength'].default_value=1.4
 # The slim optical strip is recessed into each rear fence's trailing edge.
 # Its individually spaced lenses lift with the fence in the parts breakdown.
 edge_lens=mat('Endplate lamp lens','f15c61',.30,.10)
@@ -920,73 +911,109 @@ for side in (-1,1):
    a=k*math.tau/8
    glass.append(point+Vector((side*.0045,.0032*math.cos(a),.0032*math.sin(a))))
   mesh('Rear endplate light cell',glass,[(0,1+k,1+(k+1)%8) for k in range(8)],edge_lens)
-for row in range(4):
- for col in range(3):
-  x=(col-1)*.027;y=.231+(row-1.5)*.021
-  rod('Individual tail optic',(x,y,-2.724),(x,y,-2.729),.0081,lens,vertices=10)
+for row in range(3):
+ for col in range(5):
+  x=(col-2)*.022;y=.245+(row-1)*.020
+  rod('Individual tail optic',(x,y,-2.741),(x,y,-2.743),.0081,lens,vertices=10)
 # Seated driver, modelled in metres. The camera sees the crown from behind;
 # the helmet is a shaped shell with an actual curved visor, not a white ball.
-helmetpaint=mat('HelmetPaint','e9ed24',.31,.07)
-helmetink=mat('HelmetInk','18212e',.4)
-visor=mat('HelmetVisor','172029',.13,.65)
-ellipsoid('Suit shoulders',(0,.49,-.35),(.235,.135,.20),sleeve,helmet)
+helmetpaint=mat('HelmetPaint','dfc68c',.22,.32)
+helmetink=mat('HelmetInk','18212e',.40)
+visor=mat('HelmetVisor','283748',.085,.65)
+ellipsoid('Suit shoulders',(0,.49,-.35),(.235,.135,.20),sleeve,body)
 ellipsoid('Neck balaclava',(0,.61,-.32),(.085,.085,.09),black,helmet)
-shell=ellipsoid('Helmet shell',(0,.772,-.315),(.158,.178,.19),helmetpaint,helmet,seg=64,rings=32)
-# Slightly flattened rear/chin and fuller brow, smoothly continuous shell.
-for v in shell.data.vertices:
- if v.co.y<-.45:v.co.z+=.16*(-v.co.y-.45)
- if v.co.z<-.3:v.co.z*=.94
-def helmet_band(name,lo,hi,material,start=-math.pi,end=math.pi,relief=0):
- vs=[];fs=[];N=96
- rows=max(1,math.ceil((hi-lo)/.009))
- for row in range(rows+1):
-  y=lo+(hi-lo)*row/rows
-  r=math.sqrt(max(0,1-((y-.772)/.178)**2))
+# Each horizontal section carries an independent width, chin and rear radius.
+sections=[(.624,.099,.126,.096),(.643,.134,.174,.137),(.682,.149,.196,.164),
+ (.716,.153,.195,.179),(.743,.156,.175,.183),(.795,.158,.174,.183),
+ (.833,.157,.183,.181),(.856,.155,.177,.175),(.891,.143,.155,.164),
+ (.926,.111,.121,.131),(.949,.065,.069,.082),(.956,.006,.009,.009)]
+def helmet_point(y,a,relief=0):
+ low,high=next(((l,h) for l,h in zip(sections,sections[1:]) if l[0]<=y<=h[0]),sections[-2:])
+ t=min(1,max(0,(y-low[0])/(high[0]-low[0])))
+ w,front,rear=[low[i]+(high[i]-low[i])*t for i in (1,2,3)]
+ cheek=.010*math.exp(-((y-.717)/.024)**2)*math.sin(a)**4
+ return ((w+relief-cheek)*math.sin(a),y,-.315+((front if math.cos(a)>0 else rear)+relief)*math.cos(a))
+def helmet_band(name,ys,material,lo=-math.pi,hi=math.pi,relief=0,parent=helmet):
+ N=64;vs=[];fs=[];uv=[]
+ for j,y in enumerate(ys):
   for i in range(N+1):
-   a=start+(end-start)*i/N
-   vs.append(((.1605+relief)*r*math.sin(a),y,-.315+(.194+relief)*r*math.cos(a)))
- for row in range(rows):
-  for i in range(N):
-   k=row*(N+1)+i;fs.append((k,k+1,k+N+2,k+N+1))
- return mesh(name,vs,fs,material,helmet)
-helmet_band('Recessed visor gasket',.737,.839,black,-1.46,1.46,.002)
-helmet_band('Curved visor glazing',.747,.827,visor,-1.405,1.405,.0055)
-helmet_band('Visor upper seal',.827,.836,black,-1.435,1.435,.004)
-helmet_band('Visor lower seal',.739,.747,black,-1.435,1.435,.004)
-helmet_band('Lower shell binding',.650,.661,black)
-helmet_band('Crown red pinline',.858,.864,paint)
-helmet_band('Crown ivory pinline',.866,.870,silver)
+   a=lo+(hi-lo)*i/N
+   vs.append(helmet_point(y,a,relief));uv.append((i/N,(y-.624)/.332))
+   if i and j:
+    k=len(vs)-1;fs.append((k-N-2,k-N-1,k,k-1))
+ obj=mesh(name,vs,fs,material,parent);layer=obj.data.uv_layers.new(name='UVMap')
+ for loop in obj.data.loops:layer.data[loop.index].uv=uv[loop.vertex_index]
+ return obj
+# Join the sidewall to a square-grid spherical cap. The top has four-sided
+# faces, continuous normals at the rim, and a planar print island.
+def helmet_shell():
+ n=96;div=n//4
+ vs=[];faces=[];uvs=[]
+ def face(indices,uv):
+  faces.append(indices);uvs.extend(uv)
+ heights=[s[0] for s in sections if s[0]<=.856]
+ for j,y in enumerate(heights):
+  for i in range(n):
+   vs.append(helmet_point(y,math.tau*i/n))
+   if j:
+    k=(i+1)%n
+    us=[(i/n+.5)%1,((i+1)/n+.5)%1]
+    if us[1]<us[0]:us[1]=1
+    v0=(heights[j-1]-.624)/.664;v1=(y-.624)/.664
+    face([(j-1)*n+i,(j-1)*n+k,j*n+k,j*n+i],[(us[0],v0),(us[1],v0),(us[1],v1),(us[0],v1)])
+ rim=(len(heights)-1)*n
+ grid=[]
+ for j in range(div+1):
+  row=[]
+  for i in range(div+1):
+   x=2*i/div-1;z=2*j/div-1;r=max(abs(x),abs(z))
+   if not r:a=0
+   elif z==r:a=math.pi*.25*x/r
+   elif x==r:a=math.pi*.5-math.pi*.25*z/r
+   elif z==-r:a=math.pi-math.pi*.25*x/r
+   else:a=-math.pi*.5+math.pi*.25*z/r
+   radius=math.sin(r*math.pi/2);u=radius*math.sin(a);v=radius*math.cos(a)
+   if r==1:index=rim+round(a*n/math.tau)%n
+   else:
+    index=len(vs);vs.append((.155*u,.856+.101*math.cos(r*math.pi/2),-.315+(.177 if v>0 else .175)*v))
+   row.append((index,(.5+.247*u,.75+.247*v)))
+  grid.append(row)
+ for j in range(div):
+  for i in range(div):
+   corners=[grid[j][i],grid[j+1][i],grid[j+1][i+1],grid[j][i+1]]
+   face([k for k,_ in corners],[t for _,t in corners])
+ obj=mesh('Helmet shell',vs,faces,helmetpaint,helmet)
+ layer=obj.data.uv_layers.new(name='UVMap')
+ for loop,uv in zip(layer.data,uvs):loop.uv=uv
+helmet_shell()
+helmet_band('Lower carbon binding',[.624,.638],carbon)
+helmet_band('Visor elastomer seal',[.737,.757,.80,.838],black,-1.51,1.51,.0016)
+helmet_band('Curved iridium glazing',[.746,.765,.795,.826],visor,-1.46,1.46,.0038)
+helmet_band('Zylon brow reinforcement',[.825,.832,.843],carbon,-1.46,1.46,.0048)
+helmet_band('Rear aero stabiliser',[.808,.818],helmetink,1.9,math.tau-1.9,.019)
+helmet_band('Rear aero stabiliser root',[.819,.829],helmetink,1.9,math.tau-1.9,.009)
 for side in [-1,1]:
- rod('Visor hinge',(side*.152,.79,-.295),(side*.160,.79,-.295),.014,metal,helmet,16)
- rod('Hinge centre',(side*.160,.79,-.295),(side*.162,.79,-.295),.006,black,helmet,12)
- for i in range(3):box('Chin ventilation',(side*(.021+i*.017),.695,-.138),(.010,.007,.002),black,helmet,r=.002)
- # Rear-quarter painted streaks and recessed crown intake slots.
- curve('Helmet rear graphic',[(side*.10,.87,-.40),(side*.137,.80,-.414),(side*.106,.69,-.43)],.006,helmetink,helmet)
- vent=ellipsoid('Crown intake',(side*.065,.932,-.33),(.009,.004,.022),black,helmet,seg=24,rings=12)
-# Crown marks are shrinkwrapped onto the compound curve, facing the T-camera.
-for label,pos,size in [('NEXUS',(0,.966,-.344),.037),('44',(0,.949,-.407),.036),('63',(0,.949,-.407),.036)]:
- parent=helmet
- if label in ['44','63']:
-  parent=group('HelmetNumberA' if label=='44' else 'HelmetNumberB');parent.parent=helmet
- o=text(label,pos,size,helmetink,(-math.pi/2,math.pi,0),parent)
- bpy.context.view_layer.objects.active=o;o.select_set(True);bpy.ops.object.convert(target='MESH');o=bpy.context.object
- sw=o.modifiers.new('Crown decal conformity','SHRINKWRAP');sw.target=shell;sw.wrap_method='NEAREST_SURFACEPOINT';sw.offset=.001
- bpy.ops.object.modifier_apply(modifier=sw.name)
-# Helmet graphics conform to the crown itself. Their sweeps converge at the
-# back and split around the vents; each stripe is one thin curved surface.
-for side in [-1,1]:
- for low,wide,ink in [(.33,.105,helmetink),(.455,.030,silver),(.51,.090,paint)]:
-  vv=[];ff=[]
-  for step in range(35):
-   longitude=side*(.72+step/34*2.15)
-   fade=math.sin(math.pi*step/34)**.65
-   centre=low+.61*math.sin(math.pi*(step/34)*.89)
-   for edge in [-1,1]:
-    elevation=centre+edge*wide*fade
-    vv.append((.1595*math.cos(elevation)*math.sin(longitude),.772+.1795*math.sin(elevation),
-               -.315+.192*math.cos(elevation)*math.cos(longitude)))
-   if step:ff.append((2*step-2,2*step-1,2*step+1,2*step))
-  mesh('Swept helmet graphic',vv,ff,ink,helmet)
+ a=side*1.21
+ p=helmet_point(.79,a,.005);q=helmet_point(.79,a,.011)
+ rod('Tear-off post',p,q,.005,metal,helmet,12)
+ for i in range(3):
+  a=side*(.18+i*.12);x,y,z=helmet_point(.694,a,.001)
+  vent=ellipsoid('Chin intake',(x,y,z),(.006,.011,.0024),black,helmet,seg=12,rings=8);vent.rotation_euler.y=a
+ # The tapered blade rests on the shoulder and sweeps up behind the neck.
+ path=[(.141,.565,-.267,.021),(.139,.597,-.302,.027),(.127,.616,-.354,.028),(.112,.620,-.404,.025),(.085,.630,-.442,.023),(.052,.639,-.461,.019),(0,.641,-.464,.016)]
+ ribbon=[];cells=[]
+ for k,(x,y,z,w) in enumerate(path):
+  for dx,dy in [(-w,0),(w,0),(w,-.009),(-w,-.009)]:ribbon.append((side*(x+dx),y+dy,z))
+  if k:
+   for e in range(4):cells.append((4*k-4+e,4*k-4+(e+1)%4,4*k+(e+1)%4,4*k+e))
+ cells.extend([(3,2,1,0),tuple(range(len(ribbon)-4,len(ribbon)))])
+ bevel(mesh('HANS collar blade',ribbon,cells,carbon,body),.003,2)
+ stations=[(.137,.709,-.393),(.13,.679,-.410),(.111,.641,-.433),(.091,.632,-.445)]
+ strap=[(side*(x+k*.007),y,z) for x,y,z in stations for k in (-1,1)]
+ mesh('Flat restraint webbing',strap,[(i,i+1,i+3,i+2) for i in (0,2,4)],black,body)
+ # Driver-specific rear hardware stays bound to the constructor selection node.
+ fastener=group('HelmetNumberA' if side==-1 else 'HelmetNumberB');fastener.parent=helmet
+ rod('Restraint clip',helmet_point(.724,2.0,.001),helmet_point(.724,2.0,.005),.006,metal,fastener,12)
 # The moulded seat and horseshoe head restraint remain visible in an empty
 # showroom cockpit and shield the rear aperture around the suited driver.
 seatmat=mat('SeatFoam','141717',.94)
@@ -1189,6 +1216,9 @@ steer.scale=(.85,.9,1)
 build_driver(group, mesh, curve, interp, steer, body, (fabric, glovepanel, suede, stitch, sleeve))
 # Boot tops, bent thighs and the six-point harness are visible beneath the wheel.
 occupant=group('SuitBody');occupant.parent=body;occupant.location.y=-.060
+for item in bpy.context.scene.objects:
+ if item.name.startswith(('Suit shoulders','HANS collar','Flat restraint webbing')):
+  item.parent=occupant;item.location.y+=.060
 for side in [-1,1]:
  loft('Suited thigh',[[-.54,side*.088,.072,.273,.420],[-.38,side*.093,.080,.267,.433],[-.20,side*.100,.073,.291,.451],[.00,side*.108,.066,.329,.468],[.15,side*.108,.056,.354,.462],[.27,side*.103,.041,.323,.421]],sleeve,occupant,n=14)
  def web(label,points,width,m):
@@ -1236,8 +1266,10 @@ for front in [True,False]:
  for s in [-1,1]:
   z=1.55 if front else -2.05;w=.305 if front else .405;x=s*(.8475 if front else .7675)
   # Upright, spaced ball joints and inboard pickup brackets (not one shared hub point).
+  corner=('Front' if front else 'Rear')+('L' if s<0 else 'R')
+  knuckle=group(corner+'Knuckle');knuckle.location=(x,.36,z)
   ux=x-s*.10
-  rod('Upright',(ux,.22,z),(ux,.48,z),.029,metal,vertices=12)
+  rod('Upright',(-s*.10,-.14,0),(-s*.10,.12,0),.029,metal,knuckle,12)
   for level,yy in enumerate([.251,.419]):
    for dz in [-.33,.28]:
     # Taper the blades into the actual nose/gearbox at both chassis stations.
@@ -1246,15 +1278,15 @@ for front in [True,False]:
     suspension_blade(pick,joint,front)
     box('Pickup clevis',pick,(.052,.036,.07),metal,r=.007)
     rod('Pickup bolt',(pick[0]-.03,pick[1],z+dz),(pick[0]+.03,pick[1],z+dz),.009,metal,vertices=6)
-   ellipsoid('Upright spherical joint',(ux,yy,z),(.027,.022,.025),metal)
+   ellipsoid('Upright spherical joint',(-s*.10,yy-.36,0),(.027,.022,.025),metal,knuckle)
   rod('Suspension pushrod',(s*.138,.457 if front else .43,z+(-.29 if front else .29)),(ux,.25,z),.013)
   rod('Steering trackrod',(s*.18,.33,z+.22),(ux,.34,z+.08),.009)
-  box('Brake duct scoop',(x-s*.17,.39,z+.16),(.085,.13,.13),carbon,r=.025)
-  box('Brake duct opening',(x-s*.17,.40,z+.229),(.058,.087,.005),black,r=.015)
-  pivot=group(('Front' if front else 'Rear')+('L' if s<0 else 'R'));pivot.location=(x,.36,z);wheelgroups.append(pivot)
+  box('Brake duct scoop',(-s*.17,.03,.16),(.085,.13,.13),carbon,knuckle,r=.025)
+  box('Brake duct opening',(-s*.17,.04,.229),(.058,.087,.005),black,knuckle,r=.015)
+  pivot=group(corner);pivot.location=(x,.36,z);wheelgroups.append(pivot)
   # Surface of revolution about X.
   def lathe(name,profile,m):
-   vs=[];fs=[];steps=94 if name=='Slick tyre' else 34 if name=='Ventilated carbon brake rotor' else 32 if name=='Locking collar' else 48 if name=='Recessed black dish' else 96
+   vs=[];fs=[];steps=94 if name=='Slick tyre' else 34 if name=='Ventilated carbon brake rotor' else 32 if name=='Locking collar' else 48 if name in ('Recessed black dish','Centre boss','Anodized bead seat') else 96
    for xx,r in profile:
     for i in range(steps):a=i*math.tau/steps;vs.append((xx,r*math.cos(a),r*math.sin(a)))
    for j in range(len(profile)-1):
@@ -1264,21 +1296,35 @@ for front in [True,False]:
   for side in [-1,1]:
    xx=side*w/2
    # Rolled graphite bead and concave cover with a raised centrelock socket.
-   lathe('Recessed black dish',[(xx-side*0.00538,0.245),(xx-side*0.00038,0.245),(xx+side*0.00013,0.241),
-        (xx-side*0.01188,0.223),(xx-side*0.03056,0.210),(xx-side*0.04110,0.183),
-        (xx-side*0.03923,0.145),(xx-side*0.03850,0.106),(xx-side*0.04002,0.067),
-        (xx-side*0.04300,0.027)],dish)
+   # A rolled lip, centre boss and fourteen swept vanes share the dish batch.
+   # Open slots reveal the friction ring behind the wheel at oblique angles.
+   lathe('Recessed black dish',[(xx-side*.006,.245),(xx+side*.002,.243),
+        (xx+side*.003,.239),(xx-side*.006,.224),(xx-side*.020,.209)],dish)
+   lathe('Centre boss',[(xx-side*.025,.075),(xx-side*.011,.064),
+        (xx-side*.006,.039),(xx-side*.015,.032)],dish)
+   lathe('Anodized bead seat',[(xx,.244),(xx+side*.0025,.243),(xx+side*.002,.241)],gunmetal)
+   for vane in range(14):
+    verts=[];faces=[]
+    for station,(radius,sweep,depth,width) in enumerate([(.063,0,.019,.18),(.105,.04,.027,.18),(.169,.13,.024,.16),(.218,.21,.010,.13),(.229,.22,.007,.12)]):
+     for t,relief in [(-1,0),(-.66,.005),(.68,.001),(1,-.008)]:
+      angle=vane*math.tau/14+s*(sweep+t*width)
+      verts.append((xx+side*(relief-depth),radius*math.cos(angle),radius*math.sin(angle)))
+     if station:
+      for j in range(3):
+       i=(station-1)*4+j;f=(i,i+4,i+5,i+1)
+       faces.append(f if s==side else tuple(reversed(f)))
+    mesh('Swept rim vane',verts,faces,dish,pivot)
    socket=rod('Centrelock hex socket',(xx-side*.047,0,0),(xx-side*.008,0,0),.035,gunmetal,pivot,6)
    bevel(socket,.0013,1)
    for poly in socket.data.polygons:poly.use_smooth=False
    lathe('Locking collar',[(xx-side*.019,.023),(xx-side*.014,.028),(xx-side*.007,.025),
          (xx-side*.005,.020),(xx-side*.005,.017)],red if s<0 else blue)
-   rod('Centrelock spindle',(xx-side*.015,0,0),(xx+side*.012,0,0),.016,metal,pivot,12)
+   rod('Centrelock spindle',(xx-side*.015,0,0),(xx+side*.012,0,0),.016,metal,knuckle,12)
    rod('Axle inspection cap',(xx+side*.018,0,0),(xx+side*.020,0,0),.012,yellow,pivot,16)
    lathe('Ventilated carbon brake rotor',[(xx-side*.07,.075),(xx-side*.07,.205),(xx-side*.083,.205),(xx-side*.083,.075)],brake)
-   box('Brake caliper',(xx-side*.092,.155,0),(.045,.09,.13),metal,pivot,r=.012)
-   for j in range(18):
-    a=j*math.tau/18;rod('Rotor cooling vein',(xx-side*.087,.09*math.cos(a),.09*math.sin(a)),(xx-side*.087,.20*math.cos(a+.05),.20*math.sin(a+.05)),.003,black,pivot,5)
+   box('Brake caliper',(xx-side*.092,.155,0),(.045,.09,.13),metal,knuckle,r=.012)
+   for j in range(12):
+    a=j*math.tau/12;rod('Rotor cooling vein',(xx-side*.087,.09*math.cos(a),.09*math.sin(a)),(xx-side*.087,.20*math.cos(a+.05),.20*math.sin(a+.05)),.003,brake,pivot,5)
    # The mould lettering remains white. Two partial ink arcs identify the
    # fitted compound, with a gap at each of the two main sidewall wordmarks.
    for arc in (0,math.pi):
@@ -1501,7 +1547,7 @@ for row,(z0,z1,width) in enumerate([(1.964,2.034,.170),(2.083,2.147,.168),
                                       (2.191,2.239,.146),(2.278,2.348,.149),
                                       (2.391,2.431,.128),(2.489,2.587,.132)]):
  def nose_print(u,v):
-  x=(u-.5)*width;z=z0+(z1-z0)*v
+  x=(u-.5)*width*1.12;z=(z0+z1)*.5+(z1-z0)*(v-.5)*1.18
   hit,pt,_,_=skin.ray_cast(Vector((x,1.4,z)),Vector((0,-1,0)))
   if not hit:raise RuntimeError('Nose ink missed upper surface')
   return (x,pt.y+.0016,z)
@@ -1785,7 +1831,6 @@ for pivot in wheelgroups:
 # Store assembly membership on the editable master so the inspection poses
 # can move prints, solid parts and disconnected mesh islands together.
 inspection_roles={
- 'rear-beam':('Beam wing',),
  'rear-main':('Rear main plane','DRS hydraulic','DRS ram'),
  'rear-stay':('Swan neck',),
  'halo-fairing':('Bonded halo upper fairing',),
@@ -1806,7 +1851,7 @@ inspection_roles={
  'impact':('Rear carbon impact casing','Rear casing fastener'),
  'suspension':('Carbon wishbone','Upright','Pickup clevis','Pickup bolt','Suspension pushrod',
                'Steering trackrod','Brake duct scoop','Brake duct opening'),
- 'wheel-cover':('Recessed black dish','Rim lip','Centrelock','Locking collar','Axle inspection cap','Cover fastener','Compound sidewall ink','Slick tyre'),
+ 'wheel-cover':('Recessed black dish','Centre boss','Anodized bead seat','Swept rim vane','Rim lip','Centrelock','Locking collar','Axle inspection cap','Cover fastener','Compound sidewall ink','Slick tyre'),
  'front-main':('Front mainplane','Front signature'),
  'front-lower':('Front lower flap',),
  'front-upper':('Front upper flap','Front foil','Mark Marking on flap'),
@@ -1823,7 +1868,11 @@ for parent in list(groups.values()):
  for o in list(parent.children):
   if o.type!='MESH':continue
   material=o.data.materials[0].name if len(o.data.materials)==1 else 'TwoToneCover'
-  batch='RearAero' if o.name.startswith(('Rear main plane','Beam wing')) else material
+  batch='RearAero' if o.name.startswith('Rear main plane') else material
+  if o.name.startswith(('Carbon wishbone','Suspension pushrod','Steering trackrod')):batch='SuspensionCarbon'
+  if o.name=='DRS ram':batch='ActuatorRam'
+  if o.name.startswith('Shift paddle'):batch='ShiftPaddle'+('Left' if sum(v.co.x for v in o.data.vertices)<0 else 'Right')
+  if o.name.startswith('Front upper flap') and material=='Upper flap laminate':batch='MovingFlap'+('Left' if sum(v.co.x for v in o.data.vertices)<0 else 'Right')
   buckets.setdefault(batch,[]).append(o)
  for name,objects in buckets.items():
   bpy.ops.object.select_all(action='DESELECT')
@@ -1832,8 +1881,16 @@ for parent in list(groups.values()):
   bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
   bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.mesh.normals_make_consistent(inside=False);bpy.ops.object.mode_set(mode='OBJECT')
   # Generate metric UVs for a subtle carbon twill applied by the runtime.
-  if name in ('Carbon','RearAero'):
-   bpy.ops.object.mode_set(mode='EDIT');bpy.ops.uv.smart_project(angle_limit=1.15,island_margin=.015);bpy.ops.object.mode_set(mode='OBJECT')
+  if 'Carbon' in name or 'laminate' in name.lower() or name.startswith('MovingFlap') or name in ('RearAero','FloorFence','HaloComposite'):
+   # Project each face on its dominant plane in car metres. Adjacent panels
+   # retain the same physical weave scale regardless of their island size.
+   uv=o.data.uv_layers.active or o.data.uv_layers.new(name='UVMap')
+   for poly in o.data.polygons:
+    normal=(o.matrix_world.to_3x3().inverted().transposed()@poly.normal).normalized()
+    axis=max(range(3),key=lambda k:abs(normal[k]))
+    for li in poly.loop_indices:
+     co=o.matrix_world@o.data.vertices[o.data.loops[li].vertex_index].co
+     uv.data[li].uv=(co[(axis+1)%3],co[(axis+2)%3])
 # On projected vector graphics the flat interior needs no tessellation.
 # Preserve islands, printed outlines, UV seams and curved skin highlights.
 for printed in [*decals.children,*numberA.children,*numberB.children]:
@@ -1848,7 +1905,7 @@ for o in bpy.context.scene.objects:
  if o.name in ('Chassis_RearAero','DRS_Carbon') or o.name.endswith('_WheelDish'):continue
  if o.type=='MESH' and o.parent not in [floor,decals,numberA,numberB] and len(o.data.polygons)>500 and not any(m.name in ['Livery','Ivory','AeroLaminate','Upper flap laminate','FrontFenceLaminate','Rubber','GloveFabric','Sleeve','HelmetPaint','HelmetInk'] for m in o.data.materials):
   d=o.modifiers.new('Optimised smooth production topology','DECIMATE')
-  d.ratio={'Chassis_Titanium':.235,'Chassis_Transmission alloy':.26,'Chassis_Cavity':.28}.get(o.name,.35)
+  d.ratio={'Chassis_Titanium':.208,'Chassis_Transmission alloy':.26,'Chassis_Cavity':.28}.get(o.name,.35)
   bpy.context.view_layer.objects.active=o;bpy.ops.object.modifier_apply(modifier=d.name)
 from cockpit_coaming import formed_coaming
 # Keep the paint, liner, cut faces and conformal print joined at the rim.
@@ -1871,15 +1928,29 @@ for obj in bpy.context.scene.objects:
 bpy.context.scene.render.engine='CYCLES';bpy.context.scene.cycles.device='CPU';bpy.context.scene.cycles.samples=32
 meshes=[o for o in bpy.context.scene.objects if o.type=='MESH']
 bpy.ops.object.select_all(action='DESELECT')
-for o in meshes:o.select_set(True)
+for o in meshes:
+ uvs=o.data.uv_layers
+ if not uvs:uvs.new(name='UVMap')
+ uvs[0].name='UVMap'
+ # Conformal prints already carry an artwork channel. Reserve slot 1 for
+ # occlusion on these meshes too, keeping the named artwork in slot 2.
+ if len(uvs)>1:
+  artwork=uvs[1];name=artwork.name;artwork.name='UVMap_AO'
+  duplicate=uvs.new(name=name,do_init=False)
+  values=[0.]*(len(artwork.data)*2)
+  artwork.data.foreach_get('uv',values);duplicate.data.foreach_set('uv',values)
+ ao_uv=uvs.get('UVMap_AO') or uvs.new(name='UVMap_AO',do_init=False)
+ uvs.active=ao_uv;ao_uv.active_render=True
+ o.select_set(True)
 bpy.context.view_layer.objects.active=meshes[0]
-bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.uv.smart_project(angle_limit=1.15,island_margin=.008);bpy.ops.object.mode_set(mode='OBJECT')
+bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.uv.smart_project(angle_limit=1.15,island_margin=.002);bpy.ops.object.mode_set(mode='OBJECT')
 ao=bpy.data.images.new('JGP baked ambient occlusion',width=1024,height=1024);ao.generated_color=(1,1,1,1)
 bake_materials={slot.material for obj in meshes for slot in obj.material_slots if slot.material}
 for m in bake_materials:
  n=m.node_tree.nodes.new('ShaderNodeTexImage');n.image=ao;m.node_tree.nodes.active=n
 bpy.context.scene.render.bake.margin=4
-bpy.ops.object.bake(type='AO',use_clear=True)
+bpy.ops.object.bake(type='AO',use_clear=True,uv_layer='UVMap_AO')
+for o in meshes:o.data.uv_layers[0].active_render=True
 def save_occlusion(image,filename):
  # Bake values are neutral. A single PNG channel carries the same shadow
  # while leaving more of the inline host budget available for geometry.
@@ -1926,7 +1997,7 @@ for pivot in wheelgroups:
  tyre=next(o for o in pivot.children if o.type=='MESH' and o.data.materials[0]==rubber)
  tyre.data.materials[0]=tyre_rubber
  width=.305 if pivot.name.startswith('Front') else .405
- uv=tyre.data.uv_layers.new(name='SidewallInk')
+ uv=tyre.data.uv_layers[0];uv.name='SidewallInk'
  local=pivot.matrix_world.inverted()@tyre.matrix_world
  for poly in tyre.data.polygons:
   for li in poly.loop_indices:

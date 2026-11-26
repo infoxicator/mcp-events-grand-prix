@@ -1,7 +1,8 @@
 import {expect,test,type WebSocketRoute} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
-import {createRace,DT,stepRace} from '../src/race/physics';
+import {createRace,damageRepairSeconds,DT,stepRace} from '../src/race/physics';
 import {getTrack} from '../src/race/track';
+import {FIELD_STEP_TICKS} from '../src/race/grid';
 import type {Race,RaceState} from '../src/race/types';
 
 test('a front wing carries impact damage through snapshots and returns after service',async({page,request})=>{
@@ -14,9 +15,14 @@ test('a front wing carries impact damage through snapshots and returns after ser
  const before=structuredClone(race);
  stepRace(race);
  expect(race.cars.a.damage?.[0]).toBeGreaterThan(.9);
+ while(race.tick%FIELD_STEP_TICKS)stepRace(race);
  const impact=structuredClone(race);
  Object.assign(race.cars.a,{pit:'stopped',speed:0,pitTime:0});
  for(let n=0;n<Math.round(getTrack().PIT_STOP_SECONDS/DT);n++)stepRace(race);
+ expect(race.cars.a.pit).toBe('stopped');
+ expect(race.cars.a.damage).toEqual(impact.cars.a.damage);
+ for(let n=0;n<Math.ceil(damageRepairSeconds(impact.cars.a.damage)/DT);n++)stepRace(race);
+ expect(race.cars.a.pit).toBe('exit');
  expect(race.cars.a.damage).toBeUndefined();
  // Hold the same car pose and camera for all three photographs. Damage,
  // repair, race time and broadcast messages come from the integrator.

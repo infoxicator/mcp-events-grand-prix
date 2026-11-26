@@ -1,3 +1,8 @@
+import {wetRoad} from './wet-road';
+import {circuitSignals} from './circuit-signals';
+import vegasSurvey from './assets/circuits/las-vegas-manifest.json';
+import rakedURL from './assets/circuits/raked-normal.jpg?url';
+import waterURL from './assets/circuits/water-normal.jpg?url';
 import * as T from 'three';
 import {createSphereShow} from './sphere-show';
 import {tracksideMotion} from './trackside-motion';
@@ -30,13 +35,16 @@ function lakeReflection(bounds:T.Box3){
    projected.xy+=ripple*vec2(.0016,.0028)*projected.w;
    vec4 base=texture2DProj(tDiffuse,projected);`)
   .replace('gl_FragColor = vec4( blendOverlay( base.rgb, color ), 1.0 );',
-   'gl_FragColor=vec4(base.rgb*vec3(.58,.66,.72)+vec3(.002,.007,.009),.62);');
+    `float r=length(pond*vec2(95.,135./1.4));
+    float jets=exp(-.19*abs(r-35.))+exp(-.21*abs(r-65.));
+    float glint=smoothstep(.5,1.28,ripple.x+.35*ripple.y);
+    gl_FragColor=vec4(base.rgb*vec3(.58,.66,.72)+vec3(.002,.007,.009)+jets*(.04+.45*glint)*vec3(.92,.67,.34),.69);`);
  // Refresh only when visible from a main camera. The depth-correct projected
  // reflection is reused by intervening frames and distant environment probes.
  const reflect=water.onBeforeRender;let last=-Infinity;
  water.onBeforeRender=function(renderer,scene,camera,...rest){
-  if(camera.position.distanceTo(centre)>900||camera.parent instanceof T.CubeCamera)return;
-  const now=performance.now();if(now-last<80)return;last=now;
+  if(camera.name!=='Race camera'||camera.position.distanceTo(centre)>900||camera.parent instanceof T.CubeCamera)return;
+  const now=performance.now();if(now-last<33.33)return;last=now;
   reflect.call(this,renderer,scene,camera,...rest);
  };
  return water;
@@ -51,8 +59,19 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
  const normal=new T.TextureLoader().load(asphaltNormal);normal.colorSpace=T.NoColorSpace;normal.flipY=false;normal.wrapS=normal.wrapT=T.RepeatWrapping;normal.anisotropy=anisotropy;
  const canopyLight=track.night?null:new T.TextureLoader().load(canopyLightURL);
  if(canopyLight){canopyLight.flipY=false;canopyLight.colorSpace=T.NoColorSpace;}
+ const shadowPatch={value:new T.Vector3()},puddles=wetRoad(),signals=circuitSignals(scene,track,heightAt),animation={value:0};
+ const gravelNormal=new T.TextureLoader().load(rakedURL),waterNormal=new T.TextureLoader().load(waterURL);
+ for(const t of [gravelNormal,waterNormal]){t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=anisotropy;}
+ const data=new Uint8Array(1024*4);
+ for(let i=0;i<1024;i++){
+  const d=track.LENGTH*i/1024;data[4*i]=Math.round((track.racingLineOffset(d)+16)*255/32);
+  data[4*i+1]=255*Math.max(0,...track.CORNERS.map(c=>1-track.wrap(c.d-d)/Math.max(35,165-c.speed)));data[4*i+3]=255;
+ }
+ const lineMap=new T.DataTexture(data,1024,1);lineMap.wrapS=T.RepeatWrapping;lineMap.minFilter=lineMap.magFilter=T.LinearFilter;lineMap.needsUpdate=true;
  const lakeBounds=new T.Box3();let reflection:Reflector|undefined;
- const distant:T.Mesh[]=[],casters:T.Mesh[]=[];
+ const distant:T.Mesh[]=[],casters:T.Mesh[]=[],receivers:T.Mesh[]=[];
+ const circuitLods:T.LOD[]=[],detailCamera=new T.PerspectiveCamera();
+ let manualDetail=false;
  const draco=import.meta.env.MCP_APP==='true'?null:new DRACOLoader().setDecoderPath({js:decoderJS,wasm:decoderWasm}).setWorkerLimit(2);
  const source=import.meta.env.MCP_APP==='true'?embeddedGLB(track.night?vegasMcp:monzaMcp,true):gzipBytes(track.night?vegasURL:monzaURL).then(b=>new GLTFLoader().setDRACOLoader(draco!).parseAsync(b,''));
  const loaded=source.then(gltf=>{
@@ -63,7 +82,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   const drySurfaces=new Set<T.MeshStandardMaterial>();
   const farCrowns=new Map<string,T.BufferGeometry>(),lodSources:T.Mesh[]=[];
   gltf.scene.traverse(o=>{
-   if(!(o instanceof T.Mesh)||!(o.name.startsWith('LOD_Canopy')||o.name.startsWith('LOD_Grandstand')))return;
+   if(!(o instanceof T.Mesh)||!(o.name.startsWith('LOD_Canopy')||o.name.startsWith('LOD_DistantCanopy')||o.name.startsWith('LOD_Grandstand')||o.name.startsWith('LOD_Staff')))return;
    const geometry=o.geometry.clone(),position=geometry.getAttribute('position');
    if(position.normalized){
     // Apply the MCP export's placement in metres without clipping it back to [-1,1].
@@ -71,7 +90,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     for(let i=0;i<position.count;i++)floats.setXYZ(i,position.getX(i),position.getY(i),position.getZ(i));
     geometry.setAttribute('position',floats);
    }
-   const key=o.name.startsWith('LOD_Grandstand')?o.name:(o.material as T.Material).name;
+   const key=!o.name.startsWith('LOD_Canopy')?o.name:(o.material as T.Material).name;
    farCrowns.set(key,geometry.applyMatrix4(o.matrixWorld));lodSources.push(o);
   });
   lodSources.forEach(o=>{o.removeFromParent();o.geometry.dispose();});
@@ -83,17 +102,80 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   for(const objects of buckets.values()){
    const first=objects[0].mesh,materialName=(first.material as T.Material).name,spectator=materialName==='Spectator0';
    if(spectator&&!first.geometry.boundingBox)first.geometry.computeBoundingBox();
-   const key=spectator?'LOD_Grandstand'+(first.geometry.boundingBox!.max.y>1.15?'Standing':'Seated'):materialName;
+   const staff=materialName.endsWith('Uniform');
+   const key=staff?'LOD_Staff'+materialName:spectator?'LOD_Grandstand'+(first.geometry.boundingBox!.max.y>1.15?'Standing':'Seated'):materialName;
    const farGeometry=farCrowns.get(key),batch=new T.InstancedMesh(first.geometry,first.material,objects.length);batch.name=first.name;
    if(farGeometry){
     const centre=new T.Vector3();for(const o of objects)centre.add(new T.Vector3().setFromMatrixPosition(o.matrix));centre.divideScalar(objects.length);
-    const offset=new T.Matrix4().makeTranslation(-centre.x,-centre.y,-centre.z),far=new T.InstancedMesh(farGeometry,first.material,objects.length),lod=new T.LOD();far.name=first.name+'_far';
-    objects.forEach((o,i)=>{const matrix=o.matrix.clone().premultiply(offset);batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);});batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);lod.addLevel(batch,0);lod.addLevel(far,spectator?105:115,.18);lod.addLevel(new T.Group(),950,.1);gltf.scene.add(lod);
+    const offset=new T.Matrix4().makeTranslation(-centre.x,-centre.y,-centre.z);
+    const far=new T.InstancedMesh(farGeometry,first.material,objects.length),lod=new T.LOD();
+    const horizonGeometry=farCrowns.get('LOD_Distant'+materialName);
+    const horizon=horizonGeometry?new T.InstancedMesh(horizonGeometry,first.material,objects.length):null;
+    far.name=first.name+'_far';
+    objects.forEach((o,i)=>{
+     const matrix=o.matrix.premultiply(offset);
+     batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);horizon?.setMatrixAt(i,matrix);
+    });
+    batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);
+    lod.addLevel(batch,0);lod.addLevel(far,staff?40:spectator?34:100,.15);
+    if(horizon){horizon.name=first.name+'_horizon';horizon.computeBoundingSphere();lod.addLevel(horizon,290,.12);}
+    lod.addLevel(new T.Group(),staff?360:spectator?550:950,.1);gltf.scene.add(lod);circuitLods.push(lod);
    }else{objects.forEach((o,i)=>batch.setMatrixAt(i,o.matrix));batch.computeBoundingSphere();gltf.scene.add(batch);}
   }
   gltf.scene.updateMatrixWorld(true);
-  gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;o.receiveShadow=true;o.castShadow=false;o.geometry.computeBoundingSphere();o.userData.cullCenter=(o instanceof T.InstancedMesh?o.boundingSphere!:o.geometry.boundingSphere!).center.clone().applyMatrix4(o.matrixWorld);
-   const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){const m=material as T.MeshStandardMaterial;m.side=T.DoubleSide;people.bind(m);
+  // The authored circuit has fixed world transforms. Crowd, flags and LEDs
+  // animate in shaders, and LOD changes only toggle visibility.
+  gltf.scene.traverse(o=>{o.matrixAutoUpdate=false;o.matrixWorldAutoUpdate=false;});
+  const configured=new Set<T.Material>();
+  gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;o.receiveShadow=false;o.castShadow=false;o.geometry.computeBoundingSphere();o.userData.cullCenter=(o instanceof T.InstancedMesh?o.boundingSphere!:o.geometry.boundingSphere!).center.clone().applyMatrix4(o.matrixWorld);
+   const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){const m=material as T.MeshStandardMaterial;
+    if(!/^(DistantRidge|CityGround|ParkHorizon|Upper|WarmWindows|Windows|Sphere|StreetLamp)/.test(m.name))o.receiveShadow=true;
+    if(m.name.startsWith('Canopy')||m.name==='Trunk'||m.name==='Foliage')o.userData.foliageCaster=true;
+    if(['Concrete','White','Steel','Armco'].includes(m.name)||o.userData.foliageCaster)casters.push(o);
+    if(['Fence','Crowd','Foliage','Trunk','Skin'].includes(m.name)||m.name.startsWith('Spectator')||m.name.startsWith('Seated'))distant.push(o);
+    if(m.name==='Sphere'){
+     const bounds=new T.Box3().setFromObject(o),centre=bounds.getCenter(new T.Vector3());
+     centre.y=bounds.max.y-(bounds.max.x-bounds.min.x)*.5;
+     sphereShow??=createSphereShow(centre);o.material=sphereShow.material;
+    }
+    if(m.name==='Water')lakeBounds.expandByObject(o);
+    if(configured.has(m))continue;
+    configured.add(m);
+    m.side=/^(Canopy|Fence|Sign$|Brake[0-9]|ParkHorizon|Marquee|GarageFascia|WorkshopBack|DistantRidge|Impact|Balustrade|Armco$)/.test(m.name)?T.DoubleSide:T.FrontSide;
+    people.bind(m);signals.bind(m);
+    if(m.name==='PaddockBanner')m.side=T.DoubleSide;
+    if(m.name==='Trunk'){
+     m.onBeforeCompile=shader=>{
+      shader.vertexShader='varying vec3 bark;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nbark=position;');
+      shader.fragmentShader='varying vec3 bark;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+       float arc=atan(bark.y,bark.x),ridge=sin(arc*21.+.74*sin(bark.z*7.+arc*2.));
+       diffuseColor.rgb*=1.+.32*ridge*(1.-smoothstep(.07,.18,fwidth(arc))); `);
+     };
+    }
+    if(m.name==='PalmFrond')m.side=T.DoubleSide;
+    if(m.name==='Gravel'){m.normalMap=gravelNormal;m.normalScale.set(.54,.54);m.roughness=.98;m.metalness=0;}
+    if(m.name==='Water'){m.normalMap=waterNormal;m.normalScale.set(.23,.23);}
+    if(/^(Armco|Impact|Concrete)$/.test(m.name)){m.normalMap=normal;m.normalScale.set(.12,.12);if(m.map)m.roughnessMap=m.map;}
+    if(/^(Canopy|PalmFrond|ItalianFlag|FlagCloth|Fountain|Roller)/.test(m.name)){
+     const prior=m.onBeforeCompile,program=m.customProgramCacheKey(),name=m.name;
+     m.onBeforeCompile=function(shader,renderer){
+      prior.call(this,shader,renderer);shader.uniforms.venueTime=animation;
+      const hub=(vegasSurvey as {rollerCenter?:number[]}).rollerCenter??[0,84,0];
+      const deform=name.startsWith('Roller')?`vec2 p=w.xy-vec2(${hub[0].toFixed(3)},${hub[1].toFixed(3)});
+       vec2 spoke=${name==='RollerCabin'?'70.*vec2(cos(floor(atan(p.y,p.x)*25./6.283185+.5)*6.283185/25.),sin(floor(atan(p.y,p.x)*25./6.283185+.5)*6.283185/25.))':'p'};
+       float a=venueTime*.006;w.xy+=mat2(cos(a),sin(a),-sin(a),cos(a))*spoke-spoke;`:
+       name==='Fountain'?'w.y+=(.22+.14*sin(w.x*.21+venueTime))*(sin(w.z*.35+venueTime*2.)+1.);':
+       'w.x+=.055*sin(1.8*venueTime+.12*w.z+.28*w.y);w.z+=.034*sin(venueTime+.22*w.x+.30*w.y);';
+      shader.vertexShader='uniform float venueTime;\n'+shader.vertexShader.replace('#include <project_vertex>',`
+       vec4 local=vec4(transformed,1.);
+       #ifdef USE_INSTANCING
+        local=instanceMatrix*local;
+       #endif
+       vec4 w=modelMatrix*local;vec3 wp=w.xyz;${deform}
+       #include <project_vertex>
+       mvPosition.xyz+=mat3(viewMatrix)*(w.xyz-wp);gl_Position=projectionMatrix*mvPosition;`);
+     };m.customProgramCacheKey=()=>program+'-venue-'+name;
+    }
     if(m.map){m.map.anisotropy=anisotropy;m.map.wrapS=m.map.wrapT=T.RepeatWrapping;}
     if(track.night&&m.name==='Steel'){m.envMapIntensity=.92;m.roughness=.48;m.metalness=.55;}
     if(track.night&&['White','Concrete','RunoffPaint','Red','Green'].includes(m.name))drySurfaces.add(m);
@@ -108,11 +190,12 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
      // Physical aggregate at the original survey UV scale, plus broad,
      // non-repeating binder variation between the racing line and the verge.
      m.onBeforeCompile=shader=>{
-      shader.uniforms.surfaceWater=surfaceWater;
-      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 pavementUV;')
-       .replace('#include <begin_vertex>','#include <begin_vertex>\npavementUV=uv;');
+      Object.assign(shader.uniforms,{puddleMatrix:puddles.matrix,puddleMap:puddles.image,puddleVisible:puddles.visible,puddleTime:puddles.clock});
+      shader.uniforms.surfaceWater=surfaceWater;shader.uniforms.courseLine={value:lineMap};
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform mat4 puddleMatrix;varying vec4 puddleClip;varying vec2 pavementUV;')
+       .replace('#include <begin_vertex>','#include <begin_vertex>\npavementUV=uv;puddleClip=puddleMatrix*modelMatrix*vec4(transformed,1.);');
       shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
-       uniform float surfaceWater;
+       varying vec4 puddleClip;uniform float puddleVisible,puddleTime,surfaceWater;uniform sampler2D puddleMap,courseLine;
        varying vec2 pavementUV;
        float pavementHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
        float pavementNoise(vec2 p){
@@ -141,9 +224,26 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
         roughnessFactor=clamp(roughnessFactor+.09*(binder-.5),.47,1.);
         // Water settles unevenly across the existing course and binder texture.
         float basin=resolvedNoise(metres*vec2(.43,.12))*.72+.28*binder;
-        float film=surfaceWater*(.46+.54*smoothstep(.60-surfaceWater*.38,.81-surfaceWater*.38,basin));
+        vec2 raceLine=texture2D(courseLine,vec2(fract(-metres.y/${track.LENGTH.toFixed(3)}),.5)).rg;
+        float dist=abs(metres.x-(raceLine.r*32.-16.));
+        float rubber=exp(-6.*(dist-.77)*(dist-.77))*(.30+.65*raceLine.g);
+        diffuseColor.rgb*=1.-.23*rubber;roughnessFactor-=.085*rubber;
+        float film=(1.-.58*rubber)*surfaceWater*(.46+.54*smoothstep(.60-surfaceWater*.38,.81-surfaceWater*.38,basin));
         roughnessFactor=mix(roughnessFactor,.12+.15*(1.-basin),film);
        `);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
+       if(puddleVisible>.5 && film>.035 && puddleClip.w>0.){
+        vec2 cell=floor(metres*2.8),drop=fract(metres*2.8)-.5;
+        float cycle=fract(puddleTime*1.3+pavementHash(cell));
+        float radius=length(drop),ring=exp(-90.*abs(radius-cycle*.60))*(1.-cycle);
+        vec2 ripple=drop/max(.02,radius)*ring*.002+vec2(binder-.5,grit-.5)*.003;
+        vec2 projected=puddleClip.xy/puddleClip.w+ripple;
+        vec2 bounds=min(projected,1.-projected);
+        float coverage=smoothstep(0.,.035,min(bounds.x,bounds.y))*smoothstep(.45,.78,basin+.22*surfaceWater);
+        float fresnel=.18+.68*pow(1.-abs(dot(normal,normalize(vViewPosition))),3.);
+        outgoingLight=mix(outgoingLight,texture2D(puddleMap,projected).rgb,film*coverage*fresnel);
+       }
+       #include <opaque_fragment>`);
       if(!track.night)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
        // Blender's glTF export flips the survey V coordinate.
        float station=3.-metres.y;
@@ -155,15 +255,17 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        float stripe=abs(abs(metres.x+2.4+1.2*smoothstep(830.,930.,station))-.85);
        float brakingLoad=smoothstep(760.,892.,station);
        float shoulderWear=exp(-stripe*stripe/1.75)*(.07+.10*brakingLoad);
-       float rubber=shoulderWear+exp(-stripe*stripe/.36)*(.17+.13*grit);
+       float brakingRubber=shoulderWear+exp(-stripe*stripe/.36)*(.17+.13*grit);
        float edge=smoothstep(4.7,7.3,abs(metres.x));
        float flecks=smoothstep(.73,.92,resolvedNoise(pavementUV*58.))*edge;
        float jointDistance=min(abs(station-801.+metres.x*.06),abs(station-903.-metres.x*.045));
        float transverse=pavementJoint(jointDistance,.036,fwidth(station));
-       diffuseColor.rgb=mix(diffuseColor.rgb,wearingCourse*(1.-rubber-.17*transverse+.13*flecks),braking);
+       diffuseColor.rgb=mix(diffuseColor.rgb,wearingCourse*(1.-brakingRubber-.17*transverse+.13*flecks),braking);
       `);
       if(track.night)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
-       float lane=pow((metres.y-45.*floor(metres.y/45.+.5))/15.,2.);
+       float station=3.-metres.y;
+       float pool=(station-45.*floor(station/45.+.5))/15.;
+       float lane=pool*pool;
        float axial=exp(-lane);
        float lateral=exp(-pow((abs(metres.x)-7.5)/10.,2.));
        totalEmissiveRadiance+=diffuseColor.rgb*vec3(.52,.55,.59)*(.12+.88*axial)*lateral;
@@ -178,11 +280,18 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     if(m.name==='Windows'&&m.map){m.color.set('#acb3c2');m.emissiveIntensity=.88;}
     if(m.name==='Balustrade'){m.transparent=true;m.opacity=.23;m.depthWrite=false;}
     if(track.night&&['Windows','WarmWindows','StoreGlass'].includes(m.name)&&m.map){
+     m.customProgramCacheKey=()=>'strip-facade-'+m.name;
      const strip=track.pointAt(3841,0),elevation=heightAt(3841),store=m.name==='StoreGlass';
      m.onBeforeCompile=shader=>{
       shader.vertexShader='varying vec3 facadeWorld;\n'+shader.vertexShader.replace('#include <begin_vertex>',
        '#include <begin_vertex>\nfacadeWorld=(modelMatrix*vec4(transformed,1.)).xyz;');
       shader.fragmentShader='varying vec3 facadeWorld;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+       vec3 eye=normalize(cameraPosition-facadeWorld);
+       vec2 facing=vec2(dot(eye.xz,vec2(.834,.552)),eye.y);
+       vec2 pane=fract(vMapUv*vec2(11.,8.))-.5;
+       vec2 recess=abs(pane+facing*.075);
+       float jamb=1.-smoothstep(.40,.47,max(recess.x,recess.y));
+       totalEmissiveRadiance*=.78+.22*jamb;
        vec2 bay=floor(vec2(vMapUv.x*3.1,facadeWorld.y/10.5));
        float block=fract(sin(dot(bay,vec2(17.21,63.07)))*3178.94);
        float groupLight=mix(.12,.86,smoothstep(.22,.79,block));
@@ -211,20 +320,68 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
       `);
      };
     }
-    if(m.name.startsWith('Brake')&&!track.night){m.color.set('#f1eee2');m.roughness=.92;m.metalness=0;}
-    if(m.name==='Hospitality'){m.color.set('#c4cbd2');m.roughness=.40;m.envMapIntensity=.42;}
+    if(m.name.startsWith('Brake')&&!track.night){m.color.set('#ffffff');m.roughness=.92;m.metalness=0;}
+    if(m.name==='Hospitality'){m.transparent=true;m.opacity=.67;m.depthWrite=false;m.roughness=.12;m.metalness=.48;m.envMapIntensity=1.16;}
     if(m.name==='WarmWindows'&&m.map){m.map.repeat.set(1,1);m.color.set('#ffdfae');m.emissiveIntensity=.65;}
     if(m.name==='Travertine'){m.emissive.set('#c28b43');m.emissiveIntensity=.11;m.envMapIntensity=.5;}
     if(m.name==='CityGround'){m.color.set('#828897');m.emissive.set('#9ba4b1');m.emissiveIntensity=.38;m.envMapIntensity=.34;}
     if(m.name==='Fountain'){m.color.set('#c2c9ce');m.emissive.set('#e5dbc3');m.emissiveIntensity=.66;m.roughness=.64;}
     if(m.name==='BootContact'){m.transparent=true;m.depthWrite=false;m.polygonOffset=true;m.polygonOffsetFactor=-2;}
-    if(m.name==='Water'){lakeBounds.expandByObject(o);m.envMapIntensity=.55;m.roughness=.24;m.metalness=.37;m.normalMap=normal;m.normalScale.set(.05,.05);}
+    if(m.name==='Water'){m.envMapIntensity=.55;m.roughness=.24;m.metalness=.37;}
     if(m.name==='ParkHorizon'){m.color.set('#a5af9e');m.roughness=1;
      // Keep the distant tree line at eye level. From a helicopter the real
      // instanced crowns below already provide the overhead canopy.
      m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <alphatest_fragment>',
       'diffuseColor.a*=1.-smoothstep(.12,.29,dot(normalize(vViewPosition),viewMatrix[1].xyz));\n#include <alphatest_fragment>');};
      m.transparent=false;m.alphaTest=.40;m.alphaToCoverage=true;m.depthWrite=true;}
+    if(m.name==='Concrete'&&!track.night){
+     m.onBeforeCompile=shader=>{
+      shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+       if(vMapUv.x< -6.95 && vMapUv.x> -8.05 && vMapUv.y>7.95 && vMapUv.y<9.05){
+        vec2 panel=vec2(vMapUv.x+8.,9.-vMapUv.y);
+        vec2 metres=panel*vec2(4.,1.3);
+        float joint=min(metres.x,4.-metres.x);
+        float tie=length(vec2(abs(metres.x-2.)-1.42,abs(metres.y-.65)-.39));
+        float grain=texture2D(map,metres*vec2(1.35,1.8)).r;
+        float scuff=(1.-smoothstep(.14,.52,metres.y+.04*sin(4.2*metres.x)))*smoothstep(.19,.42,grain);
+        float value=.46+.23*(grain-.35)-.13*scuff;
+        float aa=clamp(fwidth(metres.x),.002,.045);
+        value*=.48+.52*smoothstep(.006,.013+aa,joint);
+        value-=.19*(1.-smoothstep(.011,.020+aa,tie));
+        value+=.05*(1.-smoothstep(.002,.009+aa,abs(tie-.025)));
+        diffuseColor.rgb=vec3(value)*vec3(1.01,.995,.96);
+       }`);
+     };
+    }
+    if(m.name==='CobaltGlass'||m.name==='RubyGlass'){
+     m.roughness=.81;m.metalness=.04;m.emissiveIntensity=.26;
+     m.onBeforeCompile=shader=>{
+      shader.vertexShader='varying vec2 gore;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ngore=uv;');
+      shader.fragmentShader='varying vec2 gore;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+       float height=1.-gore.y;
+       float seam=.5+.5*cos(gore.x*24.*6.2831853);
+       float fabric=.72+.28*seam;
+       diffuseColor.rgb*=fabric;
+       totalEmissiveRadiance=totalEmissiveRadiance*fabric
+         +vec3(1.5,.59,.12)*exp(-5.4*abs(height-.11))*(.69+.31*seam);`);
+     };
+    }
+    if(!track.night&&['Grass','Gravel','GravelMargin'].includes(m.name)){
+     m.onBeforeCompile=shader=>{
+      shader.vertexShader='varying vec2 terrainMetres;\n'+shader.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\nterrainMetres=(modelMatrix*vec4(transformed,1.)).xz;');
+      shader.fragmentShader='varying vec2 terrainMetres;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+       vec2 ground=terrainMetres;
+       float broad=sin(ground.x*.034+ground.y*.013)*sin(ground.y*.047-ground.x*.019);
+       ${m.name==='Grass'?`float pass=dot(ground,vec2(.89,.456))*.56+.29*sin(ground.y*.017);
+       float mow=smoothstep(-.28,.28,sin(pass))-.5;
+       diffuseColor.rgb*=1.+.095*mow+.048*broad;`:`float sweep=dot(ground,vec2(.79,-.61))+.016*pow(19.*sin(ground.y*.026),2.);
+       float tracks=abs(fract(sweep/19.+.05*broad)-.5)*19.;
+       float rut=(1.-smoothstep(.11,.42,abs(tracks-.81)))*smoothstep(-.35,.7,broad);
+       diffuseColor.rgb*=1.+.095*broad-.13*rut;`}
+      `);
+     };
+     m.customProgramCacheKey=()=>'landscape-'+m.name;
+    }
     if(m.name==='Grass')m.color.set('#708554');
     // The woodland floor uses the gravel scan for grain. Its neutral source
     // albedo needs the leaf-litter tint when it meets the grass in wide shots.
@@ -251,33 +408,38 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        `);
      };
     }
-    if(['Concrete','White','Steel','Foliage','Trunk'].includes(m.name)||m.name.startsWith('Canopy'))casters.push(o);
     if(m.name==='Ice'&&track.night)m.emissiveIntensity=1.15;
     if(m.name==='Gold'&&track.night){m.emissiveIntensity=.37;m.roughness=.49;}
     if(m.name==='Dark'&&track.night)m.color.set('#080b12');
-    if(['Foliage','Fence','Crowd'].includes(m.name)){m.transparent=false;m.alphaTest=.4;m.depthWrite=true;}
+    if(['Foliage','Fence','Crowd'].includes(m.name)){m.transparent=false;m.alphaTest=m.name==='Fence'?.34:.4;m.alphaToCoverage=true;m.depthWrite=true;}
+    if(m.name==='Fence'){
+     m.roughness=.92;m.metalness=.06;
+     m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <alphatest_fragment>',`
+      vec3 plane=cross(dFdx(vViewPosition),dFdy(vViewPosition));
+      float angle=abs(dot(plane,normalize(vViewPosition)))/max(length(plane),.000001);
+      diffuseColor.a*=mix(.59,1.,smoothstep(.025,.38,angle));
+      #include <alphatest_fragment>`);};
+    }
+    if(m.name==='GravelMargin'){m.transparent=true;m.depthWrite=false;m.roughness=.93;}
     if(m.name==='Rubber'){m.transparent=true;m.depthWrite=false;m.polygonOffset=true;m.polygonOffsetFactor=-1;}
-    if(['Fence','Crowd','Foliage','Trunk','Skin'].includes(m.name)||m.name.startsWith('Spectator')||m.name.startsWith('Seated'))distant.push(o);
     if(canopyLight&&['Asphalt','RepairCourse','Grass','LeafLitter','RoughMeadow','White','Red','Green','RunoffPaint','Gravel','Rubber'].includes(m.name)){
      if(m.name==='Asphalt'||m.name==='RepairCourse'||!m.userData.canopyBaked){
       const original=m.onBeforeCompile;
       m.onBeforeCompile=function(shader,renderer){
-       original.call(this,shader,renderer);shader.uniforms.canopyLight={value:canopyLight};
+       original.call(this,shader,renderer);shader.uniforms.canopyLight={value:canopyLight};shader.uniforms.shadowPatch=shadowPatch;
        shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 canopyUV;')
         .replace('#include <project_vertex>','#include <project_vertex>\ncanopyUV=((modelMatrix*vec4(transformed,1.)).xz+vec2(128.,1536.))/vec2(1536.,2560.);');
-       shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nuniform sampler2D canopyLight;varying vec2 canopyUV;')
-        .replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nfloat sunlight=texture2D(canopyLight,canopyUV).r; reflectedLight.directDiffuse*=sunlight;reflectedLight.directSpecular*=sunlight;');
+       shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 shadowPatch;uniform sampler2D canopyLight;varying vec2 canopyUV;')
+        .replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nfloat radius=distance(canopyUV*vec2(1536.,2560.)-vec2(128.,1536.),shadowPatch.xy);float sunlight=mix(1.,texture2D(canopyLight,canopyUV).r,smoothstep(.60,1.,radius/max(1.,shadowPatch.z))); reflectedLight.directDiffuse*=sunlight;reflectedLight.directSpecular*=sunlight;');
       };
       m.customProgramCacheKey=()=>'park-canopy-'+m.name;
       m.userData.canopyBaked=true;
      }
     }
-    if(m.name==='Sphere'){
-     const bounds=new T.Box3().setFromObject(o),centre=bounds.getCenter(new T.Vector3());
-     centre.y=bounds.max.y-(bounds.max.x-bounds.min.x)*.5;
-     sphereShow??=createSphereShow(centre);o.material=sphereShow.material;
-    }
+
    }
+   if(o.receiveShadow)receivers.push(o);
+   o.userData.cullRadius=(o instanceof T.InstancedMesh?o.boundingSphere:o.geometry.boundingSphere)!.radius*o.matrixWorld.getMaxScaleOnAxis();
   });
   for(const material of drySurfaces){
    const concrete=material.name==='Concrete';
@@ -303,5 +465,28 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   if(!lakeBounds.isEmpty()){reflection=lakeReflection(lakeBounds);scene.add(reflection);}
   ready=true;
  }).catch(e=>{draco?.dispose();error=String(e);console.error('Blender circuit asset failed',e);});
- return {loaded,heightAt,spherePosition,people,get sphereShow(){return sphereShow;},get ready(){return ready;},get error(){return error;},update:(time:number,focus?:T.Vector3)=>{if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;if(focus)for(const o of casters){const p=o.userData.cullCenter as T.Vector3;o.castShadow=Math.hypot(p.x-focus.x,p.z-focus.z)<105;}if(focus)for(const o of distant){const p=o.userData.cullCenter as T.Vector3;o.visible=Math.hypot(p.x-focus.x,p.z-focus.z)<950;}},dispose:()=>{disposed=true;normal.dispose();canopyLight?.dispose();if(reflection){reflection.removeFromParent();reflection.geometry.dispose();reflection.dispose();}}};
+ return {loaded,heightAt,spherePosition,people,signals,puddles,get sphereShow(){return sphereShow;},get ready(){return ready;},get error(){return error;},viewDetail(camera:T.Camera|null,detail=1,drawDistance=1){
+  if(!camera&&!manualDetail)return;
+  manualDetail=!!camera;
+  if(camera){detailCamera.matrixWorld.copy(camera.matrixWorld);detailCamera.zoom=detail;}
+  for(const lod of circuitLods){
+   lod.autoUpdate=!camera;
+   if(camera){
+    // Lower silhouette detail while preserving the venue's draw distance.
+    const end=lod.levels[lod.levels.length-1],range=end.distance;
+    end.distance=range*drawDistance/detail;lod.update(detailCamera);end.distance=range;
+   }
+  }
+ },update(time:number,focus:T.Vector3,camera:T.Vector3,shadowExtent:number,balanced:boolean){
+  animation.value=time;shadowPatch.value.set(focus.x,focus.z,balanced?0:shadowExtent);
+  if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;
+  function near(mesh:T.Mesh,range:number){
+   const centre=mesh.userData.cullCenter as T.Vector3;
+   const radius=mesh.userData.cullRadius as number;
+   return Math.min(centre.distanceToSquared(camera),centre.distanceToSquared(focus))<(range+radius)**2;
+  }
+  for(const mesh of casters)mesh.castShadow=(!balanced||!canopyLight||!mesh.userData.foliageCaster)&&near(mesh,balanced?48:105);
+  for(const mesh of receivers)mesh.receiveShadow=near(mesh,balanced?shadowExtent+8:shadowExtent*1.5+15);
+  for(const mesh of distant)mesh.visible=near(mesh,balanced?640:950);
+ },dispose:()=>{disposed=true;puddles.dispose();signals.dispose();lineMap.dispose();gravelNormal.dispose();waterNormal.dispose();normal.dispose();canopyLight?.dispose();if(reflection){reflection.removeFromParent();reflection.geometry.dispose();reflection.dispose();}}};
 }

@@ -104,11 +104,11 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
     for obj in shells:bpy.data.objects.remove(obj,do_unlink=True)
     bpy.context.view_layer.objects.active=skin
     fuse=skin.modifiers.new('Tailored one-piece shell','REMESH')
-    fuse.mode='VOXEL';fuse.voxel_size=.0017;fuse.use_smooth_shade=True
+    fuse.mode='VOXEL';fuse.voxel_size=.0015;fuse.use_smooth_shade=True
     bpy.ops.object.modifier_apply(modifier=fuse.name)
-    smooth=skin.modifiers.new('Blend finger webs','SMOOTH');smooth.factor=.82;smooth.iterations=4
+    smooth=skin.modifiers.new('Blend finger webs','SMOOTH');smooth.factor=.82;smooth.iterations=6
     bpy.ops.object.modifier_apply(modifier=smooth.name)
-    reduce=skin.modifiers.new('Preserve knuckle profile','DECIMATE');reduce.ratio=.193
+    reduce=skin.modifiers.new('Preserve knuckle profile','DECIMATE');reduce.ratio=.147
     bpy.ops.object.modifier_apply(modifier=reduce.name)
     side=-1 if suffix=='L' else 1
     colors=skin.data.color_attributes.new(name='Racewear',type='BYTE_COLOR',domain='POINT')
@@ -124,7 +124,7 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
         palm=smooth(-.004,.020,z)*.88
         edge=(1-smooth(.05,.17,abs(angle+1.29)-.56))*smooth(-.102,-.089,z)
         cuff=1-smooth(-.094,-.085,z+.006*math.sin(angle))
-        base=mix((.69,.16,.20),(.19,.17,.19),max(palm,edge,cuff*.89))
+        base=mix((.69,.145,.18),(.115,.105,.12),max(palm,edge,cuff*.89))
         # A narrow cream bias binding follows the cuff, while the inner palm
         # has darker silicone contact pads around the curled finger tips.
         piping=1-smooth(.0004,.0019,abs(z+.092+.006*math.sin(angle)))
@@ -300,7 +300,7 @@ def build_driver(group, mesh, curve, interp, steer, body, materials):
                         [.177,-.017,-.049,.016,.014],[.167,-.004,-.043,.014,.012],
                         [.159,.006,-.037,.013,.011],[.154,.011,-.029,.011,.009],
                         [.153,.012,-.024,.006,.005]]
-            points=interp(points,3)
+            points=interp(points,5)
             paths.append([Vector((side*x,y,z)) for x,y,z,_,_ in points])
             root=paths[-1][0]
             finger.location=root

@@ -2,6 +2,8 @@ import * as T from 'three';
 import type {Track} from './track';
 import type {Car} from './types';
 import {VEHICLE, brakeCapacity, cornerLimit} from './vehicle';
+import {pavementHeight} from './pavement';
+import {kerbHeight} from './suspension';
 import {grip, pathCurvature} from './physics';
 
 export type RacingLineMode = 'off' | 'corners' | 'full';
@@ -34,6 +36,7 @@ export function createRacingLine(track: Track, heightAt: (d: number) => number) 
  colAttr.setUsage(T.DynamicDrawUsage);
  geometry.setAttribute('position', posAttr);
  geometry.setAttribute('color', colAttr);
+ const roadUv=new T.BufferAttribute(new Float32Array(vertCount*2),2).setUsage(T.DynamicDrawUsage);geometry.setAttribute('uv',roadUv);
  geometry.setIndex(indices);
  geometry.boundingSphere = new T.Sphere(new T.Vector3(), 5000);
 
@@ -48,6 +51,14 @@ export function createRacingLine(track: Track, heightAt: (d: number) => number) 
   polygonOffsetUnits: -2,
  });
 
+ material.onBeforeCompile=shader=>{
+  shader.vertexShader='varying vec2 roadMark;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nroadMark=uv;');
+  shader.fragmentShader='varying vec2 roadMark;\n'+shader.fragmentShader.replace('#include <alphamap_fragment>',`#include <alphamap_fragment>
+   float x=abs(roadMark.x),ax=max(.01,fwidth(x));
+   float phase=roadMark.y+x*.28,ay=max(.015,fwidth(phase));
+   float band=abs(fract(phase)-.5);
+   diffuseColor.a*=(1.-smoothstep(1.-ax,1.,x))*(.23+.77*(1.-smoothstep(.28-ay,.28+ay,band)));`);
+ };
  const mesh = new T.Mesh(geometry, material);
  mesh.frustumCulled = false;
  mesh.renderOrder = 3;
@@ -91,21 +102,21 @@ export function createRacingLine(track: Track, heightAt: (d: number) => number) 
    const offset = track.racingLineOffset(d);
    const p = track.pointAt(d, offset);
    const t = track.tangentAt(d);
-   const y = heightAt(d) + 0.055;
+   const y=heightAt(d)+.024;
    const nx = -t.z, nz = t.x; // right normal
 
    // In "corners" mode, shrink the ribbon width to 0 on pure full-throttle straights.
    const isCornerBand = cornerSpeeds[i] < 84 || targetSpeeds[i] < vNow + 6 || (i < SEGMENTS - 6 && targetSpeeds[i + 6] < vNow + 2);
    const fadeEnd = Math.min(1, i / 4, (SEGMENTS - i) / 10);
-   const chevronPulse = (i % 5 === 0) ? 1.0 : 0.76;
-   const w = (mode === 'corners' && !isCornerBand && i > lastBrakeZone ? 0 : HALF_WIDTH * (0.45 + 0.55 * fadeEnd) * chevronPulse);
+   const w = (mode === 'corners' && !isCornerBand && i > lastBrakeZone ? 0 : HALF_WIDTH * (0.45 + 0.55 * fadeEnd));
 
    const vi = i * 6;
    positions[vi] = p.x - nx * w;
-   positions[vi + 1] = y;
+   positions[vi + 1] = y+pavementHeight(track,d,offset-w)+kerbHeight(track,d,offset-w);
    positions[vi + 2] = p.z - nz * w;
    positions[vi + 3] = p.x + nx * w;
-   positions[vi + 4] = y;
+   positions[vi + 4] = y+pavementHeight(track,d,offset+w)+kerbHeight(track,d,offset+w);
+   roadUv.setXY(i*2,-1,d/5.4);roadUv.setXY(i*2+1,1,d/5.4);
    positions[vi + 5] = p.z + nz * w;
 
    // Color ramp: green (gas) -> amber (lift/turn-in) -> bright red (brake now)
@@ -133,7 +144,7 @@ export function createRacingLine(track: Track, heightAt: (d: number) => number) 
    colors[vi + 5] = b * shade;
   }
   posAttr.needsUpdate = true;
-  colAttr.needsUpdate = true;
+  colAttr.needsUpdate = true;roadUv.needsUpdate=true;
  }
 
  return {

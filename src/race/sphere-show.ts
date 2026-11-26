@@ -29,18 +29,22 @@ function browLettering(){
 }
 
 export function createSphereShow(centre:T.Vector3){
- const uniforms={displayCentre:{value:centre},clock:{value:0},bearing:{value:homeBearing},
+ const uniforms={...T.UniformsUtils.clone(T.UniformsLib.fog),displayCentre:{value:centre},clock:{value:0},bearing:{value:homeBearing},
   gaze:{value:new T.Vector2()},wink:{value:0},faceMix:{value:0},flagMix:{value:0},helmetMix:{value:0},browText:{value:browLettering()},wordmark:{value:logoTexture()}};
- const material=new T.ShaderMaterial({uniforms,side:T.DoubleSide,
+ const material=new T.ShaderMaterial({uniforms,fog:true,side:T.FrontSide,
   vertexShader:`
+   #include <fog_pars_vertex>
    uniform vec3 displayCentre;
    varying vec3 radial;
    void main(){
     vec4 world=modelMatrix*vec4(position,1.);
     radial=world.xyz-displayCentre;
-    gl_Position=projectionMatrix*viewMatrix*world;
+    vec4 mvPosition=viewMatrix*world;
+    gl_Position=projectionMatrix*mvPosition;
+    #include <fog_vertex>
    }`,
   fragmentShader:`
+   #include <fog_pars_fragment>
    uniform float clock,bearing,wink,faceMix,flagMix,helmetMix;
    uniform vec2 gaze;
    uniform sampler2D wordmark,browText;
@@ -52,6 +56,13 @@ export function createSphereShow(centre:T.Vector3){
     return 1.-smoothstep(1.-w,1.+w,r);
    }
    float band(float x,float width){return 1.-smoothstep(width,width+max(fwidth(x),.004),abs(x));}
+   // Longitude wraps at atan's branch cut and at each repeated wordmark.
+   // Measure the short angular step so mip selection stays continuous there.
+   vec4 lettering(sampler2D atlas,vec2 uv,float a,float longitudeSpan){
+    vec2 dx=vec2(angle(dFdx(a))/longitudeSpan,dFdx(uv.y));
+    vec2 dy=vec2(angle(dFdy(a))/longitudeSpan,dFdy(uv.y));
+    return textureGrad(atlas,clamp(uv,0.,1.),dx,dy);
+   }
    vec3 brand(float a,float lat){
     // Two outward-facing wordmarks, each upright on its own hemisphere.
     float lon=.5*angle(2.*(a-.76));
@@ -70,7 +81,7 @@ export function createSphereShow(centre:T.Vector3){
     vec3 flag=mix(vec3(.012,.016,.027),vec3(.95,.91,.79),check)*(.91+.09*fold);
     ink=mix(ink,flag,flagMix*smoothstep(.105,.30,abs(belt)));
     vec2 uv=vec2(lon/1.62+.5,(lat-.20)/.405+.5);
-    vec4 logo=texture2D(wordmark,clamp(uv,0.,1.));
+    vec4 logo=lettering(wordmark,uv,a,1.62);
     return mix(ink,logo.rgb*1.12,logo.a);
    }
    vec3 mascot(float a,float lat){
@@ -122,7 +133,7 @@ export function createSphereShow(centre:T.Vector3){
     float pinstripe=lat+.28*wrapSide-1.04;
     shell=mix(shell,cyan,max(band(pinstripe,.014),band(pinstripe-.07,.012)));
     vec2 badge=vec2(lon/1.08+.5,(lat-.95)/.23+.5);
-    vec4 logo=texture2D(wordmark,clamp(badge,0.,1.));
+    vec4 logo=lettering(wordmark,badge,a,1.08);
     shell=mix(shell,logo.rgb,logo.a);
     // Rounded, swept-back visor opening, a raised white brow, and a black rubber seal.
     float middle=.19+.13*smoothstep(.55,1.35,side);
@@ -133,7 +144,7 @@ export function createSphereShow(centre:T.Vector3){
     shell=mix(shell,navy,1.-smoothstep(1.07-edge,1.07+edge,port));
     shell=mix(shell,face*(.81+.19*smoothstep(.0,.23,1.-port)),1.-smoothstep(1.-edge,1.+edge,port));
     vec2 title=vec2(lon/1.50+.5,(lat-middle-.373)/.070+.5);
-    shell=mix(shell,navy,texture2D(browText,clamp(title,0.,1.)).a);
+    shell=mix(shell,navy,lettering(browText,title,a,1.50).a);
     vec2 hinge=vec2(side-1.12,lat-.40);
     shell=mix(shell,ice,ellipse(hinge,vec2(.135,.118)));
     shell=mix(shell,navy,ellipse(hinge,vec2(.095,.088)));
@@ -155,13 +166,21 @@ export function createSphereShow(centre:T.Vector3){
      show=mix(show,face,front*faceMix);
      if(helmetMix>.001)show=mix(show,helmet(a,lat,face),faceMix*helmetMix);
     }
-    // A fine LED pitch, fading to its average at broadcast distances.
-    vec2 grid=vec2(a*128.,lat*132.);
-    float resolved=1.-smoothstep(.30,1.3,max(fwidth(grid.x),fwidth(grid.y)));
-    show*=1.-.09*resolved*(.5+.5*cos(grid.x))*(.5+.5*cos(grid.y));
+    // Staggered LED pucks and louver rails converge to their mean radiance
+    // below a pixel. Use radial derivatives across the longitude wrap.
+    vec2 cell=vec2(a*(1536./(2.*PI)),lat*(768./PI));
+    vec2 footprint=vec2(244.46*length(fwidth(n.xz))/max(.02,length(n.xz)),fwidth(cell.y));
+    float resolved=1.-smoothstep(.25,1.05,max(footprint.x,footprint.y));
+    float baseFade=smoothstep(-.432,-.32,lat);
+    vec2 puck=fract(cell+vec2(.5*mod(floor(cell.y),2.),0.))-.5;
+    float emitter=1.-smoothstep(.28,.49,length(puck));
+    float rails=.5+.5*cos(cell.y*PI*.25);
+    show*=1.+baseFade*(resolved*.34*(emitter-.48)
+       -.046*(rails-.5)*(1.-smoothstep(1.,3.,footprint.y)));
     gl_FragColor=vec4(show,1.);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
+    #include <fog_fragment>
    }`});
  let lastTime:number|undefined,tracked:number|undefined;
  let closest=Infinity,winked=false,lastWink=-10;

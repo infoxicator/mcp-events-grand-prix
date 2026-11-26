@@ -17,6 +17,10 @@ export function createShowroom(renderer:T.WebGLRenderer,stageOffset=0,view:strin
  const sideFill=new T.RectAreaLight('#f6f3ed',1.95,5.8,1.45);sideFill.position.set(-4,2.1,1);sideFill.lookAt(0,.4,0);scene.add(sideFill);
  const fill=new T.RectAreaLight('#d8e1ef',1.6,2.3,5.5);fill.position.set(5,3,-4);fill.lookAt(0,.4,0);scene.add(fill);
  const floor=new T.Mesh(new T.PlaneGeometry(150,150),new T.MeshStandardMaterial({color:'#0c121b',roughness:.79,metalness:.03,envMapIntensity:.025}));floor.rotation.x=-Math.PI/2;floor.position.y=-.012;floor.receiveShadow=true;scene.add(floor);
+ const sweep:T.Vector2[]=[];
+ for(let i=0;i<=14;i++){const a=i*Math.PI/28;sweep.push(new T.Vector2(19+6*Math.sin(a),stageOffset-.014+6*(1-Math.cos(a))));}
+ sweep.push(new T.Vector2(25,22));
+ const cyclorama=new T.Mesh(new T.LatheGeometry(sweep,64),new T.MeshStandardMaterial({color:'#131a24',roughness:.92,side:T.BackSide,envMapIntensity:.08}));scene.add(cyclorama);
  const mirror=new Reflector(new T.PlaneGeometry(150,150),{textureWidth:768,textureHeight:768,color:0x151b23,clipBias:.001});mirror.rotation.x=-Math.PI/2;mirror.position.y=-.01;
  const mirrorMaterial=mirror.material as T.ShaderMaterial;
  // A subdued, slightly blurred studio reflection; no extra pass during racing.
@@ -24,8 +28,14 @@ export function createShowroom(renderer:T.WebGLRenderer,stageOffset=0,view:strin
  mirrorMaterial.uniforms.reflectionOpacity={value:.14};
  mirrorMaterial.transparent=true;mirrorMaterial.fragmentShader='uniform float reflectionOpacity;\n'+mirrorMaterial.fragmentShader.replace('gl_FragColor = vec4( blendOverlay( base.rgb, color ), 1.0 );','gl_FragColor = vec4( base.rgb * vec3(.80,.84,.89), reflectionOpacity );');scene.add(mirror);
  // Soft contact occlusion strengthens contact without a full-resolution SSAO pass.
- const tex=new T.TextureLoader().load(contactURL);tex.flipY=false;
- const shadow=new T.Mesh(new T.PlaneGeometry(4,7),new T.ShaderMaterial({uniforms:{ao:{value:tex}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'uniform sampler2D ao;varying vec2 vUv;void main(){float a=1.-texture2D(ao,vUv).r;gl_FragColor=vec4(0.,0.,0.,a*.92);}',transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=.001;scene.add(shadow);
+ const contact={value:null as T.Texture|null};let disposed=false;
+ const shadow=new T.Mesh(new T.PlaneGeometry(4,7),new T.ShaderMaterial({uniforms:{ao:contact},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'uniform sampler2D ao;varying vec2 vUv;void main(){float a=1.-texture2D(ao,vUv).r;gl_FragColor=vec4(0.,0.,0.,a*.92);}',transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=.001;shadow.visible=false;scene.add(shadow);
+ const contactReady=new Promise<boolean>(resolve=>{
+  new T.TextureLoader().load(contactURL,tex=>{
+   if(disposed){tex.dispose();resolve(false);return;}
+   tex.flipY=false;contact.value=tex;shadow.visible=true;resolve(true);
+  },undefined,()=>resolve(false));
+ });
  floor.position.y+=stageOffset;mirror.position.y+=stageOffset;shadow.visible=stageOffset===0;
  if(view==='front-corner'){
   const fill=new T.RectAreaLight('#fffaf3',3.25,1.30,.62);
@@ -97,5 +107,5 @@ export function createShowroom(renderer:T.WebGLRenderer,stageOffset=0,view:strin
   floor.material.roughness=assembled?.90:.79;
   floor.material.metalness=assembled?.12:.03;
  }
- return {scene,setStageFinish,dispose(){env.dispose();key.shadow.dispose();mirror.dispose();floor.geometry.dispose();(floor.material as T.Material).dispose();shadow.geometry.dispose();shadow.material.dispose();tex.dispose();}};
+ return {scene,contactReady,setStageFinish,dispose(){disposed=true;cyclorama.geometry.dispose();cyclorama.material.dispose();env.dispose();key.shadow.dispose();mirror.dispose();floor.geometry.dispose();(floor.material as T.Material).dispose();shadow.geometry.dispose();shadow.material.dispose();contact.value?.dispose();}};
 }

@@ -46,7 +46,7 @@ try {
    };
    let shift=0;const update=T.PerspectiveCamera.prototype.updateProjectionMatrix;
    T.PerspectiveCamera.prototype.updateProjectionMatrix=function(){
-    if(this.far===5000){this.position.x+=shift;window.clipNear=this.near;}
+    if(this.name==='Race camera'){this.position.x+=shift;window.clipNear=this.near;}
     return update.call(this);
    };
    window.probe=delta=>{

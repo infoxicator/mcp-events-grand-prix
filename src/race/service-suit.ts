@@ -7,20 +7,36 @@ type Limb='Arm'|'Leg';
 // A-pose stations match the welded Blender source in build_service_suit.py.
 export function suitFabric(source:T.MeshStandardMaterial,team:Constructor){
  const ferrari=team==='Ferrari',mercedes=team==='Mercedes',label=document.createElement('canvas');label.width=384;label.height=192;
- const ctx=label.getContext('2d')!;ctx.textAlign='center';ctx.fillStyle='#f2f0e6';
- ctx.font='italic bold 54px Arial';ctx.fillText(mercedes?'PETRONAS':team,192,76);
- ctx.font='bold 23px Arial';ctx.fillStyle=ferrari?'#e5c952':constructors[team][1];
- ctx.fillText(ferrari?'SCUDERIA FERRARI':mercedes?'AMG MOTORSPORT':'PIT CREW',192,122);
+ const sponsors:Record<Constructor,string>={Ferrari:'Shell',Mercedes:'PETRONAS',McLaren:'OKX','Red Bull Racing':'ORACLE','Racing Bulls':'VISA',Alpine:'BWT',Haas:'TOYOTA',Audi:'Revolut',Williams:'BARCLAYS','Aston Martin':'aramco',Cadillac:'TWG'};
+ const ctx=label.getContext('2d')!;ctx.textAlign='center';
+ ctx.fillStyle='#162025';ctx.fillRect(6,14,372,158);
+ ctx.fillStyle=constructors[team][0];ctx.fillRect(8,15,368,10);
+ ctx.fillStyle='#fffaf1';ctx.font='italic bold 64px Arial';ctx.fillText(sponsors[team],192,93,348);
+ ctx.font='bold 31px Arial';ctx.fillText(team.toUpperCase(),192,144,345);
  const patch=new T.CanvasTexture(label);patch.colorSpace=T.SRGBColorSpace;patch.anisotropy=4;
  const fabric=source.clone();fabric.addEventListener('dispose',()=>patch.dispose());fabric.color.set(ferrari?'#bc392f':mercedes?'#313a3d':constructors[team][0]);fabric.roughness=.95;
  fabric.onBeforeCompile=shader=>{
   shader.vertexShader='varying vec3 restCloth;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nrestCloth=position;');
   shader.uniforms.seamColor={value:new T.Color(constructors[team][1])};shader.uniforms.teamPatch={value:patch};
   shader.fragmentShader='uniform vec3 seamColor;uniform sampler2D teamPatch;varying vec3 restCloth;\n'+shader.fragmentShader.replace('#include <map_fragment>',`
-   vec2 labelUV=vec2(.5-restCloth.x/.28,(restCloth.y-.28)/.129);
-   if(restCloth.z<-.056 && all(greaterThan(labelUV,vec2(0.))) && all(lessThan(labelUV,vec2(1.)))){
+   #include <map_fragment>
+   bool sleeve=abs(restCloth.x)>.217;
+   bool chest=restCloth.z>0.;
+   float torsoArc=atan(restCloth.x,abs(restCloth.z));
+   vec2 labelUV=vec2(.5+(chest?1.:-1.)*torsoArc/1.53,(restCloth.y-.279)/(chest?.098:.119));
+   if(sleeve){
+    // Around the outward normal, screen-right is -Z on the right arm and +Z on the left.
+    float armOut=dot(vec2(abs(restCloth.x)-.166,restCloth.y-.425),vec2(.73,.68));
+    float armDepth=restCloth.z-(.425-restCloth.y)*.11;
+    float arc=atan(-sign(restCloth.x)*armDepth,armOut);
+    labelUV=vec2(.5+arc/1.76,(restCloth.y-.266)/.084);
+   }
+   if(all(greaterThan(labelUV,vec2(0.))) && all(lessThan(labelUV,vec2(1.)))){
     vec4 ink=texture2D(teamPatch,labelUV);diffuseColor.rgb=mix(diffuseColor.rgb,ink.rgb,ink.a);
    }
+   vec2 quilting=vec2(restCloth.y+restCloth.x*.56,restCloth.y-restCloth.x*.56)*21.;
+   vec2 edge=abs(fract(quilting)-.5);float quilt=1.-smoothstep(.012,.042+fwidth(quilting.y),min(edge.x,edge.y));
+   diffuseColor.rgb*=1.-.19*quilt;
    float seam=restCloth.y-.421+.32*abs(restCloth.x);
    if(abs(restCloth.x)<.238 && abs(seam)<.006)diffuseColor.rgb=mix(diffuseColor.rgb,seamColor,.81);
    vec2 thread=vec2(dot(restCloth,vec3(443.,151.,77.)),dot(restCloth,vec3(-111.,457.,87.)));

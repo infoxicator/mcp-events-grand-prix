@@ -1,7 +1,8 @@
 import {loadCar} from './load-car';
 import {describe,it,expect} from 'vitest';
+import {gunzipSync} from 'node:zlib';
 import {readFileSync} from 'node:fs';
-import {Mesh} from 'three';
+import {Mesh,Raycaster,Vector3} from 'three';
 
 it('carries the masked inner cowling finish on the painted shell at both LODs',async()=>{
  for(const level of ['high','low']){
@@ -23,6 +24,22 @@ it('carries the masked inner cowling finish on the painted shell at both LODs',a
   });
   expect(painted).toBeGreaterThan(20);
   expect(carbon).toBeGreaterThan(painted);
+ }
+});
+it('closes the helmet crown across the number at both distances',async()=>{
+ for(const level of ['high','low']){
+  const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
+  const {scene}=await loadCar(bytes);
+  const shell=scene.getObjectByName('Helmet_HelmetPaint') as Mesh;
+  shell.updateWorldMatrix(true,false);
+  const down=new Vector3(0,-1,0).transformDirection(shell.matrixWorld);
+  for(const x of [-.004,0,.004])for(const z of [-.004,0,.004]){
+   const origin=shell.localToWorld(new Vector3(x,1.05,-.315+z));
+   const hit=new Raycaster(origin,down).intersectObject(shell,false)[0];
+   expect(hit).toBeDefined();
+   expect(shell.worldToLocal(hit.point).y).toBeGreaterThan(.95);
+   expect(hit.uv!.y).toBeLessThan(.5);
+  }
  }
 });
 function glb(name:string){const data=readFileSync(new URL(`../src/race/assets/jgp26-${name}.glb`,import.meta.url));expect(data.toString('ascii',0,4)).toBe('glTF');expect(data.readUInt32LE(4)).toBe(2);return JSON.parse(data.toString('utf8',20,20+data.readUInt32LE(12)));}
@@ -105,6 +122,24 @@ it('keeps both diffuser exits open through to the rising floor at each LOD',asyn
  }
 });
 
+it('keeps brake hardware on a separate knuckle when the wheel spins or comes off',async()=>{
+ for(const level of ['high','low']){
+  const bytes=readFileSync(new URL(`../src/race/assets/jgp26-${level}.glb`,import.meta.url));
+  const {scene}=await loadCar(bytes);
+  for(const corner of ['FrontL','FrontR','RearL','RearR']){
+   const hub=scene.getObjectByName(corner)!,knuckle=scene.getObjectByName(corner+'Knuckle')!;
+   expect(knuckle.parent).toBe(hub.parent);
+   expect(knuckle.getObjectByName(corner+'Knuckle_Titanium')).toBeTruthy();
+   expect(hub.getObjectByName(corner+'_BrakeDisc')).toBeTruthy();
+   scene.updateMatrixWorld(true);
+   const installed=knuckle.matrixWorld.clone();
+   hub.rotateX(Math.PI/2);hub.visible=false;scene.updateMatrixWorld(true);
+   expect(knuckle.matrixWorld.equals(installed)).toBe(true);
+   expect(knuckle.visible).toBe(true);
+  }
+ }
+});
+
 it('prints the sidewall artwork on a dedicated UV set at both wheel LODs',async()=>{
  const {Mesh,MeshStandardMaterial,DataTexture}=await import('three');
  for(const level of ['high','low']){
@@ -115,9 +150,40 @@ it('prints the sidewall artwork on a dedicated UV set at both wheel LODs',async(
    const map=(tyre.material as InstanceType<typeof MeshStandardMaterial>).map;
    if(!(map instanceof DataTexture))throw new Error('Expected decoded sidewall print');
    expect(tyre.geometry.getAttribute('uv1').count).toBe(tyre.geometry.getAttribute('position').count);
-   expect(map.channel).toBe(1);
+   expect(map.channel).toBe(0);
+   expect(tyre.geometry.getAttribute('uv')).not.toBe(tyre.geometry.getAttribute('uv1'));
    expect(map.image.width).toBe(1024);
    expect(map.image.data?.some((channel:number,i:number)=>i%4===0&&channel>200)).toBe(true);
   }
  }
+});
+
+
+it('prints the near and distant AI rear flaps upright from behind on both faces',async()=>{
+ const {scene}=await loadCar(gunzipSync(readFileSync(new URL('../src/race/assets/constructor-trim.glb.gz',import.meta.url))));
+ const teams={Field:0,Far:0};
+ scene.traverse(part=>{
+  if(!(part instanceof Mesh))return;
+  const level=part.name.startsWith('Field')?'Field':part.name.startsWith('Far')?'Far':undefined;
+  if(!level)return;
+  const pos=part.geometry.getAttribute('position'),uv=part.geometry.getAttribute('uv');
+  const flap=Array.from({length:uv.count},(_,i)=>i).filter(i=>uv.getX(i)>=0);
+  const width=Math.max(...flap.map(i=>pos.getX(i)))*2;
+  expect(width,part.name).toBeGreaterThan(1.5);
+  for(const i of flap){
+   // From the trailing car the right side of the picture is local -X.
+   expect(uv.getX(i)).toBeCloseTo(.5-pos.getX(i)/width,3);
+  }
+  const middle=flap.filter(i=>Math.abs(pos.getX(i))<.001);
+  const z=middle.map(i=>pos.getZ(i));
+  for(const trailing of [true,false]){
+   const edge=trailing?Math.min(...z):Math.max(...z);
+   const pair=middle.filter(i=>Math.abs(pos.getZ(i)-edge)<.001).sort((a,b)=>pos.getY(a)-pos.getY(b));
+   expect(pair.length).toBeGreaterThanOrEqual(2);
+   expect(uv.getY(pair[0])).toBeCloseTo(trailing?1:0);
+   expect(uv.getY(pair.at(-1)!)).toBeCloseTo(trailing?0:1);
+  }
+  teams[level]++;
+ });
+ expect(teams).toEqual({Field:11,Far:11});
 });

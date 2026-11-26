@@ -1,3 +1,5 @@
+import {surfaceEffects} from './surface-effects';
+import {impactEffects} from './impact-effects';
 import {liveryAtlas} from './liveries';
 import {createField} from './field-model';
 import type {FieldCar} from './grid';
@@ -13,6 +15,7 @@ import {createSparks} from './sparks';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {SunLight} from 'three/addons/lights/SunLight.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {createCar,type Finish} from './car-model';
 import {pitCrew} from './pit-crew';
@@ -21,6 +24,7 @@ import {createShowroom} from './showroom';
 import reviewViews from './assets/review-views.json';
 import referenceCameras from './assets/reference-cameras.json';
 import {BroadcastDirector} from './broadcast-camera';
+import {kerbHeight} from './suspension';
 import {DriverHead,onboardLens} from './onboard-camera';
 import {createRacingLine,type RacingLineMode} from './racing-line';
 import {TrackingCameraRig,AERIAL_CAMERA,SIDE_CAMERA,CHASE_CAMERA} from './tracking-camera';
@@ -28,15 +32,16 @@ import {createSafetyCar} from './safety-car-model';
 import type {RaceControl} from './race-control';
 
 export type CameraMode='broadcast'|'side'|'cockpit-a'|'cockpit-b'|'helicopter'|'flythrough'|'detail'|'sphere'|'strip'|'showroom'|'tcam-a'|'tcam-b'|'chase'|'pits'|'trackside'|'chase-a'|'chase-b'|'nose-a'|'nose-b';
-export interface RenderCar{distance:number;offset:number;speed:number;steering?:number;pit?:string;pitTime?:number;instruction?:{tyre?:string};heading?:number;acceleration?:number;lateralG?:number;compound?:string;drs?:boolean;gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
-export interface RenderRace{field?:FieldCar[];control?:RaceControl;laps?:number;cars:Record<'a'|'b',RenderCar>;time:number;phase:string}
+export interface RenderCar{brake?:number;throttle?:number;lockup?:number;lastImpact?:{time:number;source:string};distance:number;offset:number;speed:number;steering?:number;pit?:string;pitTime?:number;totalStop?:number;instruction?:{tyre?:string};heading?:number;acceleration?:number;lateralG?:number;compound?:string;drs?:boolean;gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
+export interface RenderRace{countdown?:number;field?:FieldCar[];control?:RaceControl;laps?:number;cars:Record<'a'|'b',RenderCar>;time:number;phase:string}
 export function createScene(container:HTMLElement,track:Track=getTrack()){
  const {pointAt,tangentAt}=track,night=track.night,embedded=import.meta.env.MCP_APP==='true';
  const scene=new T.Scene();scene.background=new T.Color(night?'#02040d':'#c3ccd2');scene.fog=new T.FogExp2(night?'#02040d':'#c3ccd2',night?.00024:.00083);
  const renderer=new T.WebGLRenderer({antialias:!embedded,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,embedded?1:1.5));renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.92;renderer.info.autoReset=false;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
  renderer.domElement.style.visibility='hidden';container.append(renderer.domElement);renderer.domElement.setAttribute('aria-label',`Live 3D ${track.name} ${night?'night ':''}circuit`);
- const camera=new T.PerspectiveCamera(45,1,.06,5000),sun=new T.DirectionalLight(night?'#c9dfff':'#fff0d8',night?1.25:2.7);sun.position.set(-80,120,-50);sun.castShadow=true;sun.shadow.mapSize.setScalar(embedded?1024:2048);sun.shadow.camera.left=-65;sun.shadow.camera.right=65;sun.shadow.camera.top=65;sun.shadow.camera.bottom=-65;sun.shadow.camera.near=1;sun.shadow.camera.far=350;sun.shadow.normalBias=.025;sun.shadow.bias=-.00005;
- scene.add(sun,sun.target,new T.HemisphereLight(night?'#8a9fd0':'#dce6f0',night?'#101323':'#504c3e',night?.5:.65));
+ const camera=new T.PerspectiveCamera(45,1,.06,night?7500:5000),sun=night||embedded?new T.DirectionalLight(night?'#c9dfff':'#fff0d8',night?1.17:2.7):new SunLight('#fff0d8',2.7);sun.position.set(-80,120,-50);sun.castShadow=true;sun.shadow.mapSize.setScalar(embedded?1024:2048);sun.shadow.camera.left=-65;sun.shadow.camera.right=65;sun.shadow.camera.top=65;sun.shadow.camera.bottom=-65;sun.shadow.camera.near=1;sun.shadow.camera.far=350;sun.shadow.normalBias=.025;sun.shadow.bias=-.00005;
+ camera.name='Race camera';
+ const hemisphere=new T.HemisphereLight(night?'#8a9fd0':'#dce6f0',night?'#101323':'#504c3e',night?.5:.65);scene.add(sun,hemisphere);if(sun instanceof T.DirectionalLight)scene.add(sun.target);else{sun.position.set(-80,89,-50);sun.shadow.camera.far=200;sun.shadow.mapSize.setScalar(1024);}
  const pmrem=new T.PMREMGenerator(renderer);let environment:T.WebGLRenderTarget|undefined,disposed=false;
  let reflectionError:string|null=null;
  const loadReflections=()=>gzipBytes(night?stripReflectionURL:daylightURL).then(bytes=>{
@@ -64,19 +69,40 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   scene.background=skyMap;scene.fog=new T.FogExp2('#363741',.00034);
  }
  const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+ const darkBlue=new T.Color(0x7b9bea),flagWhite=new T.Color(0xd9e1ff);
  const surfaceWater={value:0};
  const circuit=loadCircuit(scene,track,anisotropy,surfaceWater),vegas=night?circuit:null;
  let crew=embedded?undefined:pitCrew(scene,track);
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
  const dryFog=scene.fog.color.clone(),rainFog=new T.Color(night?'#495365':'#a0abb3');
  const dryDensity=scene.fog.density,drySun=sun.intensity;
- const sparks=night?createSparks(scene,track,circuit.heightAt):null;
+ const surfaceFx=surfaceEffects(scene,track,circuit.heightAt);
+ const impacts=impactEffects(scene,track,circuit.heightAt);
+ const sparks=createSparks(scene,track,circuit.heightAt);
  // Warm architectural spill is fixed to the two resort facades, independent of the car.
  if(night)for(const [lon,lat] of [[-115.1757,36.1127],[-115.1693,36.1212]]){const q=track.project(lon,lat);const light=new T.PointLight('#ffc584',6500,230,2);light.position.set(q.x,24,q.z);scene.add(light);}
+ const sphereSpill=vegas?new T.PointLight('#ffab5f',13500,235,2):null;
+ if(sphereSpill&&vegas){sphereSpill.position.copy(vegas.spherePosition);scene.add(sphereSpill);}
  const floodlightCandela=1050;
- const lights=night?Array.from({length:4},()=>{const l=new T.SpotLight('#f1f0e9',floodlightCandela,76,1.22,.76,2);scene.add(l,l.target);return l;}):[];
+ const lights=night?Array.from({length:embedded?4:6},()=>{const l=new T.SpotLight('#f1f0e9',floodlightCandela,76,1.22,.76,2);scene.add(l,l.target);return l;}):[];
+ const spot=lights[0];if(spot&&!embedded){spot.castShadow=true;spot.shadow.mapSize.set(384,384);spot.shadow.camera.near=.7;spot.shadow.camera.far=52;spot.shadow.normalBias=.021;spot.shadow.autoUpdate=false;spot.shadow.needsUpdate=true;}
+ let lastSpot=-Infinity;
+ const haze=night&&!embedded?new T.InstancedMesh(new T.ConeGeometry(2.65,4.8,20,1,true),new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,
+  uniforms:{fogAmount:{value:.012}},vertexShader:'varying vec2 cone;void main(){cone=uv;gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.);}',
+  fragmentShader:'uniform float fogAmount;varying vec2 cone;void main(){float a=cone.y*cone.y*(1.-smoothstep(.92,1.,cone.y));gl_FragColor=vec4(.82,.90,1.,a*fogAmount);}' }),lights.length):null;
+ const lampPose=new T.Object3D(),fixtureStations=lights.map(()=>NaN),fixtureBoxes=lights.map(()=>NaN),fixtureGains=lights.map(()=>1);
+ if(haze)scene.add(haze);
+ const probe=night&&!embedded?new T.LightProbe():null;
+ const hospitalityProbe=new T.SphericalHarmonics3(),sphereProbe=new T.SphericalHarmonics3(),probeDirection=new T.Vector3(),basis=new Array<number>(9);
+ if(probe){scene.add(probe);probe.intensity=.32;}
+ function zoneProbe(sh:T.SphericalHarmonics3,colour:T.Color,dx:number,dz:number){
+  T.SphericalHarmonics3.getBasisAt(probeDirection.set(dx,.35,dz).normalize(),basis);
+  for(let i=0;i<9;i++)sh.coefficients[i].copy(probeDirection.set(colour.r,colour.g,colour.b)).multiplyScalar(basis[i]);
+ }
+ zoneProbe(hospitalityProbe,new T.Color('#f1cb93'),.68,-.73);
  const weather=createRaceWeather(scene,track,circuit.heightAt,embedded,lights);
- const composer=night&&!embedded?new EffectComposer(renderer):null;let bloom:UnrealBloomPass|null=null;if(composer){composer.addPass(new RenderPass(scene,camera));bloom=new UnrealBloomPass(new T.Vector2(640,360),.11,.18,1.65);composer.addPass(bloom);composer.addPass(new OutputPass());}
+ const beauty=new RenderPass(scene,camera);
+ const composer=!embedded?new EffectComposer(renderer,new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,samples:Math.min(4,renderer.capabilities.maxSamples)})):null;let bloom:UnrealBloomPass|null=null;if(composer){composer.addPass(beauty);bloom=new UnrealBloomPass(new T.Vector2(320,180),.11,.18,1.65);composer.addPass(bloom);const output=new OutputPass();output.material.fragmentShader=output.material.fragmentShader.replace('// color space','gl_FragColor.rgb*=1.-.048*smoothstep(.10,.52,dot(vUv-.5,vUv-.5));\n// color space');composer.addPass(output);}
  const paintSheet=liveryAtlas();
  const params=new URLSearchParams(location.search);
  const reviewKey=params.get('review');
@@ -86,9 +112,9 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const stageProgress=reviewPose==='overhead'?.08:reviewPose==='lift'?.10:reviewPose==='breakdown'?.63:reviewProgress;
  const cars={a:createCar('a',track,paintSheet,surfaceWater,reviewPose??undefined,reviewProgress),b:createCar('b',track,paintSheet,surfaceWater)};scene.add(cars.a.root,cars.b.root);
  let safetyCar:ReturnType<typeof createSafetyCar>|undefined;
- const rearTarget=new T.WebGLRenderTarget(256,96),rearCamera=new T.PerspectiveCamera(58,256/96,.1,500);rearTarget.texture.wrapS=T.RepeatWrapping;rearTarget.texture.repeat.x=-1;let mirrorFrame=0;
+ const rearTarget=new T.WebGLRenderTarget(512,128),rearCamera=new T.PerspectiveCamera(55,256/128,.1,500);rearTarget.texture.wrapS=T.RepeatWrapping;rearTarget.texture.repeat.x=-1;let mirrorFrame=0,mirrorSide=0;
  let studio:ReturnType<typeof createShowroom>|undefined;let finish:Finish='colour',turntable=true;
- const field=createField(track,circuit.heightAt,paintSheet,surfaceWater);scene.add(field.root);
+ const field=createField(track,circuit.heightAt,paintSheet,surfaceWater);scene.add(field.root,field.signage);
  const loading=document.createElement('div');loading.className='model-loading';loading.setAttribute('elementtiming','race-loading');loading.textContent='LOADING MCP GP';if(!embedded)container.append(loading);
  let assetsLoaded=false,presentationReady=false,mirrorMs=0,mainMs=0,contextLost=false;
  let warmStep=0,warmSubmitted=false,warmFence:WebGLSync|null=null;
@@ -129,6 +155,13 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   }
   if(!disposed)assetsLoaded=true;
  }).catch(err=>{if(!disposed){reflectionError=String(err);loading.textContent='3D ASSET UNAVAILABLE';}});
+ const pan=new T.Vector3();let panAnchor=-1,panTime=0,orbitYaw=0,orbitPitch=0,zoom=1,pointer:number|null=null;
+ const element=renderer.domElement;
+ const orbitStart=(e:PointerEvent)=>{if(selectedMode!=='showroom'||reviewView||e.button!==0)return;pointer=e.pointerId;element.setPointerCapture(pointer);turntable=false;};
+ const orbitMove=(e:PointerEvent)=>{if(e.pointerId!==pointer)return;orbitYaw-=e.movementX*.007;orbitPitch=T.MathUtils.clamp(orbitPitch+e.movementY*.005,-.8,1.2);};
+ const orbitEnd=()=>{pointer=null;};
+ const orbitZoom=(e:WheelEvent)=>{if(selectedMode!=='showroom'||reviewView)return;e.preventDefault();zoom=T.MathUtils.clamp(zoom*Math.exp(.001*e.deltaY),.42,2.8);};
+ element.addEventListener('pointerdown',orbitStart);element.addEventListener('pointermove',orbitMove);element.addEventListener('lostpointercapture',orbitEnd);element.addEventListener('wheel',orbitZoom,{passive:false});
  let selectedMode:CameraMode='broadcast',activeMode:CameraMode='side',cameraLabel='SIDE / STABILISED';
  let lookBack=false,racingLineMode:RacingLineMode='off',racingLineSeat:'a'|'b'='a',hiddenCar:'a'|'b'|null=null;
  let racingLine:ReturnType<typeof createRacingLine>|undefined;
@@ -190,7 +223,27 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    if(!disposed)embeddedWarmed=true;
   })();
  }
+ // Reduce secondary-view work under sustained frame pressure. Hysteresis
+ // avoids reallocating targets on camera cuts or isolated shader compiles.
+ let balanced=embedded,lastPresented=0,submitMs=0,frameMs=16.7,pressure=0,recovery=0,lastShadow=-Infinity;
+ function updateQuality(now:number){
+  const dt=now-lastPresented;lastPresented=now;
+  if(embedded||!presentationReady||dt<=0||dt>160)return;
+  frameMs+=.08*(dt-frameMs);
+  pressure=Math.max(0,pressure+(frameMs>17.0||submitMs>14?dt:-dt));
+  recovery=frameMs<16.85&&submitMs<11?recovery+dt:0;
+  if((!balanced&&pressure>450)||(balanced&&recovery>9000)){
+   balanced=!balanced;pressure=0;recovery=0;
+   const size=sun instanceof SunLight?(balanced?512:1024):(balanced?1024:2048);
+   sun.shadow.mapSize.set(size,size);
+   sun.shadow.map?.dispose();sun.shadow.map=null;sun.shadow.needsUpdate=true;
+   const ratio=balanced?Math.min(devicePixelRatio*.80,1):Math.min(devicePixelRatio,1.5);
+   if(ratio!==renderer.getPixelRatio()){renderer.setPixelRatio(ratio);composer?.setPixelRatio(ratio);}
+   sizeBloom(lastWidth,lastHeight);
+  }
+ }
  function render(race:RenderRace,now:number){
+  updateQuality(now);
   if(embedded){
    if(contextLost||gl.isContextLost()){
     presentationReady=false;
@@ -230,7 +283,11 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    warmSubmitted=true;
    warmFence=gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0);
    gl.flush();
-  }else if(presentationReady)drawFrame(race,now);
+  }else if(presentationReady){
+   const start=performance.now();
+   drawFrame(race,now);
+   submitMs+=.10*(performance.now()-start-submitMs);
+  }
   if(warmSubmitted&&!presentationReady){
    // Poll on subsequent frames. Race time remains server-owned throughout.
    if(warmFence&&gl.clientWaitSync(warmFence,0,0)===gl.TIMEOUT_EXPIRED)return;
@@ -246,7 +303,8 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    safetyCar.car.visible=true;
    safetyCar.car.position.set(point.x,circuit.heightAt(safety.distance),point.z);
    safetyCar.car.rotation.y=Math.atan2(tangent.x,tangent.z);
-   safetyCar.flash(race.time);
+   safetyCar.car.rotation.x=Math.atan2(circuit.heightAt(safety.distance-2)-circuit.heightAt(safety.distance+2),4);
+   safetyCar.flash(race.time,safety.distance);
   }else if(safetyCar)safetyCar.car.visible=false;
   const visits=garageVisits(track,race.cars,race.field,visitMap);
   const inBox=(v:GarageVisit|undefined)=>v&&(v.car.pit==='stopped'||(v.car.pit==='entry'&&v.gap>=-20&&v.gap<1)||(v.car.pit==='exit'&&v.gap>=0&&v.gap<14));
@@ -261,10 +319,12 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    featured??=stoppedFallback;
    covering=featured?.entry.team;
   }
-  const mode=warmMode??(selectedMode==='broadcast'?(featured?'pits':director.update(now)):selectedMode);
-  if(mode!==activeMode){aerial.reset();side.reset();chase.reset();driverHead.reset();activeMode=mode;}
+  const mode=warmMode??(selectedMode==='broadcast'?(featured?'pits':director.update(now,[race.cars.a,race.cars.b].some(c=>c.lastImpact&&race.time>=c.lastImpact.time&&race.time-c.lastImpact.time<.45))):selectedMode);
+  const cameraCut=mode!==activeMode;
+  if(cameraCut){aerial.reset();side.reset();chase.reset();driverHead.reset();activeMode=mode;}
   renderer.info.reset();container.classList.toggle('visor-edge',params.has('visor')&&mode.startsWith('cockpit'));
-  for(const id of ['a','b'] as const){const c=race.cars[id],p=carPosition(c,id==='a'?carPosA:carPosB),t=tangentAt(c.distance);cars[id].root.position.copy(p);cars[id].root.position.y=p.y+.026;cars[id].root.rotation.set(Math.atan2(circuit.heightAt(c.distance-3)-circuit.heightAt(c.distance+3),6),Math.atan2(t.x,t.z)+(c.heading??0),0,'YXZ');cars[id].update(c,mode===`cockpit-${id}`,mode==='showroom',now,mode===`cockpit-${id}`||mode===`tcam-${id}`||mode==='detail'||mode==='showroom');}
+  for(const id of ['a','b'] as const){const c=race.cars[id],p=carPosition(c,id==='a'?carPosA:carPosB),t=tangentAt(c.distance);cars[id].root.position.copy(p);cars[id].root.position.y=p.y+.026;cars[id].root.rotation.set(Math.atan2(circuit.heightAt(c.distance-3)-circuit.heightAt(c.distance+3),6),Math.atan2(t.x,t.z)+(c.heading??0),0,'YXZ');const flag=race.control?.safetyCar||(race.control?.yellowUntil??0)>race.time?'yellow':(race.cars[id==='a'?'b':'a'].distance-c.distance>track.LENGTH?'blue':'green');
+   cars[id].update({...c,flag},mode===`cockpit-${id}`,mode==='showroom',now,mode===`cockpit-${id}`||mode===`tcam-${id}`||mode==='detail'||mode==='showroom');}
   const onboard=mode.startsWith('cockpit')||mode.startsWith('tcam');
   const playerCam=onboard||mode.startsWith('chase-')||mode.startsWith('nose-');
   const leader=race.cars.a.distance>=race.cars.b.distance?'a':'b';
@@ -274,44 +334,57 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   // Resolve the shadow of fingers wrapped around the rim. Keep the larger
   // shadow footprint for external views of the field and trackside scenery.
   const extent=mode.startsWith('cockpit')?8:mode==='pits'?10:onboard||mode==='detail'?22:65;
-  if(sun.shadow.camera.right!==extent){
+  if(sun instanceof SunLight)sun.shadow.camera.far=mode==='helicopter'||mode==='flythrough'?390:onboard?120:215;
+  if(sun instanceof T.DirectionalLight&&sun.shadow.camera.right!==extent){
    Object.assign(sun.shadow.camera,{left:-extent,right:extent,top:extent,bottom:-extent});
    sun.shadow.camera.updateProjectionMatrix();
    sun.shadow.normalBias=extent<=10?.0009:extent===22?.003:.025;
    sun.shadow.radius=extent===8?2:1;
   }
   const chequered=race.phase==='finished'||(race.phase==='racing'&&race.laps!==undefined&&(Math.max(race.cars.a.distance,race.cars.b.distance)>=race.laps*track.LENGTH||!!race.field?.some(car=>car.finishTime!==null)));
-  circuit.people.update(elapsed,cars.a.root.position,cars.b.root.position,race.phase==='racing'&&race.cars.a.distance<track.LENGTH,race.phase==='racing'&&race.cars.b.distance<track.LENGTH,chequered);
+  circuit.signals.update(race);
+  circuit.people.update(elapsed,cars.a.root.position,cars.b.root.position,race.phase==='racing'&&race.cars.a.distance<track.LENGTH,race.phase==='racing'&&race.cars.b.distance<track.LENGTH,chequered,(race.control?.yellowUntil??0)>race.time||!!race.control?.safetyCar);
   circuit.sphereShow?.update(race,track,elapsed,chequered);
-  circuit.update(race.time,p);sparks?.update(race);
+  if(sphereSpill&&circuit.sphereShow){const u=circuit.sphereShow.material.uniforms;sphereSpill.color.set('#ffbd62').lerp(darkBlue,u.helmetMix.value).lerp(flagWhite,u.flagMix.value);}
+  sparks.update(race,p);impacts.update(race,camera);surfaceFx.update(race,renderer.domElement.height);
   if(night){
    // The exported fixtures are 45 m apart with a shorter span at the timing line.
    const station=track.wrap(c.distance),row=Math.floor(station/45)*45,next=Math.min(row+45,track.LENGTH);
    const travel=(station-row)/(next-row);
+   const stops=[...visits.values()].filter(v=>v.gap>=-32&&v.gap<=20);
+   const first=(mode==='pits'?featured:undefined)??stops[0];
+   const firstBox=first?pitBox(track,first.entry.team):null;
+   let secondBox=firstBox,nearest=Infinity;
+   for(const candidate of stops)if(candidate!==first&&firstBox!==null){
+    const box=pitBox(track,candidate.entry.team),gap=Math.abs(box-firstBox);
+    if(gap<nearest){nearest=gap;secondBox=box;}
+   }
+   let moved=false;
    lights.forEach((light,i)=>{
-    const d=i<2?row:track.wrap(next),side=i%2?1:-1,q=pointAt(d,side*7.5),aim=pointAt(d,side*1.9);
-    const h=circuit.heightAt(d);
-    light.position.set(q.x,h+12.47,q.z);light.target.position.set(aim.x,h,aim.z);
-    const stripPool=T.MathUtils.smoothstep(d,3150,3420)*(1-T.MathUtils.smoothstep(d,4180,4410));
-    const fixtureGain=1+stripPool*(.17*Math.cos(d*.026+side*1.6)-.24);
-    light.intensity=floodlightCandela*fixtureGain*(1-T.MathUtils.smoothstep(i<2?travel:1-travel,.59,1));
-    // The upper pair illuminates the service apron from the visible garage fascias.
-    // Reuse the race light budget and keep lights local to an occupied box.
-    if(i>=2){
-     const stops=[...visits.values()].filter(v=>v.gap>=-32&&v.gap<=20);
-     const first=mode==='pits'&&featured?featured:stops[0];
-     const second=first&&stops.filter(v=>v!==first).sort((a,b)=>Math.abs(pitBox(track,a.entry.team)-pitBox(track,first.entry.team))-Math.abs(pitBox(track,b.entry.team)-pitBox(track,first.entry.team)))[0];
-     const visit=i===2?first:second??first;
-     if(visit){
-      const box=pitBox(track,visit.entry.team),housing=pointAt(box+(i===2?-4.5:4.5),-24.5);
-      const service=pointAt(box,BOX_OFFSET);
-      light.position.set(housing.x,circuit.heightAt(box)+4.12,housing.z);
-      light.target.position.set(service.x,circuit.heightAt(box)+.65,service.z);light.intensity=190;
-     }
+    const d=i<2?row:i<4?track.wrap(next):track.wrap(next+45),side=i%2?1:-1;
+    const box=i===2?firstBox:i===3?secondBox:null;
+    // Fixed luminaires only move when the selected row or occupied bay changes.
+    if(fixtureStations[i]!==d||fixtureBoxes[i]!== (box??-1)){
+     fixtureStations[i]=d;fixtureBoxes[i]=box??-1;moved=true;
+     const stripPool=T.MathUtils.smoothstep(d,3150,3420)*(1-T.MathUtils.smoothstep(d,4180,4410));
+     fixtureGains[i]=1+stripPool*(.17*Math.cos(d*.026+side*1.6)-.24);
+     const housing=box!==null?pointAt(box+(i===2?-4.5:4.5),-24.5):pointAt(d,side*7.5);
+     const aim=box!==null?pointAt(box,BOX_OFFSET):pointAt(d,side*1.9),h=circuit.heightAt(box??d);
+     light.position.set(housing.x,h+(box!==null?4.12:12.47),housing.z);
+     light.target.position.set(aim.x,h+(box!==null?.65:0),aim.z);
+     if(haze){lampPose.position.copy(light.position);lampPose.position.y-=2.45;lampPose.updateMatrix();haze.setMatrixAt(i,lampPose.matrix);}
     }
+    light.intensity=box!==null?190:i>=4?floodlightCandela*.46:floodlightCandela*fixtureGains[i]*(1-T.MathUtils.smoothstep(i<2?travel:1-travel,.59,1));
    });
+   if(haze){
+    if(moved){haze.instanceMatrix.needsUpdate=true;haze.computeBoundingSphere();}
+    haze.material.uniforms.fogAmount.value=.011+.044*surfaceWater.value;
+   }
+   if(spot&&spot.castShadow&&(cameraCut||now<lastSpot||now-lastSpot>(balanced?250:75))){spot.shadow.needsUpdate=true;lastSpot=now;}
+   if(probe&&vegas&&sphereSpill){const mix=1-T.MathUtils.smoothstep(vegas.spherePosition.distanceTo(p),70,330);
+    zoneProbe(sphereProbe,sphereSpill.color,-.61,.79);probe.sh.copy(hospitalityProbe).lerp(sphereProbe,mix);probe.intensity=.13+mix*.26;}
   }
-  sun.position.set(p.x-80,p.y+120,p.z-50);sun.target.position.copy(p);
+  if(sun instanceof T.DirectionalLight){sun.position.set(p.x-80,p.y+(night?120:89),p.z-50);sun.target.position.copy(p);}
   if(camera.view?.enabled)camera.clearViewOffset();
   if(mode==='showroom'){
    if(!studio){
@@ -336,6 +409,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
     camera.position.fromArray(pos);target.fromArray(aim);camera.lookAt(target);
     camera.fov=['rear','side'].includes(angle)?T.MathUtils.clamp(2*T.MathUtils.radToDeg(Math.atan(Math.tan(Math.PI/10)*4/(3*camera.aspect))),23,66):36;
    }
+   if((orbitPitch||orbitYaw||zoom!==1)&&!reviewView){const orbit=new T.Spherical().setFromVector3(desired.copy(camera.position).sub(target));orbit.theta+=orbitYaw;orbit.phi=T.MathUtils.clamp(orbit.phi-orbitPitch,.09,Math.PI*.496);orbit.radius*=zoom;camera.position.copy(desired.setFromSpherical(orbit)).add(target);camera.lookAt(target);}
    cameraLabel=`MCP GP / STUDIO / ${finish.toUpperCase()}`;
   }else if(mode.startsWith('cockpit')||mode.startsWith('tcam')){
    const id=mode.endsWith('-a')?'a':'b',v=race.cars[id];
@@ -356,12 +430,13 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
     if(!tc)driverHead.update(now,roadAngle,v.steering??0,v.speed,v.acceleration??0,v.lateralG??0);
     const eyeX=offset+(tc?0:driverHead.lateral),eyeZ=-back+(tc?0:driverHead.forward);
     const yaw=tc?0:driverHead.yaw;
-    camera.position.copy(mount.localToWorld(desired.set(eyeX,height,eyeZ)));
+    const bump=reducedMotion.matches?0:Math.min(.003,kerbHeight(track,v.distance,v.offset+.82)*.09)*Math.min(1,v.speed/35)*Math.sin(now*.136);
+    camera.position.copy(mount.localToWorld(desired.set(eyeX,height+bump,eyeZ)));
     mount.localToWorld(target.set(eyeX+12*Math.sin(yaw),height-12*Math.tan(T.MathUtils.degToRad(pitch)),eyeZ+12*Math.cos(yaw)));
     camera.up.set(0,1,0).applyQuaternion(mount.getWorldQuaternion(mountRotation));camera.lookAt(target);
     camera.up.set(0,1,0);
     if(!tc)camera.rotateZ(driverHead.roll);
-    camera.fov=fov;cameraLabel=`${tc?'T-CAM':'ONBOARD'} / ${id==='a'?'FERRARI':'MERCEDES'}`;
+    camera.fov=fov+(reducedMotion.matches?0:3.2*T.MathUtils.smoothstep(v.speed,18,92));cameraLabel=`${tc?'T-CAM':'ONBOARD'} / ${id==='a'?'FERRARI':'MERCEDES'}`;
    }
   }else if(mode.startsWith('chase-')||mode.startsWith('nose-')){
    const id=mode.endsWith('-a')?'a':'b',v=race.cars[id],nose=mode.startsWith('nose-');
@@ -389,7 +464,10 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    const station=track.wrap(c.distance),anchor=track.wrap(Math.floor(station/85)*85+55);
    const lens=pointAt(anchor,track.trackHalfWidth(anchor)+1.15);
    camera.position.set(lens.x,circuit.heightAt(anchor)+1.38,lens.z);
-   target.copy(p);target.y+=.55;camera.lookAt(target);
+   target.copy(p);target.y+=.55;
+   if(cameraCut||panAnchor!==anchor||now<=panTime||reducedMotion.matches)pan.copy(target);else pan.lerp(target,-Math.expm1(-(now-panTime)/36));
+   panTime=now;panAnchor=anchor;camera.lookAt(pan);
+   if(!reducedMotion.matches)camera.rotateZ(.0009*Math.sin(now*.063)*(1-T.MathUtils.smoothstep(camera.position.distanceTo(target),5,21)));
    camera.fov=T.MathUtils.clamp(T.MathUtils.radToDeg(2*Math.atan(4.9/camera.position.distanceTo(target))),17,55);
    cameraLabel='TRACKSIDE / FIXED';
   }else if(mode==='pits'){
@@ -435,6 +513,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   }
   const rainfall=weather.update(race,camera,mode,elapsed,reducedMotion.matches,renderer.domElement.height);
   surfaceWater.value=mode==='showroom'?0:race.control?.wetness??0;
+  hemisphere.intensity=(night?.5:.65)*(1+rainfall*.19);scene.environmentIntensity=(night?.82:.65)*(1-rainfall*.19);
   sun.intensity=drySun*(1-rainfall*(night?.16:.78));
   scene.fog!.color.copy(dryFog).lerp(rainFog,rainfall);
   (scene.fog as T.FogExp2).density=dryDensity+rainfall*(night?.0032:.0046);
@@ -442,33 +521,56 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    scene.backgroundBlurriness=rainfall*.80;
    scene.backgroundIntensity=.8-rainfall*.28;
   }
-  field.update(race.field,camera,p,onboard&&mirrorFrame%6===0);
+  const limitDetail=balanced&&!embedded&&mode!=='showroom';
+  circuit.update(race.time,p,camera.position,extent,limitDetail);
+  renderer.shadowMap.autoUpdate=!balanced||cameraCut||mode==='showroom'||now<lastShadow||now-lastShadow>=(limitDetail?(onboard?48:64):32);
+  if(renderer.shadowMap.autoUpdate)lastShadow=now;
   mirrorMs=0;
-  if(onboard&&(!embedded||presentationReady)&&(warmMode||mirrorFrame++%(embedded?12:6)===0)){
+  if(onboard&&(!embedded||presentationReady)&&(warmMode||mirrorFrame++%(embedded?6:balanced?3:1)===0)){
    const mirrorStart=cameraDebug?performance.now():0;
    const id=mode.endsWith('-a')?'a':'b',v=race.cars[id],q=carPosition(v,rearPos),t=tangentAt(v.distance);
-   rearCamera.position.set(q.x,q.y+.78,q.z);rearCamera.lookAt(q.x-t.x*25,q.y+.65,q.z-t.z*25);cars[id].root.visible=false;
+   const side=mirrorSide===0?-1:1;
+   rearCamera.position.set(q.x-t.z*side*.78,q.y+.73,q.z+t.x*side*.78);
+   rearCamera.lookAt(q.x-t.x*25-t.z*side*4,q.y+.65,q.z-t.z*25+t.x*side*4);
+   rearTarget.viewport.set(mirrorSide*256,0,256,128);rearTarget.scissor.copy(rearTarget.viewport);rearTarget.scissorTest=true;
+   mirrorSide=1-mirrorSide;cars[id].root.visible=false;
    // Both cockpits can retain the shared rear texture after a broadcast cut.
    // Exclude both sets of reflecting faces while writing into that texture.
    cars.a.setMirrorVisible(false);cars.b.setMirrorVisible(false);
-   const oldTarget=renderer.getRenderTarget(),oldShadow=renderer.shadowMap.autoUpdate;renderer.shadowMap.autoUpdate=false;renderer.setRenderTarget(rearTarget);renderer.render(scene,rearCamera);renderer.setRenderTarget(oldTarget);renderer.shadowMap.autoUpdate=oldShadow;cars[id].root.visible=true;cars.a.setMirrorVisible(true);cars.b.setMirrorVisible(true);cars[id].setMirror(rearTarget.texture);
+   rearCamera.updateMatrixWorld();
+   field.update(race.field,rearCamera,p,0,true);circuit.viewDetail(rearCamera,.18);
+   const oldTarget=renderer.getRenderTarget(),oldShadow=renderer.shadowMap.autoUpdate;
+   renderer.shadowMap.autoUpdate=false;renderer.setRenderTarget(rearTarget);
+   renderer.render(scene,rearCamera);
+   renderer.setRenderTarget(oldTarget);renderer.shadowMap.autoUpdate=oldShadow;
+   cars[id].root.visible=true;cars.a.setMirrorVisible(true);cars.b.setMirrorVisible(true);cars[id].setMirror(rearTarget.texture);
    if(cameraDebug)mirrorMs=performance.now()-mirrorStart;
   }
+  circuit.viewDetail(limitDetail?camera:null,.54,.8);
   if(mode==='showroom'){cars.a.setMirror(null);cars.b.setMirror(null);}
+  else field.update(race.field,camera,p,extent,false,limitDetail);
   const mainStart=cameraDebug?performance.now():0;
   if(racingLine){if(racingLineMode!=='off'&&mode!=='showroom')racingLine.update(race.cars[racingLineSeat] as any,racingLineMode,race.control?.wetness??0);else racingLine.mesh.visible=false;}
-  if(mode==='showroom')renderer.render(studio!.scene,camera);else{if(cars.a.root.parent!==scene)scene.add(cars.a.root);if(composer)composer.render();else renderer.render(scene,camera);}
+  if(mode!=='showroom'&&cars.a.root.parent!==scene)scene.add(cars.a.root);
+  if(!embedded)circuit.puddles.update(renderer,scene,camera,p,now,surfaceWater.value,cameraCut);
+  beauty.scene=mode==='showroom'?studio!.scene:scene;
+  if(bloom){bloom.strength=mode==='showroom'?.042:night?.11:.045;bloom.enabled=night||!balanced;}
+  if(composer)composer.render();else renderer.render(beauty.scene,camera);
   weather.renderLens(renderer);
   if(cameraDebug)mainMs=performance.now()-mainStart;
  }
  let hasSize=false,lastWidth=0,lastHeight=0;
+ function sizeBloom(width:number,height:number){
+  const scale=Math.min(renderer.getPixelRatio(),320/Math.max(1,width),180/Math.max(1,height));
+  bloom?.setSize(Math.max(1,Math.round(width*scale)),Math.max(1,Math.round(height*scale)));
+ }
  function sizeScene(){
   const w=container.clientWidth,h=container.clientHeight;
   hasSize=w>0&&h>0;
   if(!hasSize||(w===lastWidth&&h===lastHeight))return;
   lastWidth=w;lastHeight=h;
-  renderer.setSize(w,h,false);composer?.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
+  renderer.setSize(w,h,false);composer?.setSize(w,h);sizeBloom(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
  }
  const resize=new ResizeObserver(sizeScene);resize.observe(container);sizeScene();
- return {render,get activeCamera(){return activeMode;},get ready(){return presentationReady;},get contextLost(){return contextLost||gl.isContextLost();},get startupError(){return cars.a.error??cars.b.error??circuit.error??(contextLost||gl.isContextLost()?'WebGL context lost':null);},setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars.a.setFinish(next==='showroom'?finish:'colour');},setFinish:(next:Finish)=>{finish=next;cars.a.setFinish(next);studio?.setStageFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},setLookBack:(on:boolean)=>{lookBack=on;},setHideCar:(team:'a'|'b'|null)=>{hiddenCar=team;if(!team){cars.a.root.visible=true;cars.b.root.visible=true;}},setRacingLine:(m:RacingLineMode,seat:'a'|'b'='a')=>{racingLineMode=m;racingLineSeat=seat;if(m!=='off'&&!racingLine){racingLine=createRacingLine(track,circuit.heightAt);scene.add(racingLine.mesh);}if(racingLine&&m==='off')racingLine.mesh.visible=false;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(cameraDebug?{mirrorMs,mainMs,lensBeads:weather.beads,rainDrops:weather.drops,sprayPackets:weather.spray,cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,safetyCarOnTrack:safetyCar?.car.visible??false,circuit:track.id,modelsReady:presentationReady,modelError:reflectionError??cars.a.error??cars.b.error??circuit.error??crew?.error??field.error,finish};},dispose:()=>{disposed=true;renderer.domElement.removeEventListener('webglcontextlost',onContextLost);renderer.domElement.removeEventListener('webglcontextrestored',onContextRestored);if(warmFence)gl.deleteSync(warmFence);paintSheet.dispose();rearTarget.dispose();crew?.dispose();field.dispose();circuit.dispose();loading.remove();cars.a.dispose();cars.b.dispose();scene.add(cars.a.root);studio?.dispose();resize.disconnect();sparks?.dispose();racingLine?.dispose();weather.dispose();composer?.passes.forEach(p=>p.dispose());composer?.dispose();const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();scene.traverse(o=>{if(o instanceof T.DirectionalLight||o instanceof T.PointLight||o instanceof T.SpotLight)o.shadow.dispose();if(o instanceof T.Mesh||o instanceof T.Sprite){if(o instanceof T.Mesh&&!o.geometry.userData?.shared)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);if(m instanceof T.ShaderMaterial)for(const u of Object.values(m.uniforms))if(u.value instanceof T.Texture&&!u.value.userData?.shared)textures.add(u.value);for(const value of Object.values(m))if(value instanceof T.Texture&&!value.userData?.shared)textures.add(value);}}});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>{if(typeof ImageBitmap!=='undefined'&&t.image instanceof ImageBitmap)t.image.close();t.dispose();});if(scene.background instanceof T.Texture){if(typeof ImageBitmap!=='undefined'&&scene.background.image instanceof ImageBitmap)scene.background.image.close();scene.background.dispose();}environment?.dispose();pmrem.dispose();renderer.dispose();if(embedded&&!contextLost&&!gl.isContextLost())renderer.forceContextLoss();renderer.domElement.remove();}};
+ return {render,get activeCamera(){return activeMode;},get ready(){return presentationReady;},get contextLost(){return contextLost||gl.isContextLost();},get startupError(){return cars.a.error??cars.b.error??circuit.error??(contextLost||gl.isContextLost()?'WebGL context lost':null);},setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars.a.setFinish(next==='showroom'?finish:'colour');},setFinish:(next:Finish)=>{finish=next;cars.a.setFinish(next);studio?.setStageFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},setLookBack:(on:boolean)=>{lookBack=on;},setHideCar:(team:'a'|'b'|null)=>{hiddenCar=team;if(!team){cars.a.root.visible=true;cars.b.root.visible=true;}},setRacingLine:(m:RacingLineMode,seat:'a'|'b'='a')=>{racingLineMode=m;racingLineSeat=seat;if(m!=='off'&&!racingLine){racingLine=createRacingLine(track,circuit.heightAt);scene.add(racingLine.mesh);}if(racingLine&&m==='off')racingLine.mesh.visible=false;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(cameraDebug?{mirrorMs,mainMs,lensBeads:weather.beads,rainDrops:weather.drops,sprayPackets:weather.spray,cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,safetyCarOnTrack:safetyCar?.car.visible??false,circuit:track.id,modelsReady:presentationReady,modelError:reflectionError??cars.a.error??cars.b.error??circuit.error??crew?.error??field.error,finish};},dispose:()=>{element.removeEventListener('pointerdown',orbitStart);element.removeEventListener('pointermove',orbitMove);element.removeEventListener('lostpointercapture',orbitEnd);element.removeEventListener('wheel',orbitZoom);disposed=true;safetyCar?.dispose();renderer.domElement.removeEventListener('webglcontextlost',onContextLost);renderer.domElement.removeEventListener('webglcontextrestored',onContextRestored);if(warmFence)gl.deleteSync(warmFence);paintSheet.dispose();rearTarget.dispose();crew?.dispose();field.dispose();circuit.dispose();loading.remove();cars.a.dispose();cars.b.dispose();scene.add(cars.a.root);studio?.dispose();resize.disconnect();sparks?.dispose();impacts.dispose();surfaceFx.dispose();racingLine?.dispose();weather.dispose();composer?.passes.forEach(p=>p.dispose());composer?.dispose();const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();scene.traverse(o=>{if(o instanceof SunLight||o instanceof T.DirectionalLight||o instanceof T.PointLight||o instanceof T.SpotLight)o.shadow.dispose();if(o instanceof T.Mesh||o instanceof T.Sprite){if(o instanceof T.Mesh&&!o.geometry.userData?.shared)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);if(m instanceof T.ShaderMaterial)for(const u of Object.values(m.uniforms))if(u.value instanceof T.Texture&&!u.value.userData?.shared)textures.add(u.value);for(const value of Object.values(m))if(value instanceof T.Texture&&!value.userData?.shared)textures.add(value);}}});geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>{if(typeof ImageBitmap!=='undefined'&&t.image instanceof ImageBitmap)t.image.close();t.dispose();});if(scene.background instanceof T.Texture){if(typeof ImageBitmap!=='undefined'&&scene.background.image instanceof ImageBitmap)scene.background.image.close();scene.background.dispose();}environment?.dispose();pmrem.dispose();renderer.dispose();if(embedded&&!contextLost&&!gl.isContextLost())renderer.forceContextLoss();renderer.domElement.remove();}};
 }

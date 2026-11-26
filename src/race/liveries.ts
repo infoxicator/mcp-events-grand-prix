@@ -19,10 +19,11 @@ const profiles:Record<GridEntry['team'],Profile>={
  'Aston Martin':{base:'#00715d',side:'aramco',ink:white,cover:'Ma’aden',wing:'coinbase'},
  Cadillac:{base:'#292a2d',side:'TWG ◇',ink:white,cover:'CADILLAC',wing:'IFS'}
 };
-export function liveryAtlas(){
- const canvas=document.createElement('canvas');canvas.width=tileW*4;canvas.height=tileH*grid.length;
+export function liveryAtlas(entries:readonly GridEntry[]=grid,resolution=1){
+ const canvas=document.createElement('canvas');canvas.width=tileW*4*resolution;canvas.height=tileH*entries.length*resolution;
  const c=canvas.getContext('2d')!;
- grid.forEach((entry,row)=>{
+ c.scale(resolution,resolution);
+ entries.forEach((entry,row)=>{
   for(let tile=0;tile<4;tile++){
    const reverse=tile%2===1,printed=tile>=2,p=profiles[entry.team];
    c.save();c.beginPath();c.rect(tile*tileW,row*tileH,tileW,tileH);c.clip();
@@ -31,6 +32,7 @@ export function liveryAtlas(){
    function patch(fill:string,...coords:number[]){
     c.fillStyle=fill;c.beginPath();c.moveTo(coords[0],coords[1]);
     for(let i=2;i<coords.length;i+=2)c.lineTo(coords[i],coords[i+1]);c.closePath();c.fill();
+    if(fill===dark){c.save();c.globalCompositeOperation='destination-out';c.globalAlpha=.64;c.fill();c.restore();}
    }
    function disc(x:number,y:number,r:number,fill:string){c.fillStyle=fill;c.beginPath();c.arc(x,y,r,0,2*Math.PI);c.fill();}
    function word(s:string,x:number,y:number,w:number,h:number,fill:string,italic=false){
@@ -111,7 +113,8 @@ export function liveryAtlas(){
     else if(entry.team==='Williams'){
      word('KOMATSU',-.91,.37,.72,.092,'#dcf1ff');word('BARCLAYS',-.18,.49,.52,.064,white);
     }else word(p.side,-.66,.395,entry.team==='McLaren'?.85:1.14,entry.team==='Mercedes'?.105:.124,sideInk,['Haas','Racing Bulls'].includes(entry.team));
-    if(entry.team!=='Ferrari')word(p.cover,-.94,entry.team==='McLaren'||entry.team==='Williams'?.83:.697,.69,.083,entry.team==='Racing Bulls'?'#d51c31':entry.team==='Haas'?dark:sideInk);
+    if(entry.team==='Mercedes')word(p.cover,-1.13,.847,.53,.079,white);
+    else if(entry.team!=='Ferrari')word(p.cover,-.94,entry.team==='McLaren'||entry.team==='Williams'?.83:.697,.69,.083,entry.team==='Racing Bulls'?'#d51c31':entry.team==='Haas'?dark:sideInk);
     word(String(entry.number),-1.76,.81,.205,.122,numberInk,true);
     word(p.wing,-2.406,.809,.315,.056,entry.team==='Alpine'||entry.team==='McLaren'?dark:white);
    }
@@ -132,7 +135,7 @@ export function liveryAtlas(){
     const branding:Record<GridEntry['team'],string>={Ferrari:'UniCredit',Mercedes:'IWC',McLaren:'Workday','Red Bull Racing':'Mobil 1','Racing Bulls':'Cash App',Alpine:'BWT',Haas:'TOYOTA',Audi:'QATAR',Williams:'betway','Aston Martin':'aramco',Cadillac:'IFS'};
     c.fillStyle=plate;c.fillRect(1.90,.722,1,.434);
     c.save();c.translate(2.43,.895);c.scale(-1,1);
-    word(branding[entry.team],0,0,.46,.098,['McLaren','Alpine','Racing Bulls'].includes(entry.team)?dark:white);
+    word(branding[entry.team],0,0,entry.team==='Mercedes'?.30:.46,entry.team==='Mercedes'?.122:.098,['McLaren','Alpine','Racing Bulls'].includes(entry.team)?dark:white);
     c.restore();
    }
    if(tile===2){
@@ -161,11 +164,12 @@ export function liveryAtlas(){
    c.restore();
   }
  });
- const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=8;return map;
+ const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=8;map.userData.rows=entries.length;return map;
 }
 
 // Use the body-space rest coordinate. A bent panel carries its printed artwork with it.
 export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,instanced:boolean,row=0,endplate=false,fieldFlap=false){
+ const rows=atlas.userData.rows??grid.length,shaderRow=rows===1?0:row;
  const ferrariPlate=!instanced&&grid[row]?.team==='Ferrari';
  const existing=material.onBeforeCompile,oldKey=material.customProgramCacheKey();
  material.onBeforeCompile=(shader,renderer)=>{
@@ -177,7 +181,7 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
     #if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
      wrapTint=color.rgb;
     #endif
-    wrapPoint=${instanced?'position':'liveryPoint'};wrapRow=${instanced?'liveryRow':row.toFixed(1)};`);
+    wrapPoint=${instanced?'position':'liveryPoint'};wrapRow=${instanced?'liveryRow':shaderRow.toFixed(1)};`);
   if(fieldFlap){
    shader.vertexShader='varying vec2 flapUV;\n'+shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nflapUV=uv;');
    shader.fragmentShader='varying vec2 flapUV;\n'+shader.fragmentShader;
@@ -188,11 +192,16 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
                    (wrapPoint.z > 2.025 && wrapPoint.z < 2.82 && wrapPoint.y < .39 && abs(wrapPoint.x) > .90)){`:''}
    vec2 uvPaint=clamp(vec2((wrapPoint.z+2.85)/5.82,wrapPoint.y/1.16),vec2(.002),vec2(.998));
    float column=step(0.,wrapPoint.x);
-   vec2 tc=vec2((column+uvPaint.x)*.25,(21.-wrapRow+uvPaint.y)/22.);
-   vec3 baseInk=texture2D(liverySheet,tc).rgb;
-   vec3 printInk=texture2D(liverySheet,tc+vec2(.5,0.)).rgb;
+   vec2 tc=vec2((column+uvPaint.x)*.25,(${(rows-1).toFixed(1)}-wrapRow+uvPaint.y)/${rows.toFixed(1)});
+   vec4 bodyPrint=texture2D(liverySheet,tc);
+   float lacquer=bodyPrint.a;
+   vec3 baseInk=bodyPrint.rgb;
    vec3 face=normalize(cross(dFdx(wrapPoint),dFdy(wrapPoint)));
-   vec3 finishInk=mix(baseInk,printInk,smoothstep(.16,.64,abs(face.x)));
+   // The outward panel sets the reading direction on curved shoulders and thin fins.
+   float printSide=step(0.,face.x);
+   vec2 printedUV=vec2((2.+printSide+uvPaint.x)*.25,tc.y);
+   vec3 printInk=texture2D(liverySheet,printedUV).rgb;
+   vec3 finishInk=mix(baseInk,printInk,smoothstep(.33,.70,abs(face.x)));
    if(abs(wrapPoint.x)>.90 && wrapPoint.z>2.025 && wrapPoint.z<2.82 && wrapPoint.y<.39){
     float frontZ=wrapPoint.x<0.?wrapPoint.z:4.86-wrapPoint.z;
     // Follow the sloping endplate between its flap joints; the printable
@@ -200,14 +209,14 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
     float centre=.235-.075*smoothstep(2.22,2.66,wrapPoint.z);
     frontZ=clamp(${ferrariPlate?'2.43+(frontZ-2.43)*1.42':'frontZ'},1.92,2.88);
     float printHeight=clamp(${ferrariPlate?'.945+(wrapPoint.y-centre)*2.55':'.736+(wrapPoint.y-.105)*1.64'},.75,1.12);
-    vec2 frontUV=vec2((3.+(frontZ+2.85)/5.82)*.25,(21.-wrapRow+printHeight/1.16)/22.);
+    vec2 frontUV=vec2((3.+(frontZ+2.85)/5.82)*.25,(${(rows-1).toFixed(1)}-wrapRow+printHeight/1.16)/${rows.toFixed(1)});
     finishInk=texture2D(liverySheet,frontUV).rgb;
    }
    ${endplate?`float blade=step(.62,abs(wrapPoint.x))*step(wrapPoint.z,-2.16)*step(.68,wrapPoint.y)*smoothstep(.72,.94,abs(face.x));
    blade=max(blade,${ferrariPlate?'smoothstep(.956,.965,abs(wrapPoint.x))':'step(.90,abs(wrapPoint.x))'}*step(2.025,wrapPoint.z)*step(wrapPoint.z,2.82)
      *step(wrapPoint.y,.39)*${ferrariPlate?'smoothstep(.79,.95,abs(face.x))':'smoothstep(.55,.85,abs(face.x))'});
    diffuseColor.rgb=mix(diffuseColor.rgb,finishInk,blade);}`:`{
-    vec2 topUV=vec2((2.+uvPaint.x)*.25,(21.-wrapRow+(.953+wrapPoint.x*.54)/1.16)/22.);
+    vec2 topUV=vec2((2.+uvPaint.x)*.25,(${(rows-1).toFixed(1)}-wrapRow+(.953+wrapPoint.x*.54)/1.16)/${rows.toFixed(1)});
     // Keep implicit mip derivatives defined across the entire nose.
     // Sampling inside a varying branch gave a one-pixel broken line at z=.73.
     float noseMask=smoothstep(.73,.83,wrapPoint.z)*(1.-smoothstep(2.81,2.86,wrapPoint.z))
@@ -215,14 +224,16 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
     finishInk=mix(finishInk,texture2D(liverySheet,topUV).rgb,noseMask*smoothstep(.54,.85,abs(face.y)));
    }
    ${fieldFlap?`if(flapUV.x>=0.){
+    // Exported flap UVs follow the aft observer on both skins.
     vec2 ink=vec2(.60+1.20*flapUV.x,.825+.30*flapUV.y);
-    finishInk=texture2D(liverySheet,vec2((3.+(ink.x+2.85)/5.82)*.25,(21.-wrapRow+ink.y/1.16)/22.)).rgb;
+    finishInk=texture2D(liverySheet,vec2((3.+(ink.x+2.85)/5.82)*.25,(${(rows-1).toFixed(1)}-wrapRow+ink.y/1.16)/${rows.toFixed(1)})).rgb;
    }`:''}
    diffuseColor.rgb=finishInk;
    #if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
     diffuseColor.rgb*=wrapTint;
    #endif`}
   `);
+  if(!endplate)shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(.57,roughnessFactor,lacquer);');
  };
- material.customProgramCacheKey=()=>oldKey+'-side-paint-'+(instanced?'grid':row)+(endplate?'wing':fieldFlap?'flap':'body');
+ material.customProgramCacheKey=()=>oldKey+'-side-paint-'+rows+'-'+(instanced?'grid':row)+(endplate?'wing':fieldFlap?'flap':'body');
 }

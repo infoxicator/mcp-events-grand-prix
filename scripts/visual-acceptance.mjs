@@ -12,7 +12,7 @@ await mkdir(out,{recursive:true});
 const browser=await chromium.launch({headless:false,args:['--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding']});
 const manifest={width:1920,height:1080,fps:30,stills:{},clips:{}};
 try{
- const monzaOnly=['REVIEW_GRID_ONLY','REVIEW_LAP_ONLY','REVIEW_DAMAGE_ONLY','REVIEW_DETAIL_ONLY','REVIEW_EXTRAS_ONLY'].some(key=>process.env[key]);
+ const monzaOnly=['REVIEW_COCKPIT_ONLY','REVIEW_GRID_ONLY','REVIEW_LAP_ONLY','REVIEW_DAMAGE_ONLY','REVIEW_DETAIL_ONLY','REVIEW_EXTRAS_ONLY'].some(key=>process.env[key]);
  for(const circuit of process.env.OPTICS_CIRCUIT?[process.env.OPTICS_CIRCUIT]:(process.env.REVIEW_METER||process.env.REVIEW_POOL_SEAT==='b')?['las-vegas']:monzaOnly?['monza']:['monza','las-vegas']){
   const page=await browser.newPage({viewport:{width:1920,height:1080},deviceScaleFactor:1});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(/shader error|INVALID_OPERATION/i.test(m.text()))errors.push(m.text())});
@@ -24,14 +24,16 @@ try{
    const mod=n=>import('/src/race/'+n+'.ts');
    const source=await fetch('/src/race/scene.ts').then(r=>r.text());
    const T=await import(source.match(/from ["']([^"']*\/three\.js[^"']*)["']/)[1]);
-   const [{createScene},{getTrack},{createRace,stepRace},{circuitHeight},{pitBox,pitRoute}]=await Promise.all(['scene','track','physics','elevation','pit-service'].map(mod));
+   const [{createScene},{getTrack},{createRace,stepRace,damageRepairSeconds},{circuitHeight},{pitBox,pitRoute}]=await Promise.all(['scene','track','physics','elevation','pit-service'].map(mod));
+   const {opponents}=await mod('grid');
+   const {applyHazard}=await mod('race-control');
    const {kerbHeight,wheelStations}=await mod('suspension');
    const track=getTrack(id),v=document.querySelector('#v'),scene=createScene(v,track);
    window.prepareStripMeter?.(T);
    const after=T.Scene.prototype.onAfterRender;
    T.Scene.prototype.onAfterRender=function(renderer,world,camera){
     after.apply(this,arguments);
-    if(!window.sampleShoulder||camera.far!==5000)return;
+    if(!window.sampleShoulder||camera.name!=='Race camera')return;
     window.sampleShoulder=false;
     const caster=new T.Raycaster();caster.far=18;
     const close=[];world.traverseVisible(o=>{if(o.isMesh&&!o.isInstancedMesh&&o.parent&&o.parent.type!=='Scene')close.push(o);});
@@ -44,7 +46,7 @@ try{
    let lastFrontDamage,lock=null,current='',state,script=[],tick=0;
    const original=T.PerspectiveCamera.prototype.updateProjectionMatrix;
    T.PerspectiveCamera.prototype.updateProjectionMatrix=function(){
-    if(lock&&this.far===5000){this.position.copy(lock[0]);this.up.set(0,1,0);this.lookAt(lock[1]);this.fov=lock[2];}
+    if(lock&&this.name==='Race camera'){this.position.copy(lock[0]);this.up.set(0,1,0);this.lookAt(lock[1]);this.fov=lock[2];}
     return original.call(this);
    };
    function mode(m){if(m!==current){scene.setMode(m);current=m;}}
@@ -52,10 +54,29 @@ try{
     state=createRace(3,id);state.phase='racing';state.time=42;
     for(const [i,c] of [state.cars.a,state.cars.b,...state.field].entries())Object.assign(c,{distance:d-i*9,offset:i===0?0:i%2?2.7:-2.7,speed});
    }
-   window.startShot=(name,seat='a')=>{
+   window.startShot=(name,seat='a',angle)=>{
     lock=null;current='';script=[];tick=0;
     if(name==='launch'||name==='grid'||name==='rear-pack'||name==='six-cross'){state=createRace(3,id);state.phase='racing';}
     else base(id==='monza'?656:3430,id==='monza'?75:67);
+    const finishing=name.startsWith('finish-');
+    if(finishing){
+     const station={'finish-wall':20,'finish-cockpit':845,'finish-aerial':track.CORNERS.find(c=>c.name==='Ascari')?.d,'finish-sphere':1770,'finish-strip':3750}[name]??840;
+     base(station,name==='finish-brake'||name==='finish-cockpit'?65:0);
+     Object.assign(state.cars.a,{offset:name==='finish-wall'?-8:0,gear:6,rpm:11200});
+     state.cars.b.distance-=130;
+     if(name.startsWith('finish-wing-')){
+      const index=opponents.findIndex(e=>e.team===name.slice('finish-wing-'.length));
+      if(index<0)throw Error('Unknown constructor for '+name);
+      state.field.forEach((c,i)=>Object.assign(c,{distance:station-130-i*8,offset:0}));
+      state.field[index].distance=station;
+      state.cars.a.distance+=12;
+     }else state.field=[];
+     if(name==='finish-brake')Object.assign(state.cars.a,{acceleration:-24,brake:1});
+    }
+    if(name==='skid-sparks'){base(4300,92);state.field=[];state.cars.b.distance-=48;}
+    if(name.startsWith('flank-')||name==='wing-print'){
+     base(800,0);state.field[0].distance=840;state.field[0].offset=0;
+    }
     if(name==='pack'){
      base(id==='monza'?866:3841,62);const d=state.cars.a.distance;
      Object.assign(state.cars.a,{offset:-.7});Object.assign(state.cars.b,{distance:d+12,offset:.6});
@@ -64,8 +85,13 @@ try{
     if(name.startsWith('profile-')||name.startsWith('quarter-')){
      const i=Number(name.split('-')[1]);state.field[i].distance=840;state.field[i].offset=0;
     }
+    if(name==='wet-reflections'){
+     base(3510,54);state.cars.b.distance+=27;
+     applyHazard(state,track,{kind:'rain',level:'heavy'});
+     Object.assign(state.control,{wetness:.94,sectorWetness:[.94,.94,.94]});
+    }
     if(name==='lap')base(0,73);
-    if(name==='approach'||name.startsWith('load-'))base(779,73);
+    if(name==='approach'||name==='braking-smoke'||name.startsWith('load-'))base(779,73);
     if(name.startsWith('load-')){
      state.field=[];Object.assign(state.cars[seat],{distance:779,offset:0});
      state.cars[seat==='a'?'b':'a'].distance=400;
@@ -80,7 +106,10 @@ try{
      for(const [i,c] of state.field.entries()){c.distance=840-i*4.9;c.offset=(i%3-1)*1.35;}
      if(name==='overlap-wheels'){state.field.forEach((c,i)=>c.distance=620-i*7);[10,18,0,2].forEach((i,n)=>{state.field[i].distance=840-n*5.9;state.field[i].offset=(n%2-.5)*2.9;});}
     }
-    if(name==='steer')base(830,0);
+    if(name==='steer'||name==='steer-flag'){
+     base(830,75);Object.assign(state.cars[seat],{gear:7,rpm:11950,drs:name==='steer'});
+     if(name==='steer-flag')applyHazard(state,track,{kind:'yellow',active:true});
+    }
     if(name.startsWith('impact-')){
      // A short, genuinely simulated approach before each asymmetric contact.
      const [station,speed,gap,offset,rivalSpeed]={
@@ -93,8 +122,10 @@ try{
     if(name==='service'){base(pitBox(track,'a')-1,3);state.field=[];Object.assign(state.cars.a,{offset:pitRoute(track,state.cars.a.distance,pitBox(track,'a')),pit:'entry',damage:[...lastFrontDamage]});}
     const snapshot=()=>structuredClone(state);
     script.push(snapshot());
-    if(!['steer','pack'].includes(name)&&!name.startsWith('profile-')&&!name.startsWith('quarter-')){
-     for(let f=1;f<=(name==='lap'?7200:300);f++){
+    if(!finishing&&!['steer','steer-flag','pack','skid-sparks','flank-left','flank-right','wing-print'].includes(name)&&!name.startsWith('profile-')&&!name.startsWith('quarter-')){
+     const maxFrames=name==='lap'?7200:name==='service'?Math.ceil(30*(3+track.PIT_STOP_SECONDS+damageRepairSeconds(state.cars.a.damage))):300;
+     let released=0;
+     for(let f=1;f<=maxFrames;f++){
       for(let k=0;k<4;k++){
        if(name.startsWith('load-')){
         const c=state.cars[seat];c.intent.offset=c.distance>845&&c.distance<963?4:0;
@@ -103,7 +134,9 @@ try{
       }
       script.push(snapshot());
       if(name==='lap'&&state.cars.a.distance>=track.LENGTH)break;
+      if(name==='service'&&state.cars.a.pit==='exit'&&++released>=20)break;
      }
+     if(name==='service'&&(!released||state.cars.a.damage))throw Error('Repair did not finish within the expected service interval');
      if(name==='lap'){
       if(state.cars.a.distance<track.LENGTH)throw Error('T-cam lap did not finish');
       window.lapFrames=script.length;
@@ -116,7 +149,23 @@ try{
     window.drawShot=(f,steering=0)=>{
      const r=script[Math.min(f,script.length-1)],a=r.cars.a,b=r.cars.b;
      lock=null;
-     if(name.startsWith('matched-')){
+     if(name==='finish-wall'){
+      mode('detail');lock=[pt(a.distance+3.9,a.offset+4.7,1.05),pt(a.distance,a.offset,.52),39];
+     }else if(name==='finish-brake'){
+      mode('detail');lock=[pt(a.distance+2.19,a.offset-2.74,.65),pt(a.distance+1.55,a.offset-.85,.36),27];
+     }else if(name==='finish-cockpit'){mode('cockpit-a');}
+     else if(name.startsWith('finish-wing-')){
+      const car=r.field[opponents.findIndex(e=>e.team===name.slice('finish-wing-'.length))];
+      mode('detail');lock=angle==='upper'
+       ?[pt(car.distance-4.95,car.offset+.17,4.76),pt(car.distance-2.50,car.offset,.90),23]
+       :[pt(car.distance-5.65,car.offset+.10,.57),pt(car.distance-2.37,car.offset,.83),32];
+     }else if(name==='finish-aerial'){
+      mode('helicopter');lock=[pt(a.distance-25,56,86),pt(a.distance+16,4,0),55];
+     }else if(name==='finish-sphere'){
+      const q=track.project(-115.1621,36.1207);
+      mode('sphere');lock=[new T.Vector3(q.x+120,66,q.z+134),new T.Vector3(q.x,44,q.z),58];
+     }else if(name==='finish-strip'){mode('strip');}
+     else if(name.startsWith('matched-')){
       // Both constructors get the actual #63 trajectory from the reviewed onboard fixture.
       const c=r.cars[seat];
       if(name==='matched-onboard')mode('cockpit-'+seat);
@@ -131,10 +180,21 @@ try{
      }else if(name.startsWith('overlap')){
       const d=name==='overlap-wheels'?r.field[18].distance:r.field[1].distance;
       mode('detail');lock=name==='overlap-wheels'?[pt(d+28,12.8,2.3),pt(d,0,.54),23]:[pt(d+45,6.8,2.45),pt(d,0,.61),18];
-     }else if(name==='steer'){r.cars[seat].steering=steering;mode('cockpit-'+seat);}
-     else if(name==='rettifilo'||name==='lap'||name==='onboard')mode(name==='onboard'?'cockpit-b':'tcam-a');
+     }else if(name==='skid-sparks'){
+      mode('detail');lock=[pt(a.distance-12,a.offset+3.35,1.05),pt(a.distance-2,a.offset,.48),43];
+     }else if(name==='wing-print'){
+      const car=r.field[0];mode('detail');lock=[pt(car.distance+.72,car.offset+.25,2.42),pt(car.distance-2.35,car.offset,.88),32];
+     }else if(name.startsWith('flank-')){
+      const car=r.field[0],sign=name==='flank-left'?1:-1;
+      mode('detail');lock=[pt(car.distance+.8,car.offset+sign*6.8,1.37),pt(car.distance-.35,car.offset,.58),40];
+     }else if(name==='wet-reflections'){
+      mode('detail');lock=[pt(a.distance-11,3.8,1.08),pt(a.distance+9,-.2,1.42),51];
+     }else if(name==='steer'||name==='steer-flag'){r.cars[seat].steering=steering;mode('cockpit-'+seat);}
+     else if(name==='rettifilo'||name==='lap'||name==='onboard')mode(name==='onboard'?'cockpit-b':'tcam-'+seat);
      else if(name==='helmet'){mode('detail');lock=[pt(a.distance+1.6,a.offset+.7,1.38),pt(a.distance-.27,a.offset,.79),32];}
-     else if(name==='approach'){
+     else if(name==='braking-smoke'){
+      mode('chase');lock=[pt(a.distance-14,a.offset+4.8,1.62),pt(a.distance-3,a.offset,.54),46];
+     }else if(name==='approach'){
       mode('chase');lock=[pt(a.distance-7,a.offset+1.5,2.8),pt(a.distance+23,a.offset,.8),59];
      }else if(name==='transition'){
       mode(f<75?'chase':'trackside');
@@ -186,16 +246,49 @@ try{
      }
      const driver=r.cars[seat],cs=Math.cos(driver.heading),sn=Math.sin(driver.heading);
      const kerb=name.startsWith('load-')?Math.max(...wheelStations.map(w=>kerbHeight(track,driver.distance+w.z*cs-w.x*sn,driver.offset-w.x*cs-w.z*sn))):undefined;
-     return {projected,kerb,driverStation:r.cars[seat].distance,brake:r.cars[seat].brake,lateralG:r.cars[seat].lateralG,offset:r.cars[seat].offset,tick:r.tick,station:a.distance,steering:r.cars[seat].steering,damage:a.damage??[0,0,0,0],service:a.pit,gear:r.cars[seat].gear,ready:scene.info.modelsReady,error:scene.info.modelError};
+     return {projected,kerb,driverStation:driver.distance,brake:driver.brake,lateralG:driver.lateralG,offset:driver.offset,tick:r.tick,station:a.distance,steering:driver.steering,damage:a.damage??[0,0,0,0],service:a.pit,gear:driver.gear,ready:scene.info.modelsReady,error:scene.info.modelError};
     };
+    return script.length;
    };
    window.startShot('pack');await new Promise((ok,fail)=>{function warm(){const i=window.drawShot(0);if(i.error)fail(Error(i.error));else if(i.ready)ok();else requestAnimationFrame(warm);}warm();});
-   window.pixels=(type,quality)=>v.querySelector('canvas').toDataURL(type,quality).split(',')[1];
+   // Record the presentation size even when adaptive DPR changes the WebGL buffer.
+   const captureCanvas=document.createElement('canvas');
+   captureCanvas.width=v.clientWidth;captureCanvas.height=v.clientHeight;
+   const captureContext=captureCanvas.getContext('2d');
+   window.pixels=(type,quality)=>{
+    const source=v.querySelector('canvas');
+    if(source.width===captureCanvas.width&&source.height===captureCanvas.height)return source.toDataURL(type,quality).split(',')[1];
+    captureContext.drawImage(source,0,0,captureCanvas.width,captureCanvas.height);
+    return captureCanvas.toDataURL(type,quality).split(',')[1];
+   };
+   window.profileFloodlights=()=>{
+    base(3600,30);mode('chase');
+    const write=T.InstancedMesh.prototype.setMatrixAt;
+    let transforms=0,haze;
+    T.InstancedMesh.prototype.setMatrixAt=function(i,matrix){
+     if(this.material.uniforms?.fogAmount){haze=this;transforms++;}
+     return write.call(this,i,matrix);
+    };
+    const moved=[];
+    try{
+     for(let frame=0;frame<=90;frame++){
+      state.cars.a.distance=3600+frame;
+      state.cars.b.distance=state.cars.a.distance-9;
+      const before=transforms;
+      scene.render(state,60000+frame*1000/30);
+      if(transforms!==before)moved.push({station:state.cars.a.distance,transforms:transforms-before});
+     }
+    }finally{T.InstancedMesh.prototype.setMatrixAt=write;}
+    if(!haze||moved.length!==3)throw Error('Expected fixtures to follow the first row and two 45 m transitions');
+    return {frames:91,fixtures:haze.count,transforms,moved};
+   };
    window.studio=async()=>{
     scene.dispose();v.replaceChildren();const renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(1920,1080);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;renderer.shadowMap.enabled=true;v.appendChild(renderer.domElement);
     const [{createShowroom},{createCar},{liveryAtlas}]=await Promise.all(['showroom','car-model','liveries'].map(mod));
     const room=createShowroom(renderer),atlas=liveryAtlas(),cars={a:createCar('a',track,atlas),b:createCar('b',track,atlas)};
-    await Promise.all(Object.values(cars).map(c=>c.loaded));const camera=new T.PerspectiveCamera(36,16/9,.06,100);
+    await Promise.all(Object.values(cars).map(c=>c.loaded));
+    if(!await room.contactReady)throw Error('Could not load the studio floor contact map');
+    const camera=new T.PerspectiveCamera(36,16/9,.06,100);
     window.hero=(seat,angle,finish,panels)=>{
      const car=cars[seat];if(!car.ready)throw Error(car.error);
      for(const c of Object.values(cars))c.root.removeFromParent();room.scene.add(car.root);
@@ -204,6 +297,10 @@ try{
      car.setFinish(finish);
      if(angle==='halo'){
       camera.position.set(.30,2.42,.90);camera.lookAt(0,.73,.035);
+     }else if(angle==='flap-print'){
+      camera.position.set(.34,1.19,2.98);camera.lookAt(.52,.18,2.53);
+     }else if(angle==='nose-print'){
+      camera.position.set(.25,1.41,3.10);camera.lookAt(0,.33,2.26);
      }else if(angle==='wing'){
       camera.position.set(2.15,.57,3.18);camera.lookAt(.54,.20,2.46);
      }else if(angle==='diffuser'){
@@ -213,7 +310,7 @@ try{
     };
    };
   },circuit);
-  const start=(name,seat)=>page.evaluate(([n,s])=>window.startShot(n,s),[name,seat]);
+  const start=(name,seat,angle)=>page.evaluate(([n,s,a])=>window.startShot(n,s,a),[name,seat,angle]);
   const capture=(frame,steering=0,quality=.90)=>page.evaluate(([f,s,q])=>{
    const meta=window.drawShot(f,s);
    return {meta,bytes:window.pixels('image/jpeg',q)};
@@ -224,7 +321,7 @@ try{
    await writeFile(out+'/'+name+'.jpg',Buffer.from(bytes,'base64'));
   };
   const clip=async(name,count,draw)=>{
-   const encoder=spawn('ffmpeg',['-loglevel','error','-y','-f','image2pipe','-framerate','30','-vcodec','mjpeg','-i','-','-c:v','libx264','-preset','fast','-crf','21','-maxrate','12M','-bufsize','8M','-pix_fmt','yuv420p','-movflags','+faststart',out+'/'+name+'.mp4']);
+   const encoder=spawn('ffmpeg',['-loglevel','error','-y','-f','image2pipe','-framerate','30','-vcodec','mjpeg','-i','-','-c:v','libx264','-preset','fast','-crf','21','-maxrate','12M','-bufsize','8M','-pix_fmt','yuv420p','-movflags','+faststart',out+'/'+name+'.mp4'],{stdio:['pipe','ignore','inherit']});
    let first,last;const events=[];
    for(let f=0;f<count;f++){
     const {meta,bytes}=await draw(f);if(!first)first=meta;
@@ -241,7 +338,35 @@ try{
     const bytes=await page.evaluate(([s,a])=>{window.hero(s,a,'clay');return window.pixels('image/jpeg',.96);},[seat,angle]);
     await writeFile(out+'/hero-'+seat+'-'+angle+'-clay.jpg',Buffer.from(bytes,'base64'));
    }
+   for(const angle of ['nose-print','flap-print']){
+    const bytes=await page.evaluate(a=>{window.hero('a',a,'colour');return window.pixels('image/jpeg',.96);},angle);
+    await writeFile(out+'/hero-a-'+angle+'.jpg',Buffer.from(bytes,'base64'));
+   }
   };
+  if(process.env.REVIEW_FINISHING){
+   const shots=circuit==='monza'?{'finish-wall':'monza-pitwall-car','finish-brake':'brake-glow-gradient','finish-cockpit':'cockpit-gloves-lcd','finish-aerial':'monza-aerial-turf'}:{'finish-sphere':'vegas-sphere-led','finish-strip':'vegas-strip-night'};
+   const render=async(name,angle)=>{
+    await start(name,'a',angle);
+    const bytes=await page.evaluate(()=>{for(let f=0;f<32;f++)window.drawShot(f);return window.pixels('image/png');});
+    return Buffer.from(bytes,'base64');
+   };
+   for(const [name,file] of Object.entries(shots))await writeFile(out+'/'+file+'.png',await render(name));
+   if(circuit==='monza'){
+    const sharp=(await import('sharp')).default,parts=[];
+    for(const [row,team] of ['Red Bull Racing','McLaren','Mercedes'].entries()){
+     for(const [col,angle] of ['rear','upper'].entries()){
+      const input=await sharp(await render('finish-wing-'+team,angle)).extract({left:200,top:240,width:1520,height:570}).png().toBuffer();
+      parts.push({input,left:col*1520,top:row*570});
+     }
+    }
+    await sharp({create:{width:3040,height:1710,channels:3,background:'#0a0d12'}}).composite(parts).png().toFile(out+'/field-rear-wings.png');
+   }
+   if(circuit==='las-vegas'){
+    const profile=await page.evaluate(()=>window.profileFloodlights());
+    await writeFile(out+'/floodlight-profile.json',JSON.stringify(profile,null,2)+'\n');
+   }
+   await page.close();if(errors.length)throw Error(errors.join('\n'));continue;
+  }
   if(process.env.OPTICS_PASS){await captureOptics({circuit,start,still,clip,draw,page,out,manifest});await page.close();if(errors.length)throw Error(errors.join('\n'));continue;}
   if(process.env.REVIEW_METER){
    const peak=process.env.OPTICS_PEAK_METER==='1';
@@ -269,6 +394,28 @@ try{
    await writeFile(out+'/shots.json',JSON.stringify(manifest,null,2));
    await page.close();if(errors.length)throw Error(errors.join('\n'));continue;
   }
+  async function steeringViews(){
+   for(const seat of ['a','b']){
+    await start('steer',seat);for(const [k,v] of [['centre',0],['half-left',-.21],['left',-.42],['half-right',.21],['right',.42]])await still('steer-'+seat+'-'+k,0,v);
+    await clip('steer-'+seat,181,f=>capture(f,.42*Math.sin(f*Math.PI/90)));
+    await start('steer-flag',seat);await still('steer-'+seat+'-yellow',0);
+   }
+  }
+  if(process.env.REVIEW_TRACK_POLISH){
+   await start('pack');await still(circuit+'-pack');
+   if(circuit==='monza'){
+    await start('approach');
+    await page.evaluate(()=>{for(let f=32;f<50;f++)window.drawShot(f);});
+    await still('monza-approach',50);
+    await start('braking-smoke');await page.evaluate(()=>{for(let f=25;f<50;f++)window.drawShot(f);});
+    await still('monza-tyre-smoke',50);
+    await start('wing-print');await still('field-wing-print');
+    for(const side of ['left','right']){await start('flank-'+side);await still('field-'+side);}
+   }else{await start('skid-sparks');await still('vegas-sparks');}
+   await writeFile(out+'/track-polish-shots.json',JSON.stringify(manifest,null,2));
+   await page.close();if(errors.length)throw Error(errors.join('\n'));continue;
+  }
+  if(process.env.REVIEW_COCKPIT_ONLY){await steeringViews();await page.close();if(errors.length)throw Error(errors.join('\n'));continue;}
   if(process.env.REVIEW_DETAIL_ONLY){await detailViews();await page.close();if(errors.length)throw Error(errors.join('\n'));continue;}
   if(process.env.REVIEW_LAP_ONLY){
    if(circuit==='monza'){
@@ -289,7 +436,7 @@ try{
   if(process.env.REVIEW_DAMAGE_ONLY){
    if(circuit==='monza'){
     for(const name of ['impact-left','impact-right','impact-rear','service']){
-     await start(name);await clip(name,name==='service'?150:170,draw);
+     const frames=await start(name);await clip(name,name==='service'?frames:170,draw);
     }
     const damaged=manifest.clips['impact-left'].last.damage,repaired=manifest.clips.service.last.damage;
     if(!damaged.some(Boolean)||repaired.some(Boolean))throw Error('Expected simulated damage and a completed repair');
@@ -320,15 +467,18 @@ try{
    await clip(circuit+'-'+name,300,draw);
   }
   await start('pack');await still(circuit+'-pack');
+  if(circuit==='las-vegas'){
+   await start('wet-reflections');
+   await page.evaluate(()=>{for(let f=0;f<60;f+=2)window.drawShot(f);});
+   await still('las-vegas-wet-reflections',60);
+  }
   if(circuit==='monza'){
    await start('helmet');await still('reverse-tcam');
+   await start('rettifilo','b');await still('tcam-b-crown',110);
    for(const i of [0,1,2]){await start('profile-'+i);await still('field-'+i);}
-   for(const seat of ['a','b']){
-    await start('steer',seat);for(const [k,v] of [['centre',0],['half-left',-.21],['left',-.42],['half-right',.21],['right',.42]])await still('steer-'+seat+'-'+k,0,v);
-    await clip('steer-'+seat,181,f=>capture(f,.42*Math.sin(f*Math.PI/90)));
-   }
+   await steeringViews();
    for(const name of ['impact-left','impact-right','impact-rear','service']){
-    await start(name);await clip(name,name==='service'?150:170,draw);
+    const frames=await start(name);await clip(name,name==='service'?frames:170,draw);
    }
    await page.evaluate(()=>window.studio());
    for(const seat of ['a','b'])for(const angle of ['front','rear'])for(const finish of ['colour','clay']){

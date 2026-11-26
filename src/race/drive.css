@@ -245,8 +245,9 @@ body.drive-active {
  font-family: 'Oxanium', sans-serif;
  font-weight: 700;
  letter-spacing: 0.04em;
- width: 36px;
+ display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex:1;
 }
+.drive-st-code small{padding:1px 4px;border:1px solid #ffffff35;border-radius:8px;font-size:9px;letter-spacing:0}
 .drive-st-gap {
  margin-left: auto;
  font-family: 'Space Mono', monospace;
@@ -1581,3 +1582,73 @@ body.drive-active {
  margin: 0 auto 18px;
 }
 
+
+/* Race instruments share one bounded column. Extra MFD controls scroll inside their page. */
+.drive-mode{--glass:rgba(10,13,18,.9);--glass-strong:#111620;--border:rgba(255,255,255,.13);--muted:#a6b2c3}
+.drive-left-stack{
+ top:max(12px,env(safe-area-inset-top));bottom:max(12px,env(safe-area-inset-bottom));
+ width:clamp(194px,17vw,244px);display:grid;grid-template-rows:auto minmax(48px,1fr) auto;
+ justify-items:start;align-items:start;gap:8px;pointer-events:none;
+}
+.drive-left-stack .drive-timing{position:static;width:100%;max-height:52dvh;display:flex;flex-direction:column}
+.drive-timing .drive-standings{min-height:0;overflow:auto;scrollbar-width:thin;pointer-events:auto}
+.drive-left-stack .drive-minimap{align-self:end;height:min(100%,118px);width:100px;min-height:0}
+.drive-left-stack .drive-mfd{width:100%;align-self:end;max-height:36dvh;display:flex;flex-direction:column}
+.drive-mfd-tabs{flex:none}.drive-mfd-body{overflow:auto;min-height:0;scrollbar-width:thin}
+.drive-timing,.drive-minimap,.drive-mfd,.drive-tacho,.drive-overlay,.drive-corner-pill{
+ backdrop-filter:none;-webkit-backdrop-filter:none;
+}
+.drive-timing,.drive-mfd,.drive-minimap{border-radius:4px;background:var(--glass);box-shadow:0 3px 12px #0004}
+.drive-timing{border-top:3px solid var(--accent)}.drive-st-row.is-player{background:linear-gradient(90deg,var(--accent-soft),transparent)}
+.drive-topbar{left:calc(clamp(194px,17vw,244px) + 32px);gap:8px;justify-content:flex-end;align-items:start}
+.drive-topbar :is(.drive-brand-nav,.drive-mode-switcher,.drive-quick-actions){display:flex;align-items:stretch;gap:0;flex-wrap:nowrap;
+ min-width:0;max-width:100%;background:var(--glass);border:1px solid var(--border);border-radius:5px;padding:2px}
+.drive-topbar .drive-brand-nav{margin-right:auto}
+.drive-topbar :is(.drive-home-link,.drive-conn-pill,.drive-corner-pill,.drive-eng-pill,.drive-chip-btn){
+ border:0;border-radius:2px;background:transparent;box-shadow:none;white-space:nowrap;align-items:center;padding:5px 7px}
+.drive-brand-nav>*+*,.drive-quick-actions>*+*{border-left:1px solid var(--border)!important}
+.drive-topbar .drive-corner-pill{gap:5px}.drive-corner-pill b{font-size:12px}
+.drive-topbar .drive-chip-btn:hover,.drive-topbar .drive-eng-pill:hover{background:#303846}
+.drive-topbar .drive-mode-switcher button{padding:6px 8px;border-radius:3px;font-size:10px}
+.drive-topbar .drive-mode-switcher button.active{background:#eeeef3;color:#10141a}
+.drive-topbar .drive-chip-btn kbd{font-size:9px}
+.drive-tacho{width:260px;padding:9px 13px 10px;border:1px solid var(--border);border-top:2px solid #596271;
+ border-radius:9px 9px 4px 4px;background:linear-gradient(158deg,#202631ed,#0a0d12ed 70%);box-shadow:0 4px 16px #0005}
+.drive-tacho-main{position:relative;isolation:isolate;align-items:end;grid-template-columns:22px 1fr 1fr 22px;
+ gap:5px;min-height:91px;margin:1px 0 5px}
+.tach-arc{position:absolute;z-index:-1;inset:0 6px;width:calc(100% - 12px);height:100%;fill:none;stroke-width:6;stroke-linecap:round}
+.tach-track{stroke:#3b414d}#drive-rev-arc{stroke:url(#drive-rev-spectrum)}
+.drive-tacho .drive-shift-leds{width:62%;margin:0 auto 3px;gap:3px}
+.drive-shift-leds i{height:3px;box-shadow:none}
+.drive-shift-leds .lit-g:nth-child(n+5){background:#f7bf4f}
+.drive-pedal-track{width:7px;height:38px;border-radius:2px}
+.drive-pedal-col small,.drive-gear-box small{font:650 9px var(--numeric);color:var(--silver)}
+.drive-tacho .drive-speed-block{grid-column:3;grid-row:1;text-align:left;padding-bottom:2px}
+.drive-tacho .drive-gear-box{grid-column:2;grid-row:1;align-items:flex-end;margin-right:8px;
+ border:0;background:none;height:auto;flex-direction:column-reverse;padding-bottom:2px}
+.drive-tacho .drive-gear-val{font:italic 750 44px/.92 var(--numeric);color:white}
+.drive-tacho .drive-speed-num{font:italic 700 27px/1 var(--numeric)}
+.drive-speed-unit{font:600 9px var(--numeric);margin:0}
+.drive-rpm-readout{font:600 9px var(--numeric);color:#d5dce5}
+.drive-tacho-main>.drive-pedal-col:last-child{grid-column:4}
+.drive-status-pills{display:flex;justify-content:center;gap:4px;margin:4px 0 7px}
+.drive-status-pills>span{flex:0 0 auto;min-width:24px;text-align:center;line-height:1;padding:3px 5px;font-size:9px;border-radius:10px}
+.drive-assist-lamp:not(.active),.drive-drs-pill[data-state=off]{color:#a3adba;background:#151922}
+.drive-ers-wrap{border-top:1px solid var(--border);padding-top:5px}
+.drive-ers-head,.drive-fuel-row{font:600 9px var(--numeric);color:var(--muted)}
+.drive-ers-fill{background:linear-gradient(90deg,#219991,#71e5bd)}
+.drive-ers-bar{height:4px;border-radius:1px}
+.drive-fuel-row{margin-top:6px}.drive-fuel-row b{font:650 10px var(--numeric)}
+.drive-overlay{background:linear-gradient(115deg,#090c12b8,#10162191 50%,#080a10cc)}
+.drive-card{background:linear-gradient(135deg,#1d222d,#10151d 65%);border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:6px}
+.drive-card-head{padding-bottom:12px}.drive-card-head h1,.drive-card-head h2{font-weight:700;letter-spacing:-.045em}
+.drive-card button.selected{border-color:var(--accent);color:white;background:var(--accent-soft)}
+#drive-start-btn{background:#ce1729;color:#fff;border:1px solid #ec3d4c;font-weight:700}
+@media(max-width:1280px){.drive-topbar{gap:5px}.drive-topbar .drive-chip-btn kbd{display:none}.drive-brand-nav .drive-corner-pill{flex-direction:column;align-items:flex-start;justify-content:center;gap:0}.drive-corner-pill b{font-size:10px}}
+@media(max-width:1100px){
+ .drive-topbar{flex-wrap:wrap}.drive-topbar .drive-chip-btn{font-size:10px;padding:5px}
+ .drive-topbar .drive-quick-actions{margin-left:auto}
+}
+@media(max-height:750px){.drive-left-stack .drive-minimap{height:min(100%,80px);width:90px}.drive-st-row{padding-block:2px}.drive-timing-head{padding-block:6px}}
+@media(pointer:coarse){.drive-left-stack{bottom:134px}.drive-left-stack .drive-timing{max-height:38dvh}.drive-left-stack .drive-mfd{max-height:28dvh}}
+@media(max-width:700px){.drive-left-stack{width:145px}.drive-topbar{left:172px;max-height:110px;overflow:auto;pointer-events:auto}.drive-topbar .drive-quick-actions{flex-wrap:wrap}.drive-radio-stack{top:126px}.drive-tacho{width:203px}}

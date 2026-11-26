@@ -18,7 +18,10 @@ it('independent Monza and Vegas rooms have independent physics, and only owners 
  const m=createRace(1),v=createRace(1,'las-vegas');m.phase=v.phase='racing';m.cars.a.distance=v.cars.a.distance=6000;m.cars.a.speed=v.cars.a.speed=60;stepRace(m);stepRace(v);expect(m.cars.a.lap).toBe(1);expect(v.cars.a.lap).toBe(0);
 });
 it('Vegas runs deterministic full strategic races with lap timing and both tyre stops',()=>{
- const run=()=>{const s=createRace(3,'las-vegas');s.phase='racing';for(let i=0;i<500/DT&&(s.phase as string)!=='finished';i++){if(i%24===0)for(const t of ['a','b'] as const){if(i%1440===0)s.cars[t].instruction=mockEngineer(s,t);s.cars[t].intent=mockDriver(s,t);}stepRace(s);}return s;};const a=run(),b=run();expect(a).toEqual(b);expect(a.phase).toBe('finished');for(const c of Object.values(a.cars)){expect(c.lapTimes).toHaveLength(3);expect(c.stops).toBe(1);expect(c.lapTimes.every(t=>t>70&&t<150)).toBe(true);}
+ const run=()=>{const s=createRace(3,'las-vegas');s.phase='racing';for(let i=0;i<500/DT&&(s.phase as string)!=='finished';i++){if(i%24===0)for(const t of ['a','b'] as const){if(i%1440===0)s.cars[t].instruction=mockEngineer(s,t);s.cars[t].intent=mockDriver(s,t);}stepRace(s);}return s;};const a=run(),b=run();expect(a).toEqual(b);expect(a.phase).toBe('finished');for(const c of Object.values(a.cars)){expect(c.lapTimes).toHaveLength(3);expect(c.stops).toBeGreaterThanOrEqual(1);
+ const repairs=a.events.filter(e=>e.team===c.team&&e.kind==='pit'&&e.message.includes('DAMAGE REPAIRED'));
+ expect(c.stops).toBeLessThanOrEqual(1+repairs.length);
+ expect(c.lapTimes.every(t=>t>70&&t<150)).toBe(true);}
 });
 it('titanium sparks require high speed and road excitation, and stay off in the pit lane',()=>{
  expect(sparkContact(30,100)).toBe(0);expect(sparkContact(90,100,'entry')).toBe(0);const samples=Array.from({length:200},(_,d)=>sparkContact(90,d));expect(Math.max(...samples)).toBeGreaterThan(.3);expect(samples.filter(x=>x===0).length).toBeGreaterThan(50);

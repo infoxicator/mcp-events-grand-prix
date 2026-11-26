@@ -7,13 +7,65 @@ export function sparkContact(speed:number,distance:number,pit:string='none'){
  return pit==='none'&&speed>67?Math.max(0,(speed-67)/30)*Math.max(0,Math.sin(distance*.17)+.25*Math.sin(distance*.61)-.32):0;
 }
 export function createSparks(scene:T.Scene,track:Track,heightAt:(d:number)=>number=()=>0){
- const count=128,positions=new Float32Array(count*2*3),colours=new Float32Array(count*2*3),geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));geometry.setAttribute('color',new T.BufferAttribute(colours,3).setUsage(T.DynamicDrawUsage));
- const lines=new T.LineSegments(geometry,new T.LineBasicMaterial({vertexColors:true,transparent:true,blending:T.AdditiveBlending,depthWrite:false,toneMapped:false}));lines.frustumCulled=false;scene.add(lines);let active=0;
- const rand=(n:number)=>{const a=Math.sin(n*12.9898)*43758.5453;return a-Math.floor(a);};
- return {get active(){return active;},update(race:RenderRace){active=0;let i=0;for(const car of [race.cars.a,race.cars.b])for(let n=0;n<count/2;n++,i++){
-  const age=((race.time*1.7+n*.618033)%1)*.55,seed=Math.floor(race.time*1.7+n*.618033)*97+n*17,back=car.speed*age*.75,emission=car.distance-car.speed*age;
-  const contact=sparkContact(car.speed,emission,car.pit??'none'),alive=contact>rand(seed)*.8&&race.phase==='racing';
-  const p=track.pointAt(car.distance-back-2.2,car.offset+(rand(seed+1)-.5)*(.7+age*7)),t=track.tangentAt(car.distance-back),height=heightAt(car.distance-back)+Math.max(.025,.12+rand(seed+2)*2.2*age-4.9*age*age),length=.18+car.speed*.014*(1-age/.6),fade=alive?(1-age/.6)*2.8:0;
-  const k=i*6;positions[k]=p.x;positions[k+1]=height;positions[k+2]=p.z;positions[k+3]=p.x+t.x*length;positions[k+4]=height+.02;positions[k+5]=p.z+t.z*length;colours[k]=fade;colours[k+1]=fade*.47;colours[k+2]=fade*.08;colours[k+3]=fade;colours[k+4]=fade*.88;colours[k+5]=fade*.5;if(alive)active++;
- }geometry.attributes.position.needsUpdate=true;geometry.attributes.color.needsUpdate=true;},dispose(){geometry.dispose();(lines.material as T.Material).dispose();lines.removeFromParent();}};
+ const limit=256,geometry=new T.PlaneGeometry(1,1);
+ // A camera-facing ribbon keeps its luminous core visible at circuit-level viewing angles.
+ const material=new T.ShaderMaterial({transparent:true,blending:T.AdditiveBlending,depthWrite:false,side:T.DoubleSide,
+  vertexShader:`varying vec2 streak;varying vec3 ember;
+   void main(){streak=uv;ember=instanceColor;
+    mat4 frame=modelViewMatrix*instanceMatrix;
+    vec4 mv=frame[3]+position.y*frame[1];vec2 tangent=frame[1].xy;
+    vec2 side=vec2(-tangent.y,tangent.x)/max(.00001,length(tangent));
+    mv.xy+=side*position.x*length(frame[0].xyz);
+    gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`varying vec2 streak;varying vec3 ember;
+   void main(){float y=streak.y,edge=1.-abs(streak.x*2.-1.);
+    float width=smoothstep(0.,.64,edge);
+    vec3 colour=mix(vec3(1.,.18,.016),ember,smoothstep(.12,.83,y));
+    gl_FragColor=vec4(colour,width*smoothstep(0.,.63,y)*(1.-smoothstep(.86,1.,y)));
+    #include <colorspace_fragment>
+   }`});
+ const mesh=new T.InstancedMesh(geometry,material,limit);
+ const glowMaterial=new T.ShaderMaterial({transparent:true,blending:T.AdditiveBlending,depthWrite:false,side:T.DoubleSide,
+  vertexShader:`varying vec2 st;varying float heat;void main(){st=position.xy*2.;heat=instanceColor.r;
+   gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.);}`,
+  fragmentShader:`varying vec2 st;varying float heat;void main(){
+   float f=max(0.,1.-dot(st,st));gl_FragColor=vec4(1.,.29,.035,heat*f*f*.32);
+   #include <colorspace_fragment>
+  }`});
+ const glow=new T.InstancedMesh(geometry,glowMaterial,22);
+ for(const batch of [mesh,glow]){
+  batch.setColorAt(0,new T.Color());batch.frustumCulled=false;
+  batch.instanceMatrix.setUsage(T.DynamicDrawUsage);batch.count=0;scene.add(batch);
+ }
+ const pose=new T.Object3D(),colour=new T.Color(),rand=(n:number)=>T.MathUtils.euclideanModulo(Math.sin(n*12.9898)*43758.5453,1);
+ return {get active(){return mesh.count;},update(race:RenderRace,focus?:T.Vector3){
+  mesh.count=0;glow.count=0;
+  if(race.phase!=='racing')return;
+  for(const [i,car] of [race.cars.a,race.cars.b,...race.field??[]].entries()){
+   if(car.speed<64||car.pit&&car.pit!=='none')continue;
+   const at=track.pointAt(car.distance,car.offset);
+   if(focus&&Math.hypot(at.x-focus.x,at.z-focus.z)>170)continue;
+   const edgeContact=(d:number)=>{const edge=Math.abs(car.offset)-track.trackHalfWidth(d);return edge>-.48&&edge<.87?.36:0;};
+   const heat=sparkContact(car.speed,car.distance)+edgeContact(car.distance);
+   if(heat>.06){
+    const d=car.distance-1.95,p=track.pointAt(d,car.offset),t=track.tangentAt(d);
+    pose.position.set(p.x,heightAt(d)+.076,p.z);pose.rotation.set(-Math.PI/2,Math.atan2(t.x,t.z),0,'YXZ');
+    pose.scale.set(1.42,2.36,1);pose.updateMatrix();glow.setMatrixAt(glow.count,pose.matrix);
+    glow.setColorAt(glow.count++,colour.setScalar(Math.min(1,heat)));
+   }
+   for(let n=0;n<(i<2?46:18)&&mesh.count<limit;n++){
+    const cycle=race.time*1.7+n*.618033,age=(cycle%1)*.55,seed=Math.floor(cycle)*97+n*17+i*29;
+    const emission=car.distance-car.speed*age;
+    const contact=sparkContact(car.speed,emission)+edgeContact(emission);
+    if(contact<=rand(seed)*.8)continue;
+    const d=car.distance-car.speed*age*.75-2.2,p=track.pointAt(d,car.offset+(rand(seed+1)-.5)*(.7+age*7)),t=track.tangentAt(d);
+    pose.position.set(p.x,heightAt(d)+Math.max(.04,.14+rand(seed+2)*2.2*age-4.9*age*age),p.z);
+    pose.rotation.set(Math.PI/2-.07+age*.28,Math.atan2(t.x,t.z)+(rand(seed+1)-.5)*.19,0,'YXZ');
+    pose.scale.set(.026+rand(seed+3)*.026,.32+car.speed*.022*(1-age/.6),1);
+    pose.updateMatrix();mesh.setMatrixAt(mesh.count,pose.matrix);
+    const fade=1-age/.6;colour.setRGB(2.5+2.5*fade,.42+2.65*fade*fade,.06+1.64*fade**3);mesh.setColorAt(mesh.count++,colour);
+   }
+  }
+  for(const batch of [mesh,glow])if(batch.count){batch.instanceMatrix.needsUpdate=true;batch.instanceColor!.needsUpdate=true;}
+ },dispose(){geometry.dispose();material.dispose();glowMaterial.dispose();for(const batch of [mesh,glow]){batch.dispose();batch.removeFromParent();}}};
 }

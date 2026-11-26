@@ -1,8 +1,8 @@
 [data-mcp-app=true] .mcp-shell {
  display:flow-root;
  min-width:0;
- background:#101214;
- color:#efeee8;
+ background:#0a0d12;
+ color:#f5f7fa;
  color-scheme:dark;
 }
 .mcp-header {
@@ -28,7 +28,7 @@
 }
 .mcp-brand .brand-mark{width:30px;height:26px;flex:none;border-radius:5px}
 .mcp-brand .brand-mark::before{transform:scale(.85) skewX(-28deg)}
-.mcp-header p{margin:4px 0 0;font-size:12px;line-height:1.45;color:#afbab5}
+.mcp-header p{margin:4px 0 0;font-size:12px;line-height:1.45;color:#a5afbf}
 .mcp-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mcp-header .mcp-danger{border-color:#8f3a3d;background:#3a191b;color:#ffd2c9}
 .mcp-header .mcp-danger:hover:not(:disabled){background:#4e2023;border-color:#b84c50;color:#fff}
@@ -46,7 +46,7 @@
  box-sizing:border-box;
  border:1px solid #2b4744;
  border-radius:8px;
- background:linear-gradient(135deg,#132225,#171d21);
+ background:linear-gradient(135deg,#101620,#171d26);
 }
 .mcp-multiplayer-bar[hidden]{display:none}
 .mcp-multiplayer-meta {
@@ -101,7 +101,7 @@
  box-sizing:border-box;
  border:1px solid #354147;
  border-radius:12px;
- background:#161b1e;
+ background:#121720;
  box-shadow:0 24px 64px rgba(0,0,0,.64),0 0 0 1px rgba(255,255,255,.04) inset;
 }
 .mcp-card-head {
@@ -123,10 +123,10 @@
  align-items:center;
  gap:6px;
  padding:5px 10px;
- border:1px solid #485b35;
+ border:1px solid #424b59;
  border-radius:999px;
- background:#20291a;
- color:#d6ef83;
+ background:#232a35;
+ color:#ff3448;
  font-size:11px;
  font-weight:700;
  letter-spacing:.02em;
@@ -137,7 +137,7 @@
  width:6px;
  height:6px;
  border-radius:999px;
- background:#d6ef83;
+ background:#ff3448;
 }
 .mcp-menu .mcp-icon-close {
  min-width:32px;
@@ -158,12 +158,12 @@
  margin:5px 0 0;
  font-size:12px;
  line-height:1.45;
- color:#cfdf9f;
+ color:#d1d9e4;
 }
 .mcp-crew[hidden]{display:none}
 
 .mcp-shell :is(button,input,select,summary):focus-visible,.mcp-shell a:focus-visible {
- outline:2px solid #d6ef83;
+ outline:2px solid #ff3448;
  outline-offset:3px;
 }
 .mcp-menu button,.mcp-header button,.mcp-multiplayer-bar button,.mcp-legacy-bar button {
@@ -171,16 +171,16 @@
  padding:7px 13px;
  border:1px solid #3f4a4d;
  border-radius:6px;
- background:#21282b;
- color:#efeee8;
+ background:#202630;
+ color:#f5f7fa;
  font-size:12px;
  font-weight:600;
  cursor:pointer;
 }
 .mcp-menu button:hover:not(:disabled),.mcp-header button:hover,.mcp-multiplayer-bar button:hover,.mcp-legacy-bar button:hover{background:#2d373a}
 .mcp-menu button:disabled,.mcp-legacy-bar button:disabled{opacity:.5;cursor:default}
-.mcp-menu .mcp-primary{border-color:#c9e785;background:#d6ef83;color:#17200d}
-.mcp-menu .mcp-primary:hover:not(:disabled){background:#e2f6a6}
+.mcp-menu .mcp-primary{border-color:#f83847;background:#ff3448;color:#fff}
+.mcp-menu .mcp-primary:hover:not(:disabled){background:#ed1c30}
 .mcp-menu .mcp-danger{margin-left:auto;border-color:#6c4647;color:#ffc5ba}
 
 /* Radio option groups */
@@ -204,7 +204,7 @@
  font-weight:700;
  letter-spacing:.06em;
  text-transform:uppercase;
- color:#98a8a3;
+ color:#a4b1c2;
 }
 .mcp-choice {
  position:relative;
@@ -212,23 +212,23 @@
  align-content:start;
  row-gap:3px;
  padding:11px 12px 11px 32px;
- border:1px solid #313a3d;
+ border:1px solid #303847;
  border-radius:8px;
- background:#121719;
+ background:#0e1219;
  cursor:pointer;
  transition:border-color .14s ease,background-color .14s ease;
 }
 .mcp-choice[hidden]{display:none}
 .mcp-choice:hover{border-color:#49565a;background:#181e21}
-.mcp-choice:has(:checked){border-color:#b2ca70;background:#21281d}
-.mcp-choice:has(:focus-visible){outline:2px solid #d6ef83;outline-offset:2px}
+.mcp-choice:has(:checked){border-color:#f04857;background:#261c24}
+.mcp-choice:has(:focus-visible){outline:2px solid #ff3448;outline-offset:2px}
 .mcp-choice-grid:disabled{opacity:.52}
 .mcp-choice-grid:disabled .mcp-choice{cursor:not-allowed}
-.mcp-choice-grid:disabled .mcp-choice:hover{border-color:#313a3d;background:#121719}
-.mcp-choice-grid:disabled .mcp-choice:has(:checked):hover{border-color:#b2ca70;background:#21281d}
-.mcp-choice input{position:absolute;inset:12px auto auto 11px;margin:0;accent-color:#b5d779}
-.mcp-choice strong{font-size:13px;line-height:1.25;color:#f2f1eb}
-.mcp-choice small{font-size:11px;line-height:1.38;color:#9eb0aa}
+.mcp-choice-grid:disabled .mcp-choice:hover{border-color:#303847;background:#0e1219}
+.mcp-choice-grid:disabled .mcp-choice:has(:checked):hover{border-color:#f04857;background:#261c24}
+.mcp-choice input{position:absolute;inset:12px auto auto 11px;margin:0;accent-color:#ff3448}
+.mcp-choice strong{font-size:13px;line-height:1.25;color:#f6f8fa}
+.mcp-choice small{font-size:11px;line-height:1.38;color:#a8b1c0}
 
 /* Multiplayer add-on toggle */
 .mcp-addon-toggle {
@@ -352,7 +352,7 @@
  border:1px solid #3c474a;
  border-radius:6px;
  background:#111618;
- color:#efeee8;
+ color:#f5f7fa;
  font:12px 'Space Grotesk',sans-serif;
  box-sizing:border-box;
 }
@@ -361,7 +361,7 @@
 .mcp-field-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch}
 .mcp-field-actions input{flex:1 1 160px}
 .mcp-field-actions button{flex:none}
-.mcp-invite-form a{display:inline-block;margin-top:7px;color:#d6ef83;font-size:12px}
+.mcp-invite-form a{display:inline-block;margin-top:7px;color:#ff3448;font-size:12px}
 
 /* Legacy bar (hidden for default ChatGPT strategy mode) */
 .mcp-legacy-bar {
@@ -392,7 +392,7 @@
 #mcp-join-error{margin:8px 0 0;color:#ffbfaa;font-size:12px}
 #mcp-join-error:empty{display:none}
 
-[data-mcp-app=true] #app{display:flow-root;background:#101214;color:#efeee8;color-scheme:dark}
+[data-mcp-app=true] #app{display:flow-root;background:#0a0d12;color:#f5f7fa;color-scheme:dark}
 [data-mcp-app=true] .topbar,[data-mcp-app=true] .feed-actions .matchup-label{display:none}
 [data-mcp-app=true] main{padding-top:9px}
 [data-mcp-app=true] .race-heading{margin-bottom:15px}
@@ -412,3 +412,12 @@
  color: #f0a8a0;
  overflow-wrap: anywhere;
 }
+
+.mcp-shell{font-family:'Space Grotesk',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.mcp-menu{background:linear-gradient(120deg,#070a10db,#10141bba);backdrop-filter:none;-webkit-backdrop-filter:none}
+.mcp-menu-dialog{border:1px solid #ffffff20;border-top:3px solid #ff2a3c;border-radius:6px;background:linear-gradient(135deg,#1d222c,#10141c 65%)}
+.mcp-menu-dialog h2{font:700 clamp(23px,3vw,33px)/1.12 Oxanium,sans-serif;letter-spacing:-.045em}
+.mcp-mode-pill{color:#e2e7ed;background:#222934;border-color:#3f4958}.mcp-mode-pill::before{background:#ff3448}
+.mcp-choice,.mcp-addon-toggle{border-radius:4px}
+.mcp-choice:has(:checked){box-shadow:inset 3px 0 #ff3448}
+.mcp-menu .mcp-primary{background:#cb1629;border-color:#ef3b49;color:white}

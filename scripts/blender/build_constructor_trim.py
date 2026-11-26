@@ -86,7 +86,9 @@ def rear_flap(team,vertices,faces,colours):
                 z=-2.534+(.5-chord)*section-.021*a*a
                 y=.849+.036*a*a+(chord-.35)*.48*(1-.34*a*a)*section+camber
                 x=.785*t
-            uv[len(vertices)]=((1-t)/2,chord)
+            # Looking forward from behind the car, screen right is -X.
+            # The raised rear edge is up on the back and near on the top surface.
+            uv[len(vertices)]=((1-t)/2,1-chord if camber>=0 else chord)
             vertices.append((x,y,z));colours.append((value,value,value,1))
     for j in range(8):
         for k in range(7):
@@ -173,7 +175,7 @@ for name,stations in {
                 for row in range(2):
                     for col in range(3):
                         a=start+row*4+col;faces.append((a,a+1,a+5,a+4))
-        if team in ('Ferrari','Mercedes'):
+        if team=='Mercedes':
             # Cooling slots follow the fin in the field mesh. Preserve their
             # indices on the hero package while omitting the field-only faces.
             part('Body'+team,panel,faces[:fin_faces]+faces[len(f):],shades)
@@ -202,75 +204,35 @@ for name,stations in {
             faces.extend([tuple(range(start,start+6)),tuple(range(start+30,start+36))])
         near_uv=rear_flap(team,panel,faces,shades)
         part('Field'+team,panel,faces,shades,near_uv)
-# Station lofts for the outboard wing foot and diffuser lip. The return
-# closes on the existing end fence, leaving the nose pylons, wing pivot,
-# axles and undertray mounting plane at their original game coordinates.
-for name in ('SF26Aero','W17Aero'):
-    ferrari=name=='SF26Aero'
-    v=[];f=[];colors=[]
-    def loft_sections(stations,side):
-        start=len(v)
-        for row,(z,x,y,width,height) in enumerate(stations):
-            # Rounded leading edge, convex pressure surface, thin trailing edge.
-            for u,h,shade in [(0,0,.48),(.10,.58,.83),(.40,1,1),(.78,.65,.92),
-                              (1,.06,.70),(.96,-.13,.49),(.39,-.28,.39),(.09,-.23,.37)]:
-                v.append((side*(x+u*width),y+h*height,z));colors.append((shade,shade,shade,1))
-            if row:
-                for i in range(8):
-                    a=start+(row-1)*8+i;b=start+(row-1)*8+(i+1)%8
-                    f.append((a,b,b+8,a+8))
-        f.extend([tuple(range(start+7,start-1,-1)),tuple(range(len(v)-8,len(v)))])
-    for side in (-1,1):
-        if ferrari:
-            # Low, long outwashed shelf with a short kicked-up trailing lip.
-            foot=[(2.80,.933,.114,.010,.004),(2.72,.950,.121,.035,.009),
-                  (2.54,.959,.125,.045,.010),(2.31,.959,.145,.040,.013),
-                  (2.14,.956,.178,.036,.022),(2.04,.951,.201,.010,.015)]
-            # Twin arched mouths peak outboard of the central crash structure.
-            throat=[(-2.39,.304,.191,.290,.028),(-2.51,.281,.230,.345,.053),
-                    (-2.63,.247,.249,.410,.087),(-2.73,.223,.258,.459,.095)]
-        else:
-            # The upright outer wall rides a short blade foot. Its aft corner
-            # turns in to meet the raised tip of the upper flap.
-            foot=[(2.69,.935,.140,.012,.005),(2.60,.949,.146,.041,.009),
-                  (2.46,.961,.166,.038,.020),(2.33,.963,.206,.031,.044),
-                  (2.20,.957,.259,.022,.062),(2.11,.951,.317,.008,.061)]
-            # Flatter outboard exit and a taller, tighter inboard channel.
-            throat=[(-2.39,.119,.198,.213,.020),(-2.51,.120,.234,.235,.042),
-                    (-2.63,.119,.255,.267,.062),(-2.73,.123,.277,.278,.064)]
-        loft_sections(foot,side);loft_sections(throat,side)
-        # The floor return runs underneath the pod independently of its shoulder.
-        undercut=([( .38,.54,.279,.19,.021),(.12,.55,.260,.24,.022),
-                  (-.59,.54,.215,.30,.026),(-1.38,.49,.182,.22,.015)] if ferrari else
-                 [(.41,.52,.314,.16,.019),(.02,.59,.266,.20,.018),
-                  (-.83,.58,.181,.25,.016),(-1.47,.45,.168,.21,.011)])
-        loft_sections(undercut,side)
-        # Tunnel divider terminates inside the mouth, below the upper kick.
-        blade_x=.43 if ferrari else .31
-        loft_sections([(-2.38,blade_x,.144,.013,.037),(-2.57,blade_x,.155,.016,.075),
-                       (-2.71,blade_x,.178,.012,.095)],side)
-        # Recessed run-out below the kick. A second, narrower shelf catches
-        # reflected road light behind the lip, leaving the exit open.
-        x=.30 if ferrari else .18
-        loft_sections([(-2.41,x,.137,.25,.014),(-2.56,x,.154,.29,.019),
-                       (-2.68,x,.178,.30,.025)],side)
-        # Rounded inner face and trailing flange are inset from the printed fence.
-        loft_sections([(2.59,.918,.161,.017,.014),(2.46,.923,.181,.024,.024),
-                       (2.28,.926,.204,.026,.037),(2.17,.927,.220,.018,.040)],side)
-        # Two ferrules sit between the beam-wing upright and impact structure.
-        # An open centre and contrasting inner bore survive the low rear view.
-        for cx,cy,cz,r in [(side*.135,.484,-2.60,.050),(side*.211,.378,-2.53,.034)]:
-            base=len(v);segments=16
-            for dz,scale,shade in [(.12,.82,.28),(.022,1,.56),(0,.96,.78),(0,.67,.52),(.074,.64,.16)]:
-                for k in range(segments):
-                    angle=math.tau*k/segments
-                    v.append((cx+r*scale*math.cos(angle),cy+r*scale*math.sin(angle),cz+dz))
-                    colors.append((shade,shade*.95,shade*.89,1))
-            for row in range(4):
-                for k in range(segments):
-                    a=base+row*segments+k;b=base+row*segments+(k+1)%segments
-                    f.append((a,b,b+segments,a+segments))
-    part(name,v,f,colors)
+# Constructor-specific front wing foot and sidepod floor return.
+v=[];f=[];colors=[]
+def loft_sections(stations,side):
+    start=len(v)
+    for row,(z,x,y,width,height) in enumerate(stations):
+        # Rounded leading edge, convex pressure surface, thin trailing edge.
+        for u,h,shade in [(0,0,.48),(.10,.58,.83),(.40,1,1),(.78,.65,.92),
+                          (1,.06,.70),(.96,-.13,.49),(.39,-.28,.39),(.09,-.23,.37)]:
+            v.append((side*(x+u*width),y+h*height,z));colors.append((shade,shade,shade,1))
+        if row:
+            for i in range(8):
+                a=start+(row-1)*8+i;b=start+(row-1)*8+(i+1)%8
+                f.append((a,b,b+8,a+8))
+    f.extend([tuple(range(start+7,start-1,-1)),tuple(range(len(v)-8,len(v)))])
+for side in (-1,1):
+    # The upright outer wall rides a short blade foot. Its aft corner
+    # turns in to meet the raised tip of the upper flap.
+    foot=[(2.69,.935,.140,.012,.005),(2.60,.949,.146,.041,.009),
+          (2.46,.961,.166,.038,.020),(2.33,.963,.206,.031,.044),
+          (2.20,.957,.259,.022,.062),(2.11,.951,.317,.008,.061)]
+    loft_sections(foot,side)
+    # The floor return runs underneath the pod independently of its shoulder.
+    undercut=[(.41,.52,.314,.16,.019),(.02,.59,.266,.20,.018),
+              (-.83,.58,.181,.25,.016),(-1.47,.45,.168,.21,.011)]
+    loft_sections(undercut,side)
+    # Rounded inner face and trailing flange are inset from the printed fence.
+    loft_sections([(2.59,.918,.161,.017,.014),(2.46,.923,.181,.024,.024),
+                   (2.28,.926,.204,.026,.037),(2.17,.927,.220,.018,.040)],side)
+part('W17Aero',v,f,colors)
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from wheel_trim import spoke_faces
@@ -309,7 +271,7 @@ v=[];faces=[];colors=[];uv=[]
 for left,right,low,high,support in [(-.58,.58,.75,1.43,False),(-.41,-.37,0,.78,True),(.37,.41,0,.78,True)]:
     start=len(v)
     for x,y,u,t in [(left,low,0,0),(left,high,0,1),(right,high,1,1),(right,low,1,0)]:
-        v.append((x,y,.016 if support else 0));uv.append((.02,.98) if support else (u,t))
+        v.append((x,y,.016 if support else 0));uv.append((.02,.98) if support else (1-u,t))
         colors.append((.19,.19,.19,1) if support else (1,1,1,1))
     faces.append(tuple(range(start,start+4)))
 part('RulesBoard',v,faces,colors);geo=bpy.data.meshes['RulesBoard'];art=geo.uv_layers.new(name='Board')

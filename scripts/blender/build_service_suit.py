@@ -37,10 +37,10 @@ for obj in list(bpy.context.scene.objects):bpy.data.objects.remove(obj,do_unlink
 mesh=bpy.data.meshes.new('Continuous woven shell');mesh.from_pydata(verts,[],faces);mesh.update()
 suit=bpy.data.objects.new('ServiceSuit',mesh);bpy.context.collection.objects.link(suit)
 bpy.context.view_layer.objects.active=suit;suit.select_set(True)
-weld=suit.modifiers.new('Join seat, sleeves and trouser gusset','REMESH');weld.mode='VOXEL';weld.voxel_size=.014;weld.use_smooth_shade=True
-bpy.ops.object.modifier_apply(modifier=weld.name)
-relax=suit.modifiers.new('Relax welded seams','SMOOTH');relax.factor=.43;relax.iterations=2;bpy.ops.object.modifier_apply(modifier=relax.name)
-simplify=suit.modifiers.new('Preserve silhouette','DECIMATE');simplify.ratio=.31;bpy.ops.object.modifier_apply(modifier=simplify.name)
+# Keep pockets, belts and cuffs as the tailored source surfaces. Collapse the
+# curved panels directly so thin seams survive the lower-detail skin.
+simplify=suit.modifiers.new('Tailored race-distance panels','DECIMATE');simplify.ratio=.42
+bpy.ops.object.modifier_apply(modifier=simplify.name)
 mesh=suit.data;mesh.materials.clear();mesh.materials.append(material)
 tree=KDTree(len(verts))
 for i,v in enumerate(verts):tree.insert(v,i)
@@ -65,7 +65,7 @@ for v in mesh.vertices:
     # Tonal stretch fabric follows the side seam; a continuous gradient
     # avoids faceted patches when the elbow rolls or a knee bears weight.
     panel=smooth((abs(x)-.122)/.108)*smooth((.20-abs(y-.23))/.11) if abs(x)<.29 else 0
-    val=.76*shade*(1-.40*panel)
+    val=.76*shade*(1-.40*panel)*(.38+.62*max(c[:3]))
     colors.data[v.index].color=(val,val*.985,val*.97,1)
     # Stable fabric UVs after welding. Keep the shoulder patch on the back.
     if z<-.071 and .334<y<.410 and abs(x)<.145:

@@ -26,7 +26,8 @@ export function trafficAhead(car:FieldCar,others:readonly FieldCar[],range:numbe
  let closest:FieldCar|undefined;
  for(const other of others){
   const gap=other.distance-car.distance;
-  if(other.finishTime===null&&gap>0&&gap<range&&Math.abs(car.offset-other.offset)<2.12){
+  const crossing=(other.offset-car.offset)+((other.lateralVelocity??0)-(car.lateralVelocity??0))*.25;
+  if(other.finishTime===null&&gap>0&&gap<range&&(Math.abs(car.offset-other.offset)<2.12||Math.abs(crossing)<2.17)){
    range=gap;closest=other;
   }
  }
@@ -125,6 +126,7 @@ export function advanceField(race:Race,track:Track,dt:number,queue?:ReturnType<t
   const correction=Math.max(-2.4*dt,Math.min(2.4*dt,desiredOffset-car.offset));
   const previousOffset=car.offset;
   car.offset+=correction;
+  if(car.impactYaw){car.impactYaw*=Math.exp(-3.4*dt);if(Math.abs(car.impactYaw)<.001)delete car.impactYaw;}
   if(car.impactSideSpeed){
    if(!pitting){
     const shoulder=track.trackHalfWidth(car.distance)+.60;

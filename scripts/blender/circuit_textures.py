@@ -6,79 +6,35 @@ random.seed(26)
 out=Path('src/race/assets/circuits');out.mkdir(exist_ok=True)
 font='/System/Library/Fonts/Helvetica.ttc'
 def save(im,name):im.save(out/(name+'.png'),optimize=True)
-im=Image.new('RGBA',(512,512));d=ImageDraw.Draw(im)
-for i in range(26000):
- a=random.random()*math.tau;r=math.sqrt(random.random());x=256+math.cos(a)*r*230;y=256+math.sin(a)*r*230
- if r> .9+.08*math.sin(a*7)+.06*math.cos(a*11):continue
- v=random.randrange(36,85);d.ellipse((x-2,y-1,x+3,y+2),fill=(int(v*.76),v,int(v*.48),255))
-save(im,'foliage')
-im=Image.new('RGBA',(128,128));d=ImageDraw.Draw(im)
-for k in range(-128,257,16):d.line((k,0,k+128,128),fill=(170,180,180,240),width=1);d.line((k,0,k-128,128),fill=(170,180,180,240),width=1)
-save(im,'fence')
+# Supersample the steel wire coverage and keep colour constant in transparent texels.
+mask=Image.new('L',(1024,1024));wire=ImageDraw.Draw(mask)
+for k in range(-1024,2049,128):
+ for end in (-1024,1024):wire.line((k,0,k+end,1024),fill=248,width=7)
+wire.line((0,48,1024,48),fill=242,width=7)
+im=Image.new('RGBA',(256,256),(72,78,81,0))
+im.putalpha(mask.resize(im.size,Image.Resampling.LANCZOS));save(im,'fence')
 im=Image.new('RGB',(256,256),(134,124,108));d=ImageDraw.Draw(im)
 for i in range(20000):
  x=random.randrange(256);y=random.randrange(256);v=random.randrange(85,180);r=random.randrange(1,3);d.ellipse((x,y,x+r,y+r),fill=(v,int(v*.94),int(v*.82)))
 save(im,'gravel')
-im=Image.new('RGB',(256,512),(19,23,29));d=ImageDraw.Draw(im)
-for y in range(0,512,16):
- d.line((0,y,256,y),fill=(64,54,42),width=1)
- for x in range(0,256,12):
-  v=random.choice([(150,121,77),(215,180,120),(80,102,125),(23,29,36),(23,29,36)])
-  d.rectangle((x+3,y+3,x+9,y+12),fill=v)
-save(im,'windows')
-# Floodlit limestone facade: opaque stone between recessed windows, not glowing black glass.
-im=Image.new('RGB',(256,512),(154,115,73));d=ImageDraw.Draw(im)
-for y in range(0,512,16):
- d.rectangle((0,y,255,y+2),fill=(187,146,97));d.line((0,y+15,255,y+15),fill=(97,69,44))
- for x in range(0,256,12):
-  d.rectangle((x+2,y+3,x+10,y+14),fill=(90,64,43))
-  v=random.choice([(190,159,106),(223,191,132),(35,34,32),(35,34,32),(51,49,43)])
-  d.rectangle((x+3,y+4,x+9,y+13),fill=v);d.line((x+6,y+4,x+6,y+13),fill=(73,59,43))
-save(im,'warm-windows')
-
-im=Image.new('RGBA',(256,256));d=ImageDraw.Draw(im)
-for i in range(8):
- x=i*32+16;v=random.choice([(35,49,63),(160,57,40),(205,202,183),(54,78,69)])
- d.ellipse((x-5,34,x+5,46),fill=(150,113,89,255));d.rounded_rectangle((x-7,46,x+7,68),radius=4,fill=(*v,255));d.line((x-5,65,x-8,80),fill=(*v,255),width=4);d.line((x+5,65,x+8,80),fill=(*v,255),width=4)
-save(im.crop((0,24,256,88)),'crowd')
 im=Image.new('RGB',(1024,128),(24,31,35));d=ImageDraw.Draw(im);f=ImageFont.truetype(font,62);d.text((30,25),'NEXUS  /  MCP GRAND PRIX',font=f,fill=(240,234,210));save(im,'sign')
+im=Image.new('RGB',(1024,96),(21,32,38));d=ImageDraw.Draw(im)
+d.rectangle((0,87,1024,91),fill=(175,145,89))
+d.text((512,45),'F1   PADDOCK CLUB',anchor='mm',font=ImageFont.truetype(font,62),fill=(247,239,217))
+save(im,'paddock-club')
 im=Image.new('RGBA',(128,128));d=ImageDraw.Draw(im)
 for x in range(128):
  alpha=int(37*math.sin(math.pi*x/127)**2)
  for y in range(128):d.point((x,y),fill=(9,10,12,int(alpha*(.65+random.random()*.35))))
 save(im,'rubber')
 for number in [150,100,50]:
- im=Image.new('RGB',(128,128),(231,230,217));d=ImageDraw.Draw(im);f=ImageFont.truetype(font,55);d.text((64,64),str(number),anchor='mm',font=f,fill=(16,20,25));save(im,'brake-'+str(number))
-im=Image.new('RGB',(1024,512),(8,13,28));d=ImageDraw.Draw(im)
-for y in range(0,512,6):
- points=[(x,y+int(math.sin(x/90+y/40)*22)) for x in range(0,1024,4)];d.line(points,fill=(25,90+y%100,120+y%110),width=2)
-for i in range(2):
- x=256+i*512;d.rounded_rectangle((x-230,150,x+230,360),radius=20,fill=(10,13,28),outline=(210,53,112),width=3)
- for text,y,size,col in [('WELCOME TO',190,25,(224,98,158)),('LAS VEGAS',255,57,(248,230,195)),('MCP GRAND PRIX',320,28,(90,219,209))]:d.text((x,y),text,anchor='mm',font=ImageFont.truetype(font,size),fill=col)
-save(im,'sphere-art')
-# Perforated original leaf sprays with a branching centre, layered on bent 3D fans.
-rng=random.Random(731);im=Image.new('RGBA',(256,256));d=ImageDraw.Draw(im)
-for branch in range(9):
- a=branch*math.tau/9+.14;length=rng.uniform(65,115);ex=128+math.cos(a)*length;ey=128+math.sin(a)*length
- d.line((128,128,ex,ey),fill=(78,73,52,255),width=2)
- for leaf in range(64):
-  t=rng.uniform(.15,1);x=128+(ex-128)*t+rng.gauss(0,12);y=128+(ey-128)*t+rng.gauss(0,12)
-  v=rng.randint(95,205);rx=rng.uniform(4,8);ry=rng.uniform(2.5,6)
-  d.ellipse((x-rx,y-ry,x+rx,y+ry),fill=(v,int(v*.98),int(v*.72),255))
-save(im,'canopy')
-
-# Four fascia strips share one atlas. Blender places a different strip above each bay.
-im=Image.new('RGB',(768,256),'#252b30')
-d=ImageDraw.Draw(im)
-for row,(team,color) in enumerate([('VECTOR RACING','#aa2639'),('CHAOS MOTORSPORT','#14756d'),
-                                  ('RACE ENGINEERING','#586776'),('PIT OPERATIONS','#3d4a55')]):
- top=row*64
- d.rectangle((0,top,125,top+63),fill=color)
- d.rectangle((0,top+58,767,top+62),fill=color)
- d.text((62,top+29),str(row+1).zfill(2),anchor='mm',font=ImageFont.truetype(font,42),fill='#f4f2ed')
- d.text((153,top+28),team,anchor='lm',font=ImageFont.truetype(font,34),fill='#f4f2ed')
-save(im,'garage-fascia')
-
+ im=Image.new('RGB',(576,400),(250,249,243));d=ImageDraw.Draw(im)
+ d.rectangle((6,6,569,393),outline=(20,23,24),width=12)
+ for left in (21,495):d.rectangle((left,22,left+59,37),fill=(181,38,31))
+ heavy=ImageFont.truetype('/System/Library/Fonts/Supplemental/Arial Black.ttf',242)
+ glyph=str(number);x0,y0,x1,y1=d.textbbox((0,0),glyph,font=heavy)
+ d.text(((576-x0-x1)/2,(400-y0-y1)/2),glyph,font=heavy,fill=(10,13,15))
+ save(im,'brake-'+glyph)
 # Formwork texture for concrete at metres-to-centimetres scale. Two fields of
 # aggregate, rain traces and small air pockets break the flat barrier highlight.
 rng=random.Random(448)
@@ -93,28 +49,58 @@ for i in range(850):
  d.ellipse((x-rad,y-rad,x+rad,y+rad),fill=rng.randint(112,148))
 base.convert('RGB').save(out/'formed-concrete.jpg',quality=78,optimize=True)
 
-# City blocks at aerial scale, including service alleys, roof plant, parking
-# lots and lit intersections. The all-night Strip has a luminous horizon.
-city_rng=random.Random(503)
-im=Image.new('RGB',(512,512),(29,32,38));d=ImageDraw.Draw(im)
-for j in range(8):
- for i in range(8):
-  x=i*64;y=j*64
-  d.rectangle((x+5,y+5,x+58,y+58),fill=(23,26,30))
-  for k in range(city_rng.randrange(3,7)):
-   xx=x+city_rng.randrange(7,39);yy=y+city_rng.randrange(7,41);ww=city_rng.randrange(7,21);hh=city_rng.randrange(7,18)
-   shade=city_rng.randrange(33,60)
-   d.rectangle((xx,yy,xx+ww,yy+hh),fill=(shade,shade-2,shade-3))
-   d.line((xx,yy,xx+ww,yy),fill=(shade+15,shade+10,shade+1))
-   d.rectangle((xx+2,yy+2,xx+4,yy+4),fill=(24,26,29))
-  for spot in range(6):
-   d.line((x+7+spot*6,y+52,x+7+spot*6,y+57),fill=(70,66,57),width=1)
-  for xx,yy in [(x+1,y+1),(x+32,y+1),(x+1,y+31)]:
-   d.ellipse((xx-2,yy-2,xx+2,yy+2),fill=(77,60,46));d.point((xx,yy),fill=(239,187,111))
-for q in [128,384]:
- d.line((0,q,512,q),fill=(61,53,47),width=5)
- for x in range(0,512,12):d.line((x,q,x+4,q),fill=(118,104,79))
-save(im,'city-blocks')
-
 # Retain the full-resolution normal-map master and compress the browser copy.
 Image.open(out.parent/'asphalt-normal.jpg').save(out.parent/'asphalt-normal.webp','WEBP',quality=92,method=6)
+# The two television banks use the actual surveyed circuit silhouette.
+import json
+for circuit in ('monza','las-vegas'):
+ source=json.loads(Path(f'data/{circuit}-render-path.json').read_text())['samples'][::10]
+ xy=[(p['x'],p['z']) for p in source]
+ xs,zs=zip(*xy);span=max(max(xs)-min(xs),max(zs)-min(zs))
+ panel=Image.new('RGB',(384,192),(9,18,25));draw=ImageDraw.Draw(panel)
+ draw.text((12,5),circuit.upper()+'  /  LIVE TIMING',font=ImageFont.truetype(font,18),fill=(177,223,225))
+ trackline=[(81+(x-(min(xs)+max(xs))/2)*130/span,107+(z-(min(zs)+max(zs))/2)*130/span) for x,z in xy]
+ draw.line(trackline+[trackline[0]],fill=(90,211,190),width=4)
+ for j in range(5):
+  draw.text((167,39+27*j),f'{j+1:02}    S{j%3+1}     +0.{14+27*j:03}',font=ImageFont.truetype(font,16),fill=(150,206-j*7,194))
+ panel.save(out/(circuit+'-timing.jpg'),quality=91)
+ photo=Image.open(out/'garage-backplate.jpg').convert('RGB');w,h=photo.size
+ for x0,x1 in [(.253,.448),(.613,.784)]:
+  rect=(int(w*x0),int(h*.284),int(w*x1),int(h*.392))
+  photo.paste(panel.resize((rect[2]-rect[0],rect[3]-rect[1]),Image.Resampling.LANCZOS),rect)
+ photo.save(out/(circuit+'-garage.jpg'),quality=91)
+# Tileable, metre-scale racing surfaces. Pair albedo and relief with the same aggregate.
+import numpy as np
+rng=np.random.default_rng(2026);size=768
+yy,xx=np.indices((size,size));phase=2*np.pi/size
+def texture(base,noise):
+ return Image.fromarray(np.clip(np.array(base)[None,None,:]+noise[:,:,None],0,255).astype('uint8'))
+def normal_map(height,strength):
+ dx=(np.roll(height,-1,1)-np.roll(height,1,1))*strength
+ dy=(np.roll(height,-1,0)-np.roll(height,1,0))*strength
+ n=np.stack((-dx,-dy,np.ones_like(dx)),axis=2);n/=np.linalg.norm(n,axis=2)[:,:,None]
+ return Image.fromarray(((n*.5+.5)*255).astype('uint8'))
+aggregate=rng.normal(0,1,(size,size));macro=np.sin(xx*phase*3+np.sin(yy*phase*2))+np.cos(yy*phase*4+xx*phase)
+texture([91,92,92],10*aggregate+2.7*macro+7*np.maximum(aggregate-1,0)).save(out.parent/'asphalt-color.jpg',quality=91)
+normal_map(aggregate,.17).save(out.parent/'asphalt-normal.webp',quality=91)
+blades=rng.normal(0,1,(size,size));blades=(blades+np.roll(blades,1,0)+np.roll(blades,2,0))*.52
+texture([79,98,55],blades*12+macro*3+3*np.cos(xx*phase*2)).save(out.parent/'grass-color.jpg',quality=90)
+ridge=np.cos(phase*(yy*24+xx*2)+.17*np.sin(xx*phase*3))
+grit=rng.normal(0,1,(size,size))
+pebbles=texture([137,119,97],grit*16+11*ridge+3*macro)
+pebbles.save(out/'gravel.png',optimize=True)
+normal_map(ridge*12+grit*.59,.39).save(out/'raked-normal.jpg',quality=91)
+margin=pebbles.convert('RGBA')
+coverage=np.clip((.82-xx/size+.10*macro+grit*.12)*2.2,0,1)
+margin.putalpha(Image.fromarray((coverage*255).astype('uint8')))
+save(margin.resize((256,512),Image.Resampling.LANCZOS),'gravel-margin')
+# Shared wardrobe, separate portrait and stance for the second garage mechanic.
+sources=Path('scripts/blender/textures')
+crew=Image.open(sources/'crew-atlas.jpg').convert('RGB')
+staff=Image.new('RGB',(1024,768));staff.paste(crew,(0,0));staff.paste(crew,(512,0))
+portrait=Image.open(sources/'spectators.jpg').crop((0,0,256,256))
+staff.paste(portrait.resize((512,512),Image.Resampling.LANCZOS),(512,0))
+staff.save(sources/'garage-staff.jpg',quality=92)
+normal_map(np.sin(phase*(xx*8+yy*3))+np.cos(phase*(yy*11-xx*4)),2.6).save(out/'water-normal.jpg',quality=88)
+for index,(label,bg) in enumerate([('PIRELLI',(184,146,43)),('MONZA  /  ITALIA',(21,66,47)),('GRAN PREMIO',(131,27,37)),('AUTODROMO',(33,48,66))]):
+ im=Image.new('RGB',(1024,128),bg);d=ImageDraw.Draw(im);d.text((512,66),label,anchor='mm',font=ImageFont.truetype(font,74),fill=(246,244,234));save(im,'sponsor-'+str(index))

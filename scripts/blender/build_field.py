@@ -12,9 +12,9 @@ from tempfile import TemporaryDirectory
 assets = Path(__file__).resolve().parents[2] / 'src/race/assets'
 near = '--near' in sys.argv
 groups = {'Chassis', 'Floor', 'FrontL', 'FrontR', 'RearL', 'RearR', 'Helmet'}
-layers = {key: ([], [], []) for key in ('Paint', 'Accent', 'Trim', 'HelmetTint')}
+layers = {key: ([], [], []) for key in ('Paint', 'Accent', 'Trim', 'HelmetTint', 'Visor')}
 if near:
-    for layer in ('Tyre','WheelMetal','Carbon'):
+    for layer in ('Tyre','WheelMetal','BrakeRotor','Carbon','Visor'):
         layers[layer]=([],[],[])
 normals={key:[] for key in layers}
 omit = {
@@ -27,7 +27,9 @@ omit = {
     # Deep cockpit interior occluded at AI field distances
     'SeatFoam', 'Seat pan laminate', 'Seat edge satin', 'Knee bolster', 'Cockpit liner',
 }
-if near: omit.remove('CompoundInk')
+groups.update(corner+'Knuckle' for corner in ('FrontL','FrontR','RearL','RearR'))
+if near:
+    omit.remove('CompoundInk');layers['CompoundInk']=([],[],[]);normals['CompoundInk']=[]
 for obj in list(bpy.context.scene.objects):
     if obj.type != 'MESH' or not obj.parent or obj.parent.name not in groups:
         continue
@@ -37,8 +39,10 @@ for obj in list(bpy.context.scene.objects):
     dec = obj.modifiers.new('Field exterior', 'DECIMATE')
     dec.ratio = .075 if obj.parent.name in {'FrontL','FrontR','RearL','RearR'} else .052
     if near:
-        # Retain the closed nose skin, rim lips and wheel nuts at broadcast distance.
-        dec.ratio = .78 if obj.name.startswith(('Chassis_Livery','Front','Rear')) else .32
+        # Keep the nose and tyre profiles smooth at the near-field transition.
+        dec.ratio = .25 if obj.name.startswith(('Chassis_Livery','Front','Rear')) else .095
+    if obj.parent.name=='Helmet':
+        dec.ratio=.54 if near else .25
     geo = obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data
     geo.calc_loop_triangles()
     lookup = {}
@@ -50,9 +54,12 @@ for obj in list(bpy.context.scene.objects):
         if mat.name in {'Livery','DeepLivery'}: layer = 'Paint'
         elif mat.name == 'Ivory': layer = 'Accent'
         elif mat.name == 'HelmetPaint': layer = 'HelmetTint'
+        elif mat.name=='HelmetVisor': layer='Visor'
+        elif near and mat.name=='CompoundInk': layer='CompoundInk'
         elif near and mat.name=='SlickRubber': layer='Tyre'
-        elif near and mat.name in ('WheelDish','BrakeDisc','Titanium','OxidisedTitanium'): layer='WheelMetal'
-        elif near and mat.name in ('AeroLaminate','Carbon'): layer='Carbon'
+        elif near and mat.name=='BrakeDisc': layer='BrakeRotor'
+        elif near and mat.name in ('WheelDish','Titanium','OxidisedTitanium'): layer='WheelMetal'
+        elif near and mat.name in ('AeroLaminate','Carbon','Visor'): layer='Carbon'
         else: layer = 'Trim'
         vertices, faces, colors = layers[layer]
         face = []
@@ -67,8 +74,7 @@ for obj in list(bpy.context.scene.objects):
                     point.y=max(.002,point.y-.004*(1-point.y/.060))
                 vertices.append(tuple(point))
                 normals[layer].append(direction)
-                if near and mat.name=='CompoundInk': colors.append((.45,.32,.10,1))
-                elif not near and mat.name=='SlickRubber': colors.append((.018,.020,.023,1))
+                if not near and mat.name=='SlickRubber': colors.append((.018,.020,.023,1))
                 elif mat.name=='WheelDish': colors.append((.016,.020,.023,1))
                 elif mat.name=='BrakeDisc': colors.append((.18,.16,.14,1))
                 elif layer in ('Trim','WheelMetal'): colors.append(tuple(mat.diffuse_color))
@@ -96,7 +102,7 @@ if not near:
 if near:
     sys.path.insert(0,str(Path(__file__).resolve().parent))
     from wheel_trim import spoke_faces
-    relief,relief_faces,finish=spoke_faces()
+    relief,relief_faces,finish=spoke_faces(sectors=32)
     rim_verts,rim_faces,rim_colors=layers['WheelMetal']
     for side in [-1,1]:
         for axle in [1.55,-2.05]:

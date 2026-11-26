@@ -141,6 +141,8 @@ it('strips sealed engine/gearbox internals from exterior racing GLBs while prese
  // AI field GLBs stay valid with all required exterior layers
  const fieldNear=parsePackedGlb('../src/race/assets/field-near.glb.gz');
  const fieldFar=parsePackedGlb('../src/race/assets/field.glb.gz');
+ expect(fieldNear.tris).toBeLessThanOrEqual(28_000);
+ expect(fieldNear.tris).toBeGreaterThan(fieldFar.tris);
  const nearMeshes=new Set<string>(fieldNear.gltf.meshes.map((m:any)=>m.name));
  const farMeshes=new Set<string>(fieldFar.gltf.meshes.map((m:any)=>m.name));
  for(const layer of ['Paint','Accent','Trim','HelmetTint','Tyre','WheelMetal','Carbon','UndertrayShadow'])expect(nearMeshes.has(layer)).toBe(true);

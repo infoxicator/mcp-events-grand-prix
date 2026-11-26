@@ -1,7 +1,7 @@
 """Forged spoke faces in wheel-local metres, from hub flange to bead seat."""
 import math
 
-def spoke_faces():
+def spoke_faces(sectors=64):
     vertices, faces, colours = [], [], []
     for spoke in range(10):
         for branch in [-1, 1]:
@@ -25,7 +25,7 @@ def spoke_faces():
     for profile in [[(.207,-.006,.10),(.215,-.004,.22),(.222,-.007,.33),
                      (.226,-.014,.18),(.231,-.021,.065)],
                     [(.045,-.014,.12),(.050,-.009,.25),(.058,-.011,.19),(.066,-.021,.07)]]:
-        start=len(vertices);sectors=64
+        start=len(vertices)
         for radius,depth,shade in profile:
             for i in range(sectors):
                 a=math.tau*i/sectors

@@ -6,7 +6,7 @@ import type {Track} from './track';
 export function pavementHeight(track:Track,station:number,offset:number){
  const {waves,amplitudes,patches}=profiles[track.id];
  const d=track.wrap(station),a=d*2*Math.PI/track.LENGTH;
- let h=amplitudes[0]*Math.sin(a*waves[0])+
+ let h=.012*Math.max(0,1-(offset/track.trackHalfWidth(station))**2)+amplitudes[0]*Math.sin(a*waves[0])+
   amplitudes[1]*Math.sin(a*waves[1]+.6)+offset*.00011*Math.sin(a*waves[0]+.9)+
   amplitudes[2]*Math.sin(a*waves[2]+offset*.31);
  for(const [start,end,left,right,rise] of patches){

@@ -6,7 +6,7 @@ export function installStripMeter(){
   const original=T.Scene.prototype.onAfterRender;
   T.Scene.prototype.onAfterRender=function(renderer,scene,camera){
    original.apply(this,arguments);
-   if(!window.measureStrip||camera.far!==5000)return;
+   if(!window.measureStrip||camera.name!=='Race camera')return;
    const rt=renderer.getRenderTarget();
    if(!rt||rt.texture.type!==T.HalfFloatType)throw Error('Expected a linear half-float scene target');
    image=new Uint16Array(rt.width*rt.height*4);
