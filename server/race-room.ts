@@ -1,12 +1,12 @@
-import type {LivePhase} from '../src/race/live';
+import {newLiveKey,type LivePhase} from '../src/race/live';
 import {observeStrategy,projectFuelAtFlag,sectorGaps} from '../src/race/strategy-observation';
 import {strategistDue} from '../src/race/strategy-radio';
 import {pitCommitmentPoint} from '../src/race/strategy-calls';
 import {getTrack,isCircuit,type CircuitId} from '../src/race/track';
 import {createRace,dryCompoundRuleSatisfied,DT,FIA_MIN_FUEL_KG,stepRace,event,other,humanInputToControls,type DriverControls} from '../src/race/physics';
-import {TEAMS,type Team,type Race,type RaceState,type Radio,type Decision,type RoomLinks,type Instruction,type ClientMessage,type ServerMessage,type DriverControlMode,type EngineerControlMode,type PeerRole,type HumanControlInput} from '../src/race/types';
+import {TEAMS,type Team,type Race,type RaceState,type Radio,type DriverConsultRadio,type Decision,type RoomLinks,type Instruction,type ClientMessage,type ServerMessage,type DriverControlMode,type EngineerControlMode,type PeerRole,type HumanControlInput} from '../src/race/types';
 import {mockDriver,mockEngineer,autopilotIntent} from '../src/race/brains';
-import {StrategyEvents,radioInstruction,strategySummary,type LiveStrategyRead,type RadioInput} from './strategy-events';
+import {StrategyEvents,radioInstruction,strategySummary,type DriverAnswerInput,type LiveStrategyRead,type RadioInput} from './strategy-events';
 import {createRaceDriver,createRaceEngineer,providerConfig} from './race-brains';
 import {createLunaDriver,lunaConfig} from './luna';
 import {driverRoster} from './race-drivers';
@@ -14,13 +14,17 @@ import {isMatchup,type Matchup,type DriverInfo} from '../src/race/matchup';
 import {invitationCode} from '../src/race/invitation';
 import {applyHazard,compounds,parseHazard,wetnessBand} from '../src/race/race-control';
 import type {RaceLogData,RaceLogEntry,RaceLogKind,RaceLogUpdate} from '../src/race/event-log';
-import {WEBHOOK_STRATEGY_RESPONSE_MS,type StrategyEventNotice} from '../src/race/strategy-events';
+import {DRIVER_RADIO_TEXT_LIMIT,WEBHOOK_STRATEGY_RESPONSE_MS,type DriverQuestion,type StrategyEventNotice} from '../src/race/strategy-events';
 export interface Peer{send:(m:ServerMessage,raw?:string)=>void;team:Team|null;role?:PeerRole;owner:boolean;joined:boolean;eventLog?:boolean;lastSeen:number;lastDecision:number;sequence:number;accepted:number;busy:boolean;}
 const LOG_LIMIT:Record<RaceLogKind,number>={strategy:60,driver:120,radio:60};
 const RIVAL_PIT_COOLDOWN_S=20;
 const STRATEGY_COALESCE_S=15;
 const PENDING_LAP_REFRESH_S=25;
+const CONSULT_RADIO_LIMIT=12;
+type DriverQuestionOffer={error:string;event_id?:never}|{team:Team;event_id:string;line:string;error?:never};
 export class RaceRoom {
+ readonly #elicitationKey=newLiveKey();
+ get elicitationKey(){return this.#elicitationKey;}
  private audible:Peer|null=null;
  live?:LivePhase;
  strategyPractice?:boolean;
@@ -29,6 +33,7 @@ export class RaceRoom {
  chatStrategy?:RaceState['chatStrategy'];
  guestChatStrategy?:RaceState['chatStrategy'];
  latestChatRadio?:RaceState['latestChatRadio'];
+ driverConsultRadio?:RaceState['driverConsultRadio'];
  strategyWebhook?:RaceState['strategyWebhook'];
  guestStrategyWebhook?:RaceState['strategyWebhook'];
  strategyEvents?:StrategyEvents;
@@ -49,6 +54,7 @@ export class RaceRoom {
  private lastStrategyOfferAt:Partial<Record<Team,number>>={};
  private pendingBox:Partial<Record<Team,{lap:number;instruction:Instruction;source:'mock'|'live'|'fallback';responseMs:number;strategist?:'chatgpt'}>>={};
  private awaitingChatReply=new Set<Team>();
+ private driverQuestionOffered=new Set<Team>();
  private radioRevision={a:0,b:0};private manualUntil={a:0,b:0};private engineerBusy={a:false,b:false};private generation=0;private sequence=0;private jevDriver;private lunaDriver:ReturnType<typeof createLunaDriver>|null=null;private engineer;mode:'mock'|'mixed'|'live';players:Record<Team,DriverInfo>;
  driverMode:Record<Team,DriverControlMode>={a:'jev',b:'jev'};
  engineerMode:Record<Team,EngineerControlMode>={a:'mock',b:'mock'};
@@ -73,11 +79,11 @@ export class RaceRoom {
   this.broadcast();
   return true;
  }
- private reset(){this.generation++;this.race=createRace(this.race.laps,this.race.circuit);this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerWindow={};this.lastRivalPitEventAt={};this.lastStrategyOfferAt={};this.gapHistory={a:[],b:[]};this.observedFieldStops={a:new Map(),b:new Map()};this.lastSector={};this.pendingBox={};this.radioRevision={a:0,b:0};this.awaitingChatReply.clear();this.latestChatRadio=undefined;this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.humanInputs={};this.captureUntil=0;this.clearEventLog();this.broadcast();}
+ private reset(){this.generation++;this.race=createRace(this.race.laps,this.race.circuit);this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerWindow={};this.lastRivalPitEventAt={};this.lastStrategyOfferAt={};this.gapHistory={a:[],b:[]};this.observedFieldStops={a:new Map(),b:new Map()};this.lastSector={};this.pendingBox={};this.radioRevision={a:0,b:0};this.awaitingChatReply.clear();this.latestChatRadio=undefined;this.driverQuestionOffered.clear();this.driverConsultRadio=undefined;this.strategyEvents?.clearDriverQuestion();this.guestStrategyEvents?.clearDriverQuestion();this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.humanInputs={};this.captureUntil=0;this.clearEventLog();this.broadcast();}
 
  connected(){if(this.live||this.watchMode)return {a:true,b:true};let a=false,b=this.solo;for(const p of this.peers){if(p.role==='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;if(a&&b)break;}return {a,b};}
  engineerConnected(){let a=false,b=false;for(const p of this.peers){if(p.role!=='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;}return {a,b};}
- state():RaceState{return {type:'state',room:this.id,race:this.race,connected:this.connected(),decisions:this.decisions,intents:this.intents,engineerCalls:this.engineerCalls,driverStats:this.driverStats,matchup:this.matchup,players:this.players,mode:this.mode,serverTime:Date.now(),physicsHz:120,snapshotHz:30,speed:this.speed,paidCalls:this.paidCalls,...(this.solo?{solo:true}:{}),...(this.drive||this.driverMode.a!=='jev'||this.driverMode.b!=='jev'||this.engineerMode.a!=='mock'||this.engineerMode.b!=='mock'||this.engineerConnected().a||this.engineerConnected().b?{drive:this.drive,driverMode:{...this.driverMode},engineerMode:{...this.engineerMode},engineerConnected:this.engineerConnected()}:{}),live:this.live,strategyPractice:this.strategyPractice,strategyWebhook:this.strategyWebhook,chatStrategy:this.chatStrategy,latestChatRadio:this.latestChatRadio,guestChatStrategy:this.guestChatStrategy,guestStrategyWebhook:this.guestStrategyWebhook};}
+ state():RaceState{return {type:'state',room:this.id,race:this.race,connected:this.connected(),decisions:this.decisions,intents:this.intents,engineerCalls:this.engineerCalls,driverStats:this.driverStats,matchup:this.matchup,players:this.players,mode:this.mode,serverTime:Date.now(),physicsHz:120,snapshotHz:30,speed:this.speed,paidCalls:this.paidCalls,...(this.solo?{solo:true}:{}),...(this.drive||this.driverMode.a!=='jev'||this.driverMode.b!=='jev'||this.engineerMode.a!=='mock'||this.engineerMode.b!=='mock'||this.engineerConnected().a||this.engineerConnected().b?{drive:this.drive,driverMode:{...this.driverMode},engineerMode:{...this.engineerMode},engineerConnected:this.engineerConnected()}:{}),live:this.live,strategyPractice:this.strategyPractice,strategyWebhook:this.strategyWebhook,chatStrategy:this.chatStrategy,latestChatRadio:this.latestChatRadio,driverConsultRadio:this.driverConsultRadio,guestChatStrategy:this.guestChatStrategy,guestStrategyWebhook:this.guestStrategyWebhook};}
  links():RoomLinks{const root=`${this.origin}/?room=${this.id}`;return {room:this.id,expiresAt:this.expiresAt,owner:`${root}#token=${this.tokens.owner}`,a:`${root}&team=a#token=${this.tokens.a}`,b:this.solo?'':`${root}&team=b#token=${this.tokens.b}`,spectator:`${root}&spectate`};}
  invitation(team:Team){return invitationCode(this.id,team,this.tokens[team]);}
  add(send:Peer['send']):Peer{const p:Peer={send,team:null,owner:false,joined:false,lastSeen:Date.now(),lastDecision:0,sequence:0,accepted:0,busy:false};this.peers.add(p);return p;}
@@ -353,6 +359,99 @@ export class RaceRoom {
    &&this.radioRevision[event.team]===window.revision?pending:undefined;
  }
 
+ private isConsultRaceActive(){
+  return this.live==='running'&&this.race.phase==='racing'&&Date.now()<this.expiresAt;
+ }
+
+ private consultRadio(team:Team,consultationId:string,consultation:DriverConsultRadio['consultation'],text:string,responseMs=0){
+  const line:DriverConsultRadio={
+   id:++this.sequence,time:this.race.time,team,speaker:consultation==='question'?'DRIVER':'ENGINEER',
+   text,source:'live',responseMs,consultation,consultationId,...(consultation==='answer'?{strategist:'chatgpt'}:{}),
+  };
+  const retained=this.driverConsultRadio??={};
+  retained[team]=[...(retained[team]??[]),line].slice(-CONSULT_RADIO_LIMIT);
+  this.race.radio=[...this.race.radio,line].slice(-20);
+  event(this.race,'radio',team,text);
+  this.log(team,{kind:'radio',speaker:line.speaker,source:line.source,text,responseMs,strategist:line.strategist,consultation,consultationId});
+  this.broadcast();
+ }
+
+ private offerDriverQuestion(team:Team,text:string,source:DriverQuestion['source']):DriverQuestionOffer{
+  const events=this.strategyFor(team);
+  if(!this.isConsultRaceActive()||this.race.cars[team].finishTime!==null||!events){
+   return {error:'Driver questions require an active race strategy seat.'} as const;
+  }
+  if((team==='a'?this.strategyWebhook:this.guestStrategyWebhook)==='waiting'){
+   return {error:'The strategist is disconnected. Send your question when team radio reconnects.'} as const;
+  }
+  const pending=events.getDriverConsultation();
+  if(pending&&!(source==='driver'&&pending.event.driverQuestion.source==='automatic')){
+   return {error:'The driver already has a question awaiting a reply.'} as const;
+  }
+  const observation=observeStrategy(this.race,team,[...this.gapHistory[team]]);
+  // The transcript is public. The webhook's event ID authorizes an answer.
+  const consultationId=crypto.randomUUID();
+  const question=events.offerDriverQuestion(this.id,{text,source},consultationId,observation);
+  this.driverQuestionOffered.add(team);
+  this.consultRadio(team,consultationId,'question',text);
+  events.publishDriverQuestion();
+  return {team,event_id:question.event_id,line:text} as const;
+ }
+
+ askDriverQuestion(team:Team,text:string):DriverQuestionOffer{
+  const line=typeof text==='string'?text.trim():'';
+  if(line.length===0||line.length>DRIVER_RADIO_TEXT_LIMIT){
+   return {error:`Enter a question between 1 and ${DRIVER_RADIO_TEXT_LIMIT} characters.`} as const;
+  }
+  return this.offerDriverQuestion(team,line,'driver');
+ }
+
+ private currentDriverConsultation(eventId:string,team?:Team){
+  if(!this.isConsultRaceActive())return undefined;
+  for(const seat of team?[team]:TEAMS){
+   const consultation=this.strategyFor(seat)?.getDriverConsultation();
+   if(consultation?.event.event_id===eventId&&this.race.cars[seat].finishTime===null)return consultation;
+  }
+  return undefined;
+ }
+
+ readDriverQuestion(eventId:string,team?:Team){
+  const consultation=this.currentDriverConsultation(eventId,team);
+  return consultation?structuredClone(consultation.event):undefined;
+ }
+
+ answerDriver(input:DriverAnswerInput){
+  if(input.room!==this.id)return {error:'Race does not match this driver question.'} as const;
+  const consultation=this.currentDriverConsultation(input.event_id,input.team);
+  if(!consultation)return {error:'This driver question is no longer active or has already been answered.'} as const;
+  const {event,consultationId}=consultation;
+  const events=this.strategyFor(event.team)!;
+  if(input.reply===undefined){
+   events.clearDriverQuestion();
+   return {team:event.team,sent:false} as const;
+  }
+  const line=typeof input.reply==='string'?input.reply.trim():'';
+  if(line.length===0||line.length>DRIVER_RADIO_TEXT_LIMIT){
+   return {error:`Enter a reply between 1 and ${DRIVER_RADIO_TEXT_LIMIT} characters.`} as const;
+  }
+  events.clearDriverQuestion();
+  this.consultRadio(event.team,consultationId,'answer',line,Math.max(0,Date.now()-event.issuedAt));
+  return {team:event.team,line} as const;
+ }
+
+ private updateDriverQuestion(team:Team){
+  const car=this.race.cars[team];
+  if(!this.strategyFor(team)||this.driverQuestionOffered.has(team)||this.driverMode[team]==='human'||car.lap<1
+   ||car.pit!=='none'||car.finishTime!==null)return;
+  const control=this.race.control;
+  const question=control?.safetyCar
+   ? 'How much pace should I leave in reserve while we follow the safety car?'
+   : (control?.wetness??0)>=.25
+     ? 'The track is getting wet. What should I watch for before we switch tyres?'
+     : `How are the ${car.compound} tyres holding up? Should I manage them or keep this pace?`;
+  this.offerDriverQuestion(team,question,'automatic');
+ }
+
  readStrategyEvent(eventId:string){
   const event=this.currentStrategyEvent(this.strategyEvents,eventId)?.event??this.currentStrategyEvent(this.guestStrategyEvents,eventId)?.event;
   if(event&&this.loggedTelemetryReads[event.team]!==eventId){
@@ -365,6 +464,8 @@ export class RaceRoom {
  readLiveStrategyEvent(eventId?:string,team?:Team):LiveStrategyRead|null{
   if(this.live!=='running'||this.race.phase!=='racing')return null;
   if(eventId){
+   const question=this.readDriverQuestion(eventId,team);
+   if(question)return question;
    const exact=this.readStrategyEvent(eventId);
    if(exact)return exact;
   }
@@ -617,7 +718,10 @@ export class RaceRoom {
     }
     this.expireStrategyEvent(this.strategyEvents);
     this.expireStrategyEvent(this.guestStrategyEvents);
-    for(const team of TEAMS)this.updateStrategy(team);
+    for(const team of TEAMS){
+     this.updateStrategy(team);
+     this.updateDriverQuestion(team);
+    }
    }
    if(this.race.phase==='racing'&&this.race.tick%8===0){this.history.push(this.replayFrame());if(this.history.length>120)this.history.shift();}
    if(this.race.phase==='racing'&&this.race.cars.a.finishTime===null&&this.race.cars.b.finishTime===null&&oldLeader!==this.race.leader&&this.race.cars.a.pit==='none'&&this.race.cars.b.pit==='none'){const score=100-Math.abs(this.race.cars.a.distance-this.race.cars.b.distance);if(score>this.bestReplayScore){this.bestReplayScore=score;this.replay=this.history.slice();this.captureUntil=this.race.time+3;}}
@@ -647,6 +751,12 @@ export class RaceRoom {
   }
   if(this.live){
    if(this.strategyPractice&&this.live==='running'){
+    if(msg.type==='strategy-question'){
+     if(!p.team||p.role!=='driver'){p.send({type:'error',code:'strategy-question',message:'A driver seat is required to ask a strategy question.'});return;}
+     const result=this.askDriverQuestion(p.team,msg.text);
+     if(result.error)p.send({type:'error',code:'strategy-question',message:result.error});
+     return;
+    }
     if(msg.type==='start'&&msg.startKey&&msg.startKey===this.strategyDriverKeys?.a&&this.strategyWebhook==='connected'){
      this.start();
      return;

@@ -303,7 +303,9 @@ async function showLive(invite:LiveInvitation,phase:LivePhase='running',strategy
    view=mountDrive(driverRoom,{team:strategySeat,embedded:true,canStart,startReady,onStart,autostart:pendingAutoStart});
   }else{
    if(disposed||seq!==mountSequence)return;
-   view=mountRace(hosted,{team:null,controller:false,openLink,telemetry,strategySeat,canStart,startReady,onStart});
+   const radioSeat=nextKey?strategySeat:undefined;
+   const broadcastRoom=radioSeat&&nextKey?{...hosted,token:nextKey}:hosted;
+   view=mountRace(broadcastRoom,{team:null,controller:false,openLink,telemetry,strategySeat:radioSeat,canStart,startReady,onStart});
   }
  }
  setMenuOpen(!settings?.collapseMenu);

@@ -1,7 +1,7 @@
 import {playerEntry} from './grid';
 import type {RadioSpeech} from './race-audio';
 import {createRadioWave} from './radio-wave';
-import {PERSONAS,type ChatStrategyRadio,type Radio} from './types';
+import {PERSONAS,type ChatStrategyRadio,type DriverConsultRadio,type Radio} from './types';
 
 type Transmission=Radio&Partial<ChatStrategyRadio>;
 type Speak=(message:string,speech:RadioSpeech)=>(()=>void)|undefined;
@@ -100,10 +100,14 @@ function followCaption(captions:HTMLElement,element:HTMLElement){
 export function radioOverlay(card:HTMLElement,announcement:HTMLElement,speak:Speak){
  let currentId='';
  let cancel=()=>{};
+ const queue:DriverConsultRadio[]=[];
+ let lastConsultationId=0;
+ let playingConsultation=false;
+ let latestOrder:Transmission|undefined;
  card.style.setProperty('--radio-entry',`${entryMs}ms`);
  card.style.setProperty('--radio-exit',`${exitMs}ms`);
 
- function show(order:Transmission|undefined){
+ function display(order:Transmission|undefined,onDone?:()=>void){
   const id=order?`${order.team}:${order.id}`:'';
   if(id===currentId)return;
   currentId=id;
@@ -115,6 +119,7 @@ export function radioOverlay(card:HTMLElement,announcement:HTMLElement,speak:Spe
   const driver=playerEntry(order.team),surname=driver.name.split(' ').at(-1);
   const message=clean(order.submittedText??order.text);
   const raceControl=order.submittedText?`Race control · ${order.text}`:'';
+  const speaker=order.consultation==='question'?'Driver':order.consultation==='answer'?'ChatGPT strategist':'';
   card.style.setProperty('--radio-team-colour',PERSONAS[order.team].colour);
   card.dataset.team=order.team;
   card.innerHTML=`<article class="radio-transmission">
@@ -122,6 +127,7 @@ export function radioOverlay(card:HTMLElement,announcement:HTMLElement,speak:Spe
    <h2>${surname}</h2><b class="radio-label">Radio</b>
    <b class="radio-number">${driver.number}</b><span class="radio-team" role="img" aria-label="${driver.team}"></span></header>
    <div class="radio-captions" aria-hidden="true">
+    ${speaker?`<b class="radio-speaker">${speaker}</b>`:''}
     <p class="radio-transcript" hidden></p>
     <small class="radio-race-control" hidden></small>
    </div>
@@ -137,16 +143,35 @@ export function radioOverlay(card:HTMLElement,announcement:HTMLElement,speak:Spe
   // Sound and muted playback share the same waveform clock.
   waveform.open();
   const lap=order.lap===undefined?'':` Lap ${order.lap}.`;
-  announcement.textContent=`${driver.name}, car ${driver.number}.${lap} ${message}${raceControl?` ${raceControl}`:''}`;
+  announcement.textContent=`${driver.name}, car ${driver.number}.${lap} ${speaker?`${speaker}. `:''}${message}${raceControl?` ${raceControl}`:''}`;
   const stopLine=playLine(transcript,message,reducedMotion,speak,waveform.speech,captions,()=>{
    note.hidden=!raceControl;
    if(raceControl&&!reducedMotion)followCaption(captions,note);
    phaseTimer=window.setTimeout(()=>{
     card.classList.add('radio-leaving');
-    phaseTimer=window.setTimeout(()=>{card.hidden=true;stopLine();waveform.close();},exitMs);
+    phaseTimer=window.setTimeout(()=>{card.hidden=true;stopLine();waveform.close();onDone?.();},exitMs);
    },holdMs);
   });
   cancel=()=>{clearTimeout(phaseTimer);stopLine();waveform.close();};
+ }
+
+ function nextConsultation(){
+  const line=queue.shift();
+  playingConsultation=Boolean(line);
+  if(line)display(line,nextConsultation);
+  else if(latestOrder&&latestOrder.id>lastConsultationId)display(latestOrder);
+ }
+
+ function show(order:Transmission|undefined,consultations:readonly DriverConsultRadio[]=[]){
+  latestOrder=order;
+  for(const line of consultations){
+   if(line.id<=lastConsultationId)continue;
+   queue.push(line);
+   lastConsultationId=line.id;
+  }
+  if(playingConsultation)return;
+  if(queue.length)nextConsultation();
+  else if(!order||order.id>lastConsultationId)display(order);
  }
 
  return {show,dispose:()=>cancel()};

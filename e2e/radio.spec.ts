@@ -1,6 +1,6 @@
 import {expect,test,type APIRequestContext,type Page} from '@playwright/test';
 import sharp from 'sharp';
-import type {ChatStrategyRadio,RaceState} from '../src/race/types';
+import type {ChatStrategyRadio,ClientMessage,DriverConsultRadio,RaceState} from '../src/race/types';
 
 async function raceFeed(page:Page,request:APIRequestContext){
  const {room}=await request.get('/api/default').then(response=>response.json());
@@ -21,15 +21,107 @@ async function raceFeed(page:Page,request:APIRequestContext){
  });
  await page.goto('/?spectate&view=telemetry');
  await page.waitForFunction(()=>Boolean((window as Window&{__raceState?:RaceState}).__raceState));
- return (order?:ChatStrategyRadio)=>{
+ return (order?:ChatStrategyRadio,consultations?:DriverConsultRadio[])=>{
   if(order)(state.latestChatRadio??={})[order.team]=order;
+  if(consultations)state.driverConsultRadio={a:consultations};
   send();
  };
 }
 
 const order=(id:number,team:'a'|'b',text:string):ChatStrategyRadio=>
  ({id,team,text,time:0,speaker:'ENGINEER',source:'live',strategist:'chatgpt',responseMs:1,lap:1});
+const consultation=(id:number,kind:DriverConsultRadio['consultation'],text:string):DriverConsultRadio=>({
+ id,team:'a',text,time:0,speaker:kind==='question'?'DRIVER':'ENGINEER',source:'live',responseMs:0,
+ consultation:kind,consultationId:'consultation-1',...(kind==='answer'?{strategist:'chatgpt'}:{}),
+});
 const visibleWords='.radio-word:has(.radio-character-visible)';
+
+test('live driver can send a question and read a fast reply in team radio',async({page,request})=>{
+ const {room}=await request.get('/api/default').then(response=>response.json());
+ const state:RaceState=await request.get(`/api/rooms/${room}/status`).then(response=>response.json());
+ Object.assign(state,{live:'running',strategyPractice:true,chatStrategy:{state:'applied',team:'a'},
+  connected:{a:true,b:true},driverMode:{a:'human',b:'autopilot'}});
+ state.race.phase='lobby';
+ const questions:string[]=[];
+ const messages:ClientMessage[]=[];
+ let send=()=>{};
+ await page.routeWebSocket('**/api/rooms/*/ws',socket=>{
+  socket.onMessage(raw=>{
+   const message=JSON.parse(String(raw)) as ClientMessage;
+   messages.push(message);
+   if(message.type==='join'){
+    socket.send(JSON.stringify({type:'joined',team:message.team,role:message.role,canReset:false}));
+    send=()=>socket.send(JSON.stringify(state));
+    send();
+   }
+   if(message.type==='strategy-question'){
+    questions.push(message.text);
+    if(questions.length===1){
+     state.driverConsultRadio={a:[consultation(20,'question',message.text),consultation(21,'answer','Your tyres can finish the race.')]};
+     send();
+    }else{
+     socket.send(JSON.stringify({type:'error',code:'strategy-question',message:'A question is already awaiting a reply.'}));
+    }
+   }
+  });
+ });
+ await page.goto(`/?drive&live=${room}&team=a#token=${'c'.repeat(64)}`);
+ const radio=page.getByRole('region',{name:'Team radio'});
+ const question=page.getByRole('textbox',{name:'Ask the strategist'});
+ await expect(page.locator('body')).toHaveAttribute('data-phase','lobby');
+ await expect(question).toBeHidden();
+ state.race.phase='racing';
+ send();
+ await expect(question).toBeVisible();
+ await expect(question).toHaveAttribute('maxlength','180');
+ const submit=radio.getByRole('button',{name:'Send',exact:true});
+ await expect(submit).toBeDisabled();
+ await question.fill('   ');
+ await expect(submit).toBeDisabled();
+ await question.pressSequentially('What grip can I expect?');
+ await question.press('Enter');
+ const log=radio.getByRole('log');
+ await expect(log.locator('.drive-team-radio-message')).toHaveText([
+  'DriverWhat grip can I expect?','ChatGPT strategistYour tyres can finish the race.',
+ ]);
+ await expect(question).toHaveValue('');
+ await expect(question).not.toBeFocused();
+ expect(questions).toEqual(['What grip can I expect?']);
+ expect(messages.filter(message=>message.type==='driver-mode'||message.type==='radio')).toEqual([]);
+
+ await question.fill('Is the pit lane clear?');
+ await submit.click();
+ await expect(radio.getByRole('status')).toHaveText('A question is already awaiting a reply.');
+ await expect(question).toHaveValue('Is the pit lane clear?');
+ await expect(submit).toBeEnabled();
+ state.race.cars.a.finishTime=65;
+ send();
+ await expect(question).toBeHidden();
+ await expect(log.locator('.drive-team-radio-message')).toHaveCount(2);
+});
+
+test('the broadcast delivers a driver question before a reply received in the same snapshot',async({page,request})=>{
+ const send=await raceFeed(page,request);
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.clock.install();
+ await page.clock.pauseAt(new Date(Date.now()+1000));
+ const question=consultation(20,'question','How are my tyres?');
+ const answer=consultation(21,'answer','You can stay out for another lap.');
+ const radio=page.getByRole('region',{name:'ChatGPT radio'});
+ const announcement=page.locator('#radio-announcement');
+ send(undefined,[question,answer]);
+ await expect(radio.getByText('Driver',{exact:true})).toBeVisible();
+ await expect(radio.locator('.radio-transcript')).toHaveText(`"${question.text}"`);
+ await expect(announcement).toContainText(`Driver. ${question.text}`);
+ await page.clock.runFor(4_500);
+ await expect(radio.getByText('ChatGPT strategist',{exact:true})).toBeVisible();
+ await expect(radio.locator('.radio-transcript')).toHaveText(`"${answer.text}"`);
+ await expect(announcement).toContainText(`ChatGPT strategist. ${answer.text}`);
+ await page.clock.runFor(4_500);
+ send();
+ await expect(radio).toBeHidden();
+ await expect(page.getByRole('textbox',{name:'Ask the strategist'})).toHaveCount(0);
+});
 
 const waveform=(page:Page)=>page.locator('.radio-wave').evaluate(element=>{
  const canvas=element as HTMLCanvasElement;

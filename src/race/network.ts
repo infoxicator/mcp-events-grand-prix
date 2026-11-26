@@ -23,7 +23,7 @@ export interface ConnectOptions{
  reconnectMaxMs?:number;
  maxReconnectAttempts?:number;
 }
-export interface Connection{onSnapshot?:(s:RaceState,received:number)=>void;onAudioLost?:()=>void;onEventLog?:(log:RaceLogUpdate)=>void;subscribeEventLog:(subscribe:boolean)=>void;claimAudio:()=>Promise<boolean>;releaseAudio:()=>void;state:RaceState|null;team:Team|null;role?:PeerRole;canReset:boolean;status:string;latency:number;received:number;onReplay:(frames:Race[])=>void;send:(msg:ClientMessage)=>void;close:()=>void;}
+export interface Connection{onSnapshot?:(s:RaceState,received:number)=>void;onAudioLost?:()=>void;onEventLog?:(log:RaceLogUpdate)=>void;onQuestionError?:(message:string)=>void;subscribeEventLog:(subscribe:boolean)=>void;claimAudio:()=>Promise<boolean>;releaseAudio:()=>void;state:RaceState|null;team:Team|null;role?:PeerRole;canReset:boolean;status:string;latency:number;received:number;onReplay:(frames:Race[])=>void;send:(msg:ClientMessage)=>void;close:()=>void;}
 
 function isHidden(){
  return typeof document !== 'undefined' && (document.hidden || document.documentElement?.dataset?.mcpHidden === 'true');
@@ -234,6 +234,7 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
    if(m.type==='replay')c.onReplay(m.frames);
    if(m.type==='event-log'&&eventLog)c.onEventLog?.(m);
    if(m.type==='error'){
+    if(m.code==='strategy-question'){c.onQuestionError?.(m.message);return;}
     c.status=m.message;
     if(m.message.toLowerCase().includes('expired'))stopPermanently('RACE EXPIRED');
    }

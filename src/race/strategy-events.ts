@@ -4,8 +4,13 @@ import type {Compound} from './types';
 export const STRATEGY_EVENT='grand_prix.strategy_required';
 export const STRATEGY_RESPONSE_MS=20_000;
 export const WEBHOOK_STRATEGY_RESPONSE_MS=120_000;
+export const DRIVER_RADIO_TEXT_LIMIT=180;
 export type LiveStrategist='provider'|'chatgpt';
 export type StrategyWebhookStatus='waiting'|'connected'|'delivered'|'failed';
+export interface DriverQuestion {
+ text:string;
+ source:'automatic'|'driver';
+}
 
 export interface StrategyEventNotice {
  room:string;
@@ -13,6 +18,7 @@ export interface StrategyEventNotice {
  lap:number;
  reasons:string[];
  expiresAt:number;
+ driverQuestion?:DriverQuestion;
  summary:{
   speedKph:number;position:number;lapsRemaining:number;
   compound:Compound;tyreWear:number;availableSets:Record<Compound,number>;

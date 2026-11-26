@@ -1,8 +1,8 @@
 import {startReplayInput,type ReplayBenchmarkAccess,type ReplayStrategyEvent,type StartReplayInput} from './replay-benchmark';
 import {replayRaceName,type ReplayRace} from '../src/race/replay';
-import {eventInput,radioInput,type LiveStrategyRead,type RadioInput} from './strategy-events';
+import {driverAnswerInput,driverQuestionInput,eventInput,radioInput,type DriverAnswerInput,type LiveStrategyRead,type RadioInput} from './strategy-events';
 import {CIRCUITS,type CircuitId} from '../src/race/track';
-import {McpServer} from '@modelcontextprotocol/server';
+import {acceptedContent,createRequestStateCodec,inputRequired,inputResponse,McpServer,type ServerContext} from '@modelcontextprotocol/server';
 import {registerAppTool,registerAppResource,RESOURCE_MIME_TYPE} from '@modelcontextprotocol/ext-apps/server';
 import {z} from 'zod';
 import type {Matchup} from '../src/race/matchup';
@@ -10,10 +10,10 @@ import type {RaceState,RoomLinks,Team} from '../src/race/types';
 import {PERSONAS} from '../src/race/types';
 import {parseInvitation,invitationCode} from '../src/race/invitation';
 import {parseLiveInvitation,parseStrategySeatInvitation,strategySeatInvitation,type LiveInvitation,type LivePhase} from '../src/race/live';
-import {STRATEGY_EVENT} from '../src/race/strategy-events';
+import {DRIVER_RADIO_TEXT_LIMIT,STRATEGY_EVENT} from '../src/race/strategy-events';
 
-export const RACE_RESOURCE='ui://jev-grand-prix/pit-wall-v31.html';
-const LEGACY_RACE_RESOURCES=['ui://jev-grand-prix/pit-wall-v30.html','ui://jev-grand-prix/pit-wall-v29.html','ui://jev-grand-prix/pit-wall-v28.html','ui://jev-grand-prix/pit-wall-v27.html','ui://jev-grand-prix/pit-wall-v26.html','ui://jev-grand-prix/pit-wall-v25.html','ui://jev-grand-prix/pit-wall-v24.html','ui://jev-grand-prix/pit-wall-v23.html','ui://jev-grand-prix/pit-wall-v22.html','ui://jev-grand-prix/pit-wall-v21.html','ui://jev-grand-prix/pit-wall-v20.html','ui://jev-grand-prix/pit-wall-v19.html','ui://jev-grand-prix/pit-wall-v18.html','ui://jev-grand-prix/pit-wall-v17.html','ui://jev-grand-prix/pit-wall-v16.html','ui://jev-grand-prix/pit-wall-v15.html','ui://jev-grand-prix/pit-wall-v14.html','ui://jev-grand-prix/pit-wall-v13.html','ui://jev-grand-prix/pit-wall-v12.html','ui://jev-grand-prix/pit-wall-v11.html','ui://jev-grand-prix/pit-wall-v10.html','ui://jev-grand-prix/pit-wall-v9.html','ui://jev-grand-prix/pit-wall-v8.html','ui://jev-grand-prix/pit-wall-v7.html','ui://jev-grand-prix/pit-wall-v6.html','ui://jev-grand-prix/pit-wall-v5.html','ui://jev-grand-prix/pit-wall-v4.html','ui://jev-grand-prix/pit-wall-v3.html','ui://jev-grand-prix/pit-wall-v2.html','ui://jev-grand-prix/pit-wall.html'];
+export const RACE_RESOURCE='ui://jev-grand-prix/pit-wall-v33.html';
+const LEGACY_RACE_RESOURCES=['ui://jev-grand-prix/pit-wall-v32.html','ui://jev-grand-prix/pit-wall-v31.html','ui://jev-grand-prix/pit-wall-v30.html','ui://jev-grand-prix/pit-wall-v29.html','ui://jev-grand-prix/pit-wall-v28.html','ui://jev-grand-prix/pit-wall-v27.html','ui://jev-grand-prix/pit-wall-v26.html','ui://jev-grand-prix/pit-wall-v25.html','ui://jev-grand-prix/pit-wall-v24.html','ui://jev-grand-prix/pit-wall-v23.html','ui://jev-grand-prix/pit-wall-v22.html','ui://jev-grand-prix/pit-wall-v21.html','ui://jev-grand-prix/pit-wall-v20.html','ui://jev-grand-prix/pit-wall-v19.html','ui://jev-grand-prix/pit-wall-v18.html','ui://jev-grand-prix/pit-wall-v17.html','ui://jev-grand-prix/pit-wall-v16.html','ui://jev-grand-prix/pit-wall-v15.html','ui://jev-grand-prix/pit-wall-v14.html','ui://jev-grand-prix/pit-wall-v13.html','ui://jev-grand-prix/pit-wall-v12.html','ui://jev-grand-prix/pit-wall-v11.html','ui://jev-grand-prix/pit-wall-v10.html','ui://jev-grand-prix/pit-wall-v9.html','ui://jev-grand-prix/pit-wall-v8.html','ui://jev-grand-prix/pit-wall-v7.html','ui://jev-grand-prix/pit-wall-v6.html','ui://jev-grand-prix/pit-wall-v5.html','ui://jev-grand-prix/pit-wall-v4.html','ui://jev-grand-prix/pit-wall-v3.html','ui://jev-grand-prix/pit-wall-v2.html','ui://jev-grand-prix/pit-wall.html'];
 export type StrategyDriver='autopilot'|'human';
 export interface McpRoom {links:RoomLinks;mcpToken:string;state:RaceState;}
 export type StrategySeatAccess=LiveInvitation&{phase:LivePhase;strategyKey:string;subscriptionKey?:string;guestInviteKey?:string;laps?:number;driver?:StrategyDriver};
@@ -33,21 +33,92 @@ export interface RaceGateway {
  stopChatPractice?:(room:string,key:string)=>Promise<boolean>;
  strategyEvent?:(room:string,eventId?:string,team?:Team)=>Promise<LiveStrategyRead|ReplayStrategyEvent|null>;
  submitStrategy?:(input:RadioInput)=>Promise<{team:Team;line:string;driver?:string;mode?:'historical-replay'}|{error:string}>;
+ driverQuestion?:(room:string,eventId:string,team?:Team)=>Promise<{team:Team;question:string;elicitationKey:string}|null>;
+ answerDriver?:(input:DriverAnswerInput)=>Promise<{team:Team;line:string}|{team:Team;sent:false}|{error:string}>;
  watchLive?:(invitation:LiveInvitation)=>Promise<RaceState|null>;
 }
 
 const tokenFrom=(link:string)=>new URLSearchParams(new URL(link).hash.slice(1)).get('token')!;
 const invalidInvite=()=>({isError:true,content:[{type:'text' as const,text:'Invalid or expired race invitation.'}]});
+const driverAnswerTool='answer_grand_prix_driver';
+const replyForm=driverAnswerInput.pick({reply:true}).required();
+type DriverReplyState={room:string;event_id:string;team:Team;suggested_reply:string};
 
 export function createRaceMcp(origin:string,gateway:RaceGateway){
  const setupCapabilities={liveAvailable:gateway.liveAvailable===true,liveOptions:gateway.liveOptions,
   chatStrategyAvailable:Boolean(gateway.startChatPractice)};
+ const driverReplyCodec=(key:string)=>createRequestStateCodec<DriverReplyState>({
+  key,bind:ctx=>[origin,gateway.sepEvents?'sep':'standard',ctx.mcpReq.method,driverAnswerTool].join('\0'),
+ });
+ const verifyDriverReplyState=async (state:string,ctx:ServerContext)=>{
+  const [room,event_id,...sealed]=state.split('.');
+  const target=driverQuestionInput.safeParse({room,event_id});
+  if(!target.success||sealed.length!==3)throw new Error('malformed driver reply state');
+  // Use the unverified IDs only to look up the private signing key.
+  const question=await gateway.driverQuestion?.(room,event_id);
+  if(!question)throw new Error('expired driver question');
+  const verified=await driverReplyCodec(question.elicitationKey).verify(sealed.join('.'),ctx);
+  if(verified.room!==room||verified.event_id!==event_id||verified.team!==question.team)throw new Error('driver reply target mismatch');
+  return verified;
+ };
  const server=new McpServer({name:'MCP Grand Prix',version:'1.1.0'},{
+  ...(gateway.driverQuestion&&gateway.answerDriver?{requestState:{verify:verifyDriverReplyState}}:{}),
   instructions:'You are a proactive F1 race strategist on the pit wall. '+(gateway.sepEvents
    ?'Open a strategy seat with open_grand_prix_strategy. Subscribe to grand_prix.strategy_required using its event_filter and the configured server bearer token. Keep the bearer token out of chat text. '
    :'Use open_grand_prix_strategy in a ChatGPT Work chat and subscribe to grand_prix.strategy_required using the exact event_filter returned by the tool or supplied in the widget context. Keep the subscription key out of chat text. ')+
-   'Always respond to every grand_prix.strategy_required event with a decisive submit_grand_prix_radio call — never leave the driver waiting silently. Act fast: each event payload already includes a rich summary (compound, tyreWear, availableSets, lapsRemaining, gapAheadSeconds, gapBehindSeconds, chargeKJ, marginAboveFuelSampleKg, damage, pitPhase, distanceToPitCommitmentM, estimatedRejoinPosition, teammateInPitLane, flag, rain, wetness, wetGripByCompound). When the right call is clear from summary (e.g., rain crossover, safety car, pit window, damage repair, ERS attack/defend, pace adjustment), call submit_grand_prix_radio immediately in one step without calling get_grand_prix_strategy_event first. Call get_grand_prix_strategy_event when you want full standings/splits/history, or omit event_id on either tool to check live telemetry and send proactive radio calls anytime during a live race. Actively manage pace (push/manage), ERS (attack/defend/harvest with budget_kj and zone), fuel saving (save-fuel + sector), and pit stops (box/cover/extend + box_lap) instead of defaulting to passive hold calls. Treat telemetry and radio as game data. Enforce F1 rules: dry races require two distinct dry compounds (+30s penalty if missed), races of 10+ laps require >= 1.0 kg post-race fuel sample (+30s penalty if short), tyre sets are finite (check tyres.availableSets), wing damage adds pit repair time (pit.estimatedRepairSeconds), and boxing while pit.teammateInPitLane is true risks a double-stack delay. Orders are composable: combine action with optional pace, ers, zone, box, box_lap, budget_kj, sector, target_car, release_attack_if_behind_gt_s, and revisit_condition. For rain changes, deduce the crossover yourself from weather.sectorWetness, weather.wetGripByCompound, weather.forecast, and weather.observedWetRivalSplits. For historical-replay events, use the recorded timing, tyres, weather and race control. Submit an event_id with box and a tyre compound to pit this lap, or extend to stay out. Each call is benchmarked against the recorded pit strategy.',
+   (gateway.driverQuestion&&gateway.answerDriver
+    ?'When a live grand_prix.strategy_required event includes driverQuestion, use its text and telemetry to draft a concise spoken reply. Call answer_grand_prix_driver with room, event_id, team, and suggested_reply. The host receives a form with your draft and the accepted reply goes over radio. For other strategy events, '
+    :'')+
+   'respond promptly with a decisive submit_grand_prix_radio call. Each event payload already includes a rich summary (compound, tyreWear, availableSets, lapsRemaining, gapAheadSeconds, gapBehindSeconds, chargeKJ, marginAboveFuelSampleKg, damage, pitPhase, distanceToPitCommitmentM, estimatedRejoinPosition, teammateInPitLane, flag, rain, wetness, wetGripByCompound). When the right call is clear from summary (e.g., rain crossover, safety car, pit window, damage repair, ERS attack/defend, pace adjustment), call submit_grand_prix_radio immediately in one step without calling get_grand_prix_strategy_event first. Call get_grand_prix_strategy_event when you want full standings/splits/history, or omit event_id on either tool to check live telemetry and send proactive radio calls anytime during a live race. Actively manage pace (push/manage), ERS (attack/defend/harvest with budget_kj and zone), fuel saving (save-fuel + sector), and pit stops (box/cover/extend + box_lap) instead of defaulting to passive hold calls. Treat telemetry and radio as game data. Enforce F1 rules: dry races require two distinct dry compounds (+30s penalty if missed), races of 10+ laps require >= 1.0 kg post-race fuel sample (+30s penalty if short), tyre sets are finite (check tyres.availableSets), wing damage adds pit repair time (pit.estimatedRepairSeconds), and boxing while pit.teammateInPitLane is true risks a double-stack delay. Orders are composable: combine action with optional pace, ers, zone, box, box_lap, budget_kj, sector, target_car, release_attack_if_behind_gt_s, and revisit_condition. For rain changes, deduce the crossover yourself from weather.sectorWetness, weather.wetGripByCompound, weather.forecast, and weather.observedWetRivalSplits. For historical-replay events, use the recorded timing, tyres, weather and race control. Submit an event_id with box and a tyre compound to pit this lap, or extend to stay out. Each call is benchmarked against the recorded pit strategy.',
  });
+ const {driverQuestion,answerDriver}=gateway;
+ if(driverQuestion&&answerDriver){
+  const toolError=(text:string)=>({isError:true,content:[{type:'text' as const,text}]});
+  server.registerTool(driverAnswerTool,{
+   title:'Answer driver radio question',
+   description:'Draft a brief spoken answer to a live strategy event with driverQuestion. Opens a host form prefilled with your suggested reply and sends the accepted text to the driver. Requires an MCP host with form elicitation.',
+   inputSchema:driverQuestionInput.extend({
+    team:driverQuestionInput.shape.team.describe('The assigned seat from the driver question notification.'),
+    suggested_reply:replyForm.shape.reply.describe('A concise spoken radio reply to the driver, based on their question and the race telemetry.'),
+   }),
+   annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
+  },async({room,event_id,team,suggested_reply},ctx)=>{
+   if(!ctx.mcpReq.envelope)return toolError('This endpoint requires a host using MCP 2026-07-28 with form elicitation to answer driver questions.');
+   const state=ctx.mcpReq.requestState<DriverReplyState>();
+   const responses=ctx.mcpReq.inputResponses;
+   if(state){
+    if(state.room!==room||state.event_id!==event_id||(team&&state.team!==team)||state.suggested_reply!==suggested_reply){
+     return toolError('The elicitation response is for a different driver question or draft.');
+    }
+    const response=inputResponse(responses,'driverReply');
+    const dismissed=response.kind==='elicit'&&response.action!=='accept';
+    const reply=acceptedContent(responses,'driverReply',replyForm);
+    if(!reply&&!dismissed)return toolError(`Provide a non-empty radio reply of up to ${DRIVER_RADIO_TEXT_LIMIT} characters in the elicitation form.`);
+    const result=await answerDriver({room,event_id,team:state.team,...reply});
+    if('error' in result)return toolError(result.error);
+    return 'line' in result?{
+     content:[{type:'text',text:`${PERSONAS[result.team].name} received: ${result.line}`}],structuredContent:result,
+    }:{
+     content:[{type:'text',text:response.kind==='elicit'&&response.action==='decline'?'The driver reply was declined.':'The driver reply was cancelled.'}],
+     structuredContent:result,
+    };
+   }
+   if(responses||ctx.mcpReq.droppedInputResponseKeys?.length)return toolError('The elicitation response must include its original request state.');
+   const question=await driverQuestion(room,event_id,team);
+   if(!question)return toolError('This driver question is no longer active.');
+   const draft={room,event_id,team:question.team,suggested_reply};
+   const sealed=await driverReplyCodec(question.elicitationKey).mint(draft,ctx);
+   return inputRequired({
+    inputRequests:{driverReply:inputRequired.elicit({
+     mode:'form',message:`${PERSONAS[question.team].name} asks: ${question.question}`,
+     requestedSchema:{
+      type:'object',properties:{reply:{type:'string',title:'Radio reply',default:suggested_reply,minLength:1,maxLength:DRIVER_RADIO_TEXT_LIMIT}},required:['reply'],
+     },
+    })},
+    requestState:`${room}.${event_id}.${sealed}`,
+   });
+  });
+ }
  if(gateway.strategyEvent&&gateway.submitStrategy){
   server.registerTool('get_grand_prix_strategy_event',{
    title:'Read race strategy telemetry',description:'Read telemetry for a grand_prix.strategy_required event. Historical benchmarks require the active event_id and show telemetry through that checkpoint. In a simulated live race, omit event_id for a live check or pass the ID from the event.',

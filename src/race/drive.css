@@ -1419,6 +1419,64 @@ body.drive-active {
  line-height: 1.3;
  color: #f1f5f9;
 }
+.drive-team-radio {
+ box-sizing: border-box;
+ width: 100%;
+ padding: 8px 10px;
+ border: 1px solid var(--border);
+ border-radius: 8px;
+ background: var(--glass-strong);
+ color: #f1f5f9;
+ pointer-events: auto;
+}
+.drive-team-radio h2 {
+ margin: 0 0 5px;
+ color: #f1f5f9;
+ font: 700 11px Oxanium, sans-serif;
+ letter-spacing: .08em;
+ text-transform: uppercase;
+}
+.drive-team-radio-log {
+ max-height: 112px;
+ margin-bottom: 7px;
+ overflow: auto;
+ overscroll-behavior: contain;
+ scrollbar-width: thin;
+}
+.drive-team-radio-log:empty { margin-bottom: 0; }
+.drive-team-radio-message {
+ padding: 6px 7px;
+ border-left: 2px solid #4ade80;
+ background: #ffffff0a;
+}
+.drive-team-radio-message + .drive-team-radio-message { margin-top: 3px; }
+.drive-team-radio-message[data-speaker="DRIVER"] { border-left-color: var(--accent); }
+.drive-team-radio-message b { font-size: 11px; }
+.drive-team-radio-message p { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.drive-team-radio label { display: block; margin-bottom: 3px; color: #cbd5e1; font-size: 12px; }
+.drive-team-radio-row { display: flex; gap: 5px; }
+.drive-team-radio-row input, .drive-team-radio-row button {
+ padding: 6px 7px;
+ border: 1px solid #566475;
+ border-radius: 5px;
+ color: #f1f5f9;
+ font-family: inherit;
+ font-size: 13px;
+ font-weight: 600;
+}
+.drive-team-radio-row input { flex: 1; min-width: 0; background: #0a1018; user-select: text; }
+.drive-team-radio-row button { background: #283747; }
+.drive-team-radio-row button:disabled { opacity: .55; cursor: default; }
+.drive-team-radio-status { margin: 4px 0 0; color: #cbd5e1; font-size: 12px; }
+@media (max-width: 575px) {
+ .drive-mode[data-live="true"] .drive-radio-stack {
+  top: 104px;
+  width: calc(100% - 230px);
+ }
+}
+@media (max-width: 400px) {
+ .drive-team-radio-row { flex-direction: column; }
+}
 .drive-mode-desc {
  margin: 7px 0 0;
  font-size: 12px;

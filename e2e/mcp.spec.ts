@@ -1,6 +1,41 @@
 import {test,expect} from '@playwright/test';import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client';import {RESOURCE_MIME_TYPE,getToolUiResourceUri} from '@modelcontextprotocol/ext-apps/app-bridge';
 import type {RaceState} from '../src/race/types';
 
+test('MCP autopilot lets the driver ask the strategist from the live feed',async({page,baseURL})=>{
+ const host=new URL(baseURL!);
+ host.port=String(Number(host.port)+1);
+ await page.setViewportSize({width:420,height:840});
+ await page.route('**/mcp/assets/monza-mcp.glb-*.gz',route=>route.abort());
+ await page.goto(host.href);
+ const app=page.frameLocator('#app-frame').frameLocator('iframe');
+ await app.getByRole('button',{name:'Accept',exact:true}).click();
+ const talk=app.getByRole('button',{name:'Team radio',exact:true});
+ const field=app.getByRole('textbox',{name:'Ask the strategist'});
+ await expect(app.locator('body')).toHaveAttribute('data-phase','racing',{timeout:30_000});
+ await expect(talk).toBeVisible();
+ await expect(field).toBeHidden();
+ await talk.click();
+ await expect(field).toBeFocused();
+ const question='Where would we rejoin if we boxed now?';
+ await field.fill(question);
+ await field.press('Escape');
+ await expect(talk).toBeFocused();
+ await talk.click();
+ await expect(field).toHaveValue(question);
+ await field.press('Enter');
+ await expect(talk).toHaveAttribute('aria-expanded','false');
+ const line=app.getByRole('region',{name:'ChatGPT radio'}).locator('.radio-transcript');
+ await expect(line).toHaveText(`"${question}"`);
+ const state=await app.locator('body').evaluate(()=> (window as Window&{__raceState?:RaceState}).__raceState);
+ expect(state?.driverMode?.a).toBe('autopilot');
+ expect(state?.driverConsultRadio?.a?.filter(r=>r.text===question)).toHaveLength(1);
+ await talk.click();
+ await field.fill('Is it time for inters?');
+ await app.getByRole('button',{name:'Send',exact:true}).click();
+ await expect(app.getByRole('region',{name:'Driver radio'}).getByRole('status')).toContainText('awaiting a reply');
+ await expect(field).toHaveValue('Is it time for inters?');
+});
+
 test('MCP shows a live map and waits at the grid until a delayed 3D frame is visible',async({page})=>{
  let releaseCircuit!:()=>void,releasePit!:()=>void;
  const circuit=new Promise<void>(resolve=>{releaseCircuit=resolve;});

@@ -1,4 +1,4 @@
-import {strategyEventDefinition,eventInput,radioInput,type LiveStrategyRead} from '../server/strategy-events';
+import {strategyEventDefinition,eventInput,radioInput,driverQuestionInput,driverAnswerInput,type LiveStrategyRead} from '../server/strategy-events';
 import {STRATEGY_EVENT,WEBHOOK_STRATEGY_RESPONSE_MS,type LiveStrategist,type StrategyEventNotice} from '../src/race/strategy-events';
 import {postStrategyEvent,postSepStrategyEvent,postSepTermination,subscribeInput,unsubscribeInput,verifyStrategyWebhook,webhookId,subscriptionId,type CallbackFailure,type SepStrategyWebhook,type StrategyWebhook} from './strategy-webhook';
 import {registerSepEvents,sepRequestAuthorized,sepEventHeaderError,sepEventsEnabled,SEP_AUTH_REQUIRED,SEP_EVENTS_PATH,SEP_EVENTS_PRINCIPAL,type SepEventsBindings,type SepSubscribe,type SepUnsubscribe} from './sep-events';
@@ -186,6 +186,18 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
      }));
      return result.json<{team:'a'|'b';line:string}|{error:string}>();
     },
+    driverQuestion:async(room,event_id,team)=>{
+     const result=await roomStub(env,room).fetch(new Request(`${origin}/internal-driver-question${sepQuery}`,{
+      method:'POST',headers:credentialHeaders,body:JSON.stringify({room,event_id,team}),
+     }));
+     return result.ok?result.json<{team:Team;question:string;elicitationKey:string}>():null;
+    },
+    answerDriver:async input=>{
+     const result=await roomStub(env,input.room).fetch(new Request(`${origin}/internal-driver-answer${sepQuery}`,{
+      method:'POST',headers:credentialHeaders,body:JSON.stringify(input),
+     }));
+     return result.json<{team:Team;line:string}|{team:Team;sent:false}|{error:string}>();
+    },
     watchLive:async ({room,key})=>{
      const response=await roomStub(env,room).fetch(new Request(`${origin}/internal-watch`,{method:'POST',body:key}));
      return response.ok?response.json<RaceState>():null;
@@ -286,7 +298,7 @@ interface Saved {
  speed?:number;solo?:boolean;drive?:boolean;watchMode?:boolean;driverMode?:RaceRoom['driverMode'];engineerMode?:RaceRoom['engineerMode'];matchup?:Matchup;id:string;origin:string;race:Race;tokens:RaceRoom['tokens'];mcpToken:string;expiresAt:number;
  intents:RaceState['intents'];engineerCalls:RaceState['engineerCalls'];
  live?:{phase:LivePhase;key:string;deadline:number;lobbyDeadline?:number;strategyPractice?:boolean;guestInviteKey?:string;subscriptionKey?:string;webhook?:StrategyWebhook;strategySeats?:Partial<Record<Team,SavedStrategySeat>>;
-  state:Pick<RaceState,'players'|'mode'|'paidCalls'|'driverStats'|'decisions'|'latestChatRadio'|'guestChatStrategy'>};
+  state:Pick<RaceState,'players'|'mode'|'paidCalls'|'driverStats'|'decisions'|'latestChatRadio'|'driverConsultRadio'|'guestChatStrategy'>};
 }
 
 export class GameRoom extends DurableObject<Env> {
@@ -302,7 +314,7 @@ export class GameRoom extends DurableObject<Env> {
  private strategySeats:Partial<Record<Team,StrategySeat>>={};
  private sepVerifiedUntil=0;
  private sepVerification?:Promise<SepVerificationReply>;
- private strategyDeliveries:Partial<Record<Team,string>>={};
+ private strategyDeliveries:{orders:Partial<Record<Team,string>>;questions:Partial<Record<Team,string>>}={orders:{},questions:{}};
  private guestInviteKey?:string;
  private liveDeadline=0;
  private lobbyDeadline=0;
@@ -362,6 +374,7 @@ export class GameRoom extends DurableObject<Env> {
     room.driverStats=state.driverStats;
     room.decisions=state.decisions;
     room.latestChatRadio=state.latestChatRadio;
+    room.driverConsultRadio=state.driverConsultRadio;
     this.liveDeadline=deadline;
     this.lobbyDeadline=saved.live.lobbyDeadline??0;
     if(restoreLobby)for(const team of TEAMS){
@@ -414,7 +427,7 @@ export class GameRoom extends DurableObject<Env> {
    live:room.live?{phase:room.live,key:room.viewerKey!,deadline:this.liveDeadline,lobbyDeadline:this.lobbyDeadline||undefined,strategyPractice:room.strategyPractice,guestInviteKey:this.guestInviteKey,
     strategySeats,state:{
     players:room.players,mode:room.mode,paidCalls:room.paidCalls,driverStats:room.driverStats,decisions:room.decisions,
-    latestChatRadio:room.latestChatRadio,guestChatStrategy:room.guestChatStrategy,
+    latestChatRadio:room.latestChatRadio,driverConsultRadio:room.driverConsultRadio,guestChatStrategy:room.guestChatStrategy,
    }}:undefined,
   };
   return this.ctx.storage.put('race',saved);
@@ -637,7 +650,7 @@ export class GameRoom extends DurableObject<Env> {
    events.subscribe((event,issuedAt)=>{
     const subscription=strategyWebhook(seat);
     if(subscription&&subscription.expiresAt>Date.now()){
-     this.strategyDeliveries[team]=event.event_id;
+     this.strategyDeliveries[event.driverQuestion?'questions':'orders'][team]=event.event_id;
      this.setWebhookStatus(team,'connected');
      this.ctx.waitUntil(seat.sepWebhook===subscription
       ?this.deliverSepStrategy(team,seat,subscription,event,issuedAt)
@@ -652,7 +665,7 @@ export class GameRoom extends DurableObject<Env> {
   const signal=seat.webhookAbort!.signal;
   const delivered=await postSepStrategyEvent(this.outboundSep,subscription,event,issuedAt,signal);
   const room=this.room!;
-  if(signal.aborted||seat.sepWebhook!==subscription||room.live!=='running'||this.strategyDeliveries[team]!==event.event_id)return;
+  if(signal.aborted||seat.sepWebhook!==subscription||room.live!=='running'||this.strategyDeliveries[event.driverQuestion?'questions':'orders'][team]!==event.event_id)return;
   this.setWebhookStatus(team,delivered?'delivered':'failed');
   room.logStrategyDelivery(event,delivered);
   room.broadcast();
@@ -661,7 +674,7 @@ export class GameRoom extends DurableObject<Env> {
  private async deliverStrategy(team:Team,seat:StrategySeat,subscription:StrategyWebhook,event:StrategyEventNotice&{event_id:string}){
   const room=this.room!,signal=seat.webhookAbort!.signal;
   const status=await postStrategyEvent(this.outbound.bind(this),subscription,event,signal);
-  if(signal.aborted||seat.webhook!==subscription||room.live!=='running'||this.strategyDeliveries[team]!==event.event_id)return;
+  if(signal.aborted||seat.webhook!==subscription||room.live!=='running'||this.strategyDeliveries[event.driverQuestion?'questions':'orders'][team]!==event.event_id)return;
   this.setWebhookStatus(team,status==='delivered'?'delivered':'failed');
   room.logStrategyDelivery(event,status==='delivered');
   if(status==='delivered'){
@@ -748,7 +761,8 @@ export class GameRoom extends DurableObject<Env> {
   if(!sepRequestAuthorized(req,this.env)||(input.team&&!this.strategySeats[input.team]?.sep))return null;
   const eventId=input.event_id;
   if(!eventId)return input;
-  const team=TEAMS.find(team=>this.strategySeats[team]?.sep&&this.room?.strategyFor(team)?.has(eventId));
+  const team=TEAMS.find(team=>this.strategySeats[team]?.sep&&
+   (this.room?.strategyFor(team)?.has(eventId)||this.room?.readDriverQuestion(eventId,team)));
   if(!team||(input.team&&input.team!==team))return null;
   return {...input,team};
  }
@@ -946,6 +960,21 @@ export class GameRoom extends DurableObject<Env> {
     const input=parsed.success&&parsed.data.room===current.id?this.scopeStrategyInput(req,url,parsed.data):null;
     const event=input?current.readLiveStrategyEvent(input.event_id,input.team):null;
     return event?json(event):json({error:'This race is no longer active.'},410);
+   }
+   if(path==='/internal-driver-question'&&req.method==='POST'){
+    const parsed=driverQuestionInput.safeParse(await req.json());
+    const input=parsed.success&&parsed.data.room===current.id?this.scopeStrategyInput(req,url,parsed.data):null;
+    const event=input&&current.readDriverQuestion(input.event_id,input.team);
+    return event?json({team:event.team,question:event.driverQuestion.text,elicitationKey:current.elicitationKey})
+     :json({error:'This driver question is no longer available.'},410);
+   }
+   if(path==='/internal-driver-answer'&&req.method==='POST'){
+    const parsed=driverAnswerInput.safeParse(await req.json());
+    const input=parsed.success&&parsed.data.room===current.id?this.scopeStrategyInput(req,url,parsed.data):null;
+    if(!input)return json({error:'This driver question is unavailable for this seat.'},403);
+    const result=current.answerDriver(input);
+    if(result.team){this.lastStrategyRadioAt=Date.now();this.consecutiveWebhookFailures[result.team]=0;await this.save();}
+    return json(result);
    }
    if(path==='/internal-strategy-radio'&&req.method==='POST'){
     const parsed=radioInput.safeParse(await req.json());

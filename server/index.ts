@@ -6,13 +6,15 @@ import {ReplayBenchmark,isReplayAuthorization,type ReplayStrategyEvent,type Star
 import {isArchiveReplay,replayCatalog,type ReplayRace,type ReplayTiming} from '../src/race/replay';
 import {archivedTiming,archiveRequest,serveArchive} from './replay-archive';
 import {strategyEventDefinition} from './strategy-events';
-import {subscribeInput,unsubscribeInput} from '../worker/strategy-webhook';
+import {postStrategyEvent,subscribeInput,unsubscribeInput,verifyStrategyWebhook,webhookId,type StrategyWebhook} from '../worker/strategy-webhook';
+import {WEBHOOK_STRATEGY_RESPONSE_MS} from '../src/race/strategy-events';
 import {readFile} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {performance} from 'node:perf_hooks';
 import {config as loadEnv} from 'dotenv';
 import {WebSocketServer,WebSocket} from 'ws';
-import {NodeStreamableHTTPServerTransport} from '@modelcontextprotocol/node';
+import {NodeStreamableHTTPServerTransport,toNodeHandler,toWebRequest} from '@modelcontextprotocol/node';
+import {createMcpHandler,isLegacyRequest} from '@modelcontextprotocol/server';
 import {isMatchup,type Matchup} from '../src/race/matchup';
 import {RaceRoom} from './race-room';
 import {createRaceMcp,type RaceGateway,type StrategyDriver} from './race-mcp';
@@ -23,8 +25,57 @@ const port=Number(process.env.PORT??5277),origin=`http://127.0.0.1:${port}`,spee
 const initialMatchup=process.env.RACE_MATCHUP??'jev-vs-jev';if(!isMatchup(initialMatchup))throw new Error('RACE_MATCHUP must be jev-vs-jev or jev-vs-luna');
 const initialCircuit=process.env.RACE_CIRCUIT??'monza';if(!isCircuit(initialCircuit))throw new Error('RACE_CIRCUIT must be monza or las-vegas');
 const rooms=new Map<string,RaceRoom>();
-type LocalStrategyRoom={room:RaceRoom;guestInviteKey:string;seats:Partial<Record<'a'|'b',{key:string;subscriptionKey:string}>>};
+type LocalSeat={key:string;subscriptionKey:string;subscription?:StrategyWebhook;disconnect?:()=>void;verification?:symbol};
+type LocalStrategyRoom={room:RaceRoom;guestInviteKey:string;seats:Partial<Record<'a'|'b',LocalSeat>>};
 const strategyRooms=new Map<string,LocalStrategyRoom>();
+async function changeLiveSubscription(input:ReturnType<typeof subscribeInput.parse>|ReturnType<typeof unsubscribeInput.parse>){
+ const entry=strategyRooms.get(input.arguments.room);
+ const team=(['a','b'] as const).find(team=>entry?.seats[team]?.subscriptionKey===input.arguments.subscription_key);
+ const seat=team&&entry?.seats[team];
+ if(!entry||!team||!seat||entry.room.live!=='running'||entry.room.expiresAt<=Date.now())return {error:{code:-32024,message:'This strategy seat is invalid or expired.'}};
+ const room=entry.room;
+ const url=input.delivery.url;
+ const statusKey=team==='a'?'strategyWebhook':'guestStrategyWebhook';
+ if(!('secret' in input.delivery)){
+  if(seat.subscription?.url===url){
+   seat.disconnect?.();
+   delete seat.subscription;
+   room[statusKey]='waiting';
+   room.broadcast();
+  }
+  delete seat.verification;
+  return {result:{}};
+ }
+ const ttlMs='ttlMs' in input?input.ttlMs:undefined;
+ const expiresAt=Math.min(room.expiresAt,Date.now()+(ttlMs??strategyTimeBudgetMs(room.race.laps)));
+ const current=seat.subscription;
+ const active=current&&current.expiresAt>Date.now();
+ if(seat.verification||(active&&current.url!==url))return {error:{code:-32025,message:'This seat already has a subscription.'}};
+ if(active&&current.secret===input.delivery.secret)current.expiresAt=expiresAt;
+ else{
+  const verifying=seat.verification=Symbol();
+  try{
+   const subscription={id:await webhookId(room.id,url,team),url,secret:input.delivery.secret,expiresAt};
+   if(await verifyStrategyWebhook(fetch,subscription))return {error:{code:-32015,message:'The callback endpoint did not verify.'}};
+   if(seat.verification!==verifying||room.live!=='running'||Date.now()>=expiresAt)return {error:{code:-32024,message:'This subscription has ended.'}};
+   seat.disconnect?.();
+   seat.subscription=subscription;
+   const abort=new AbortController();
+   const stop=room.strategyFor(team)!.subscribe(event=>{
+    void postStrategyEvent(fetch,subscription,event,abort.signal).then(status=>{
+     if(abort.signal.aborted||room.live!=='running')return;
+     room[statusKey]=status==='delivered'?'delivered':'failed';
+     room.logStrategyDelivery(event,status==='delivered');
+     room.broadcast();
+    });
+   });
+   seat.disconnect=()=>{stop();abort.abort();};
+   room[statusKey]='connected';
+   room.broadcast();
+  }finally{if(seat.verification===verifying)delete seat.verification;}
+ }
+ return {result:{id:seat.subscription!.id,refreshBefore:new Date(expiresAt).toISOString(),cursor:null,truncated:false}};
+}
 function create(mock=false,matchup:Matchup=initialMatchup as Matchup,circuit:CircuitId=initialCircuit as CircuitId,clock=speed,solo=false,laps=3,drive=false,watchMode=false){const r=new RaceRoom(crypto.randomUUID(),origin,mock?{JEV_MOCK:'1'}:process.env,clock,solo?'jev-vs-jev':matchup,{},circuit,solo,laps,drive,watchMode);rooms.set(r.id,r);return r;}
 const defaultRoom=create();
 const data=(r:RaceRoom)=>({links:r.links(),mcpToken:r.mcpToken,state:r.state()});
@@ -71,7 +122,7 @@ const gateway:RaceGateway={
   r.viewerKey=newLiveKey();
   r.driverMode={a:driver,b:'autopilot'};
   r.strategyDriverKeys={a:seatA.key};
-  r.enableChatStrategy(undefined,'a');
+  r.enableChatStrategy(WEBHOOK_STRATEGY_RESPONSE_MS,'a');
   r.strategyWebhook='connected';
   r.expiresAt=Date.now()+strategyTimeBudgetMs(laps);
   rooms.set(id,r);
@@ -93,7 +144,7 @@ const gateway:RaceGateway={
   if(!entry||entry.room.expiresAt<=Date.now()||entry.room.live!=='running'||entry.guestInviteKey!==invite.key)return null;
   const r=entry.room;
   entry.seats.b??={key:newLiveKey(),subscriptionKey:newLiveKey()};
-  r.enableChatStrategy(undefined,'b');
+  r.enableChatStrategy(WEBHOOK_STRATEGY_RESPONSE_MS,'b');
   r.guestStrategyWebhook='connected';
   r.driverMode.b=driver;
   r.strategyDriverKeys={...r.strategyDriverKeys,b:entry.seats.b.key};
@@ -103,6 +154,7 @@ const gateway:RaceGateway={
  stopChatPractice:async (room,key)=>{
   const entry=strategyRooms.get(room);
   if(!entry||entry.seats.a?.key!==key)return false;
+  for(const seat of Object.values(entry.seats))seat.disconnect?.();
   entry.room.finishLive('stopped');
   return true;
  },
@@ -119,15 +171,37 @@ const gateway:RaceGateway={
   if(!r||!r.live||r.expiresAt<=Date.now())return {error:'Race not found or expired.'};
   return r.submitStrategyEvent(input);
  },
+ driverQuestion:async (room,eventId,team)=>{
+  const r=rooms.get(room);
+  const event=r&&r.expiresAt>Date.now()?r.readDriverQuestion(eventId,team):undefined;
+  return r&&event?{team:event.team,question:event.driverQuestion.text,elicitationKey:r.elicitationKey}:null;
+ },
+ answerDriver:async input=>{
+  const r=rooms.get(input.room);
+  return r&&r.expiresAt>Date.now()?r.answerDriver(input):{error:'Race not found or expired.'};
+ },
  html:()=>readFile(resolve('dist/mcp/mcp-app.html'),'utf8'),
 };
+const modernMcp=createMcpHandler(()=>createRaceMcp(origin,gateway),{legacy:'reject'});
+const handleModernMcp=toNodeHandler({
+ async fetch(request,options){
+  const response=await modernMcp.fetch(request,options);
+  const body=options?.parsedBody as {method?:string}|undefined;
+  if(!response.ok||body?.method!=='server/discover')return response;
+  const discovery=await response.json() as {result?:{capabilities?:Record<string,unknown>}};
+  if(discovery.result?.capabilities)discovery.result.capabilities.events={};
+  const headers=new Headers(response.headers);
+  headers.delete('Content-Length');
+  return Response.json(discovery,{status:response.status,headers});
+ },
+});
 const vite=production?null:await(await import('vite')).createServer({server:{middlewareMode:true,hmr:{port:port+1000,host:'127.0.0.1'}},appType:'spa'});
 let benchmarkRunning=false;
 const server=createServer(async(req,res)=>{
  const url=new URL(req.url??'/',origin),path=url.pathname;const json=(v:unknown,status=200)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','Referrer-Policy':'no-referrer'});res.end(JSON.stringify(v));};
  if(path==='/mcp'){
   if(![new URL(origin).host,`localhost:${port}`].includes(req.headers.host??'')){json({error:'Invalid Host'},403);return;}
-  const o=req.headers.origin;if(o){try{const u=new URL(o);if(u.protocol!=='http:'||!['localhost','127.0.0.1'].includes(u.hostname))throw new Error();}catch{json({error:'Invalid MCP origin'},403);return;}res.setHeader('Access-Control-Allow-Origin',o);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID');res.setHeader('Access-Control-Allow-Methods','POST, GET, DELETE, OPTIONS');}
+  const o=req.headers.origin;if(o){try{const u=new URL(o);if(u.protocol!=='http:'||!['localhost','127.0.0.1'].includes(u.hostname))throw new Error();}catch{json({error:'Invalid MCP origin'},403);return;}res.setHeader('Access-Control-Allow-Origin',o);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Content-Type, MCP-Protocol-Version, MCP-Session-Id, Mcp-Method, Mcp-Name, Last-Event-ID');res.setHeader('Access-Control-Allow-Methods','POST, GET, DELETE, OPTIONS');}
   if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}
   let body;
   if(req.method==='POST'){
@@ -144,12 +218,14 @@ const server=createServer(async(req,res)=>{
     const subscribing=body.method==='events/subscribe';
     const input=(subscribing?subscribeInput:unsubscribeInput).safeParse(body.params);
     if(!input.success){
-     json({jsonrpc:'2.0',id,error:{code:-32602,message:'Use the replay event filter and a ChatGPT MCP Events webhook.'}});return;
+     json({jsonrpc:'2.0',id,error:{code:-32602,message:'Use the strategy event filter and a ChatGPT MCP Events webhook.'}});return;
     }
     const result=await replayRequest(input.data.arguments.room,subscribing?'strategy-subscribe':'strategy-unsubscribe',input.data);
-    json({jsonrpc:'2.0',id,...(result?.ok?await result.json():{error:{code:-32024,message:'This replay seat is invalid or expired.'}})});
+    json({jsonrpc:'2.0',id,...(result?.ok?await result.json():await changeLiveSubscription(input.data))});
     return;
    }
+   const probe=await toWebRequest(req,body);
+   if(!await isLegacyRequest(probe,body)){await handleModernMcp(req,res,body);return;}
   }
   const mcp=createRaceMcp(origin,gateway);
   const capabilities={tools:{},events:{}};

@@ -21,6 +21,7 @@ flowchart LR
     W -->|MCP Apps UI + event_filter| C
     W -->|Signed MCP Event webhooks| C
     C -->|get_grand_prix_strategy_event & submit_grand_prix_radio| W
+    C <-->|answer_grand_prix_driver / form elicitation| W
     A[MCP Pit Wall / Manual Cockpit / Spectator] <-->|30 Hz WebSocket snapshots| R[Authoritative Race Room / Durable Object]
     W --> R
     R -->|120 Hz vehicle physics, tyres, ERS, fuel, weather, race control| R
@@ -30,7 +31,7 @@ flowchart LR
 
 1. Connect the MCP server at **`https://f1.mcp-events.workers.dev/mcp`** (or rescan the plugin after updates).
 2. In a ChatGPT Work chat, prompt:
-   > “Use `open_grand_prix_strategy` at Monza. Subscribe this chat to `grand_prix.strategy_required` using the exact `event_filter` returned by the tool. Keep the subscription key out of chat text. For each event, act decisively and send a radio call with `submit_grand_prix_radio`.”
+   > “Use `open_grand_prix_strategy` at Monza. Subscribe this chat to `grand_prix.strategy_required` using the exact `event_filter` returned by the tool. Keep the subscription key out of chat text. Answer driver questions with `answer_grand_prix_driver` and send strategy orders with `submit_grand_prix_radio`.”
 3. The widget opens the **Race setup** modal overlay. Choose your options and click **Accept**—if ChatGPT is already subscribed, updating options in the lobby preserves the active subscription without resetting the room.
 4. Once lights go out, setup controls lock and a **Stop race** button appears in both the header bar and the Race menu modal.
 
@@ -73,6 +74,8 @@ The server publishes `grand_prix.strategy_required` webhooks at race start, on l
 Each webhook carries a rich telemetry **summary** (`compound`, `tyreWear`, `availableSets`, `lapsRemaining`, `gapAheadSeconds`, `gapBehindSeconds`, `chargeKJ`, `marginAboveFuelSampleKg`, `damage`, `pitPhase`, `distanceToPitCommitmentM`, `estimatedRejoinPosition`, `teammateInPitLane`, `flag`, `rain`, `wetness`, `sectorWetness`, `wetGripByCompound`), allowing ChatGPT to act immediately in a single step via `submit_grand_prix_radio`, pull full standings/splits via `get_grand_prix_strategy_event`, or omit `event_id` on either tool to check live telemetry and send proactive mid-race calls at any time.
 
 **Actions:** `hold`, `attack`, `defend`, `harvest`, `save-fuel`, `yield`, `swap`, `swap-back`, `push`, `manage`, `box`, `extend`, `cover`.
+
+**Driver questions.** During an autopilot strategy race, select **Team radio** on the live feed, type a question, and press **Send** or Enter. The car keeps driving while you talk. In manual mode, use the cockpit’s team radio to ask a question such as “Can I push on these tyres?” An autopilot driver can also ask about the current stint. The question goes on air immediately. Its webhook includes `driverQuestion.text` and the team’s telemetry. The strategist calls `answer_grand_prix_driver` with the room, event ID and a short suggested reply. This tool uses MCP `2026-07-28` form elicitation. The host can accept the draft, submit edited text, decline or cancel. The accepted text airs on the same team radio. Use a separate strategy order for changes to pace, ERS or pit stops.
 
 **Composable overrides:** combine any primary action with orthogonal parameters for realistic multi-part F1 calls:
 - `pace`: `push` | `balanced` | `manage` (e.g., `box` + `pace="push"` for an in-lap push)
@@ -154,6 +157,7 @@ Endpoint: `POST /mcp` (Streamable HTTP + native MCP Events JSON-RPC).
   - `open_grand_prix` — Open the MCP Grand Prix widget (defaults to ChatGPT strategy; accepts Team B strategy invitations and live spectator invitations)
   - `get_grand_prix_strategy_event` — Read telemetry for a pending `event_id` or pull fresh live mid-race telemetry
   - `submit_grand_prix_radio` — Submit a composable radio order for the active car
+  - `answer_grand_prix_driver` — Answer a live driver question through MCP form elicitation
   - `configure_grand_prix_strategy` *(app-only)* — Update circuit, lap count, driver mode, or multiplayer in an unstarted lobby while keeping the webhook subscription alive
   - `stop_grand_prix_chat_strategy` *(app-only)* — Stop an active ChatGPT strategy race
   - `grand_prix_status` — Read telemetry for a public room

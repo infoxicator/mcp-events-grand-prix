@@ -15,6 +15,7 @@ import {getTrack,type CircuitId} from './track';
 import {parseInvitation,playerURL,invitationCode} from './invitation';
 import {copyInvitation} from '../clipboard';
 import {radioOverlay} from './radio-overlay';
+import {mountDriverRadio} from './driver-radio';
 import {mountEventLog} from './event-log-view';
 import {nextSafetyCarLap,raceControlTelemetry,rainLabel,rainLevels,type Hazard,type RainLevel} from './race-control';
 const stripe=(entry:GridEntry)=>paints(entry)[entry.team==='Mercedes'?1:0];
@@ -35,13 +36,16 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
  const params=new URLSearchParams(location.search),team=room.live?null:options.team===undefined?(params.get('team')==='a'?'a':params.get('team')==='b'?'b':null):options.team;
  const strategySeat=options.strategySeat;
  const isEngineer=Boolean(team&&params.has('engineer'));
- const c=connect(options.controller===false?null:team,room,isEngineer?{role:'engineer'}:undefined),interpolate=createInterpolator();let camera:CameraMode=isEngineer?'broadcast':team?`cockpit-${team}`:'broadcast',disposed=false,frameId=0,lastUi=0,lastEvent='',title=params.has('intro'),replay:Race[]=[],replayStart=0,replayActive=false,graph:number[]=[],lastTick=-1,lastFrame=performance.now(),fps=60;
+ const c=strategySeat?connect(strategySeat,room,{role:'driver',shouldDecide:()=>false})
+  :connect(options.controller===false?null:team,room,isEngineer?{role:'engineer'}:undefined);
+ const interpolate=createInterpolator();let camera:CameraMode=isEngineer?'broadcast':team?`cockpit-${team}`:'broadcast',disposed=false,frameId=0,lastUi=0,lastEvent='',title=params.has('intro'),replay:Race[]=[],replayStart=0,replayActive=false,graph:number[]=[],lastTick=-1,lastFrame=performance.now(),fps=60;
  el('app').innerHTML=`
  <header class="topbar"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span class="brand-wordmark">MCP <b>Grand Prix</b></span></a><nav><a data-view="broadcast" href="${room.links?.spectator??`/?room=${room.room}&spectate`}">Broadcast</a><a data-view="a" href="${room.links?.a||'/?team=a'}">Ferrari pit wall</a><a data-view="b" href="${room.links?.b||'/?team=b'}">Mercedes pit wall</a><a id="strategy-link" href="/?strategy">Strategy replays</a><a id="historical-link" href="/?replay">Historical races</a><a id="drive-link" href="/?drive">Drive</a></nav><div class="top-status"><i></i><span id="connection">CONNECTING</span><span class="mock-badge" id="mode">AUTOPILOT</span></div></header>
  <main><div class="race-heading"><h1 class="eyebrow"><span id="country-flag" aria-label="Italy">🇮🇹</span> <span id="grand-prix-name">ITALIAN GRAND PRIX</span></h1><div class="track-meta"><b id="circuit-name">MONZA</b><span id="circuit-details">5.793 KM <em>•</em> 11 CORNERS <em>•</em> 3 LAPS</span><small id="circuit-weather">45.6189° N &nbsp; 9.2812° E &nbsp; / &nbsp; DRY 28°C</small></div></div>
  <section class="race-feed"><div class="feed-top"><span><i class="live-dot"></i> LIVE FEED <span id="view-label">${isEngineer?'STRATEGY PIT WALL / '+PERSONAS[team!].name:team?'ONBOARD / '+PERSONAS[team].name:'WORLD FEED'}</span></span><div class="feed-actions"><label class="matchup-label">DRIVERS<select id="circuit-select" disabled aria-label="Circuit"><option value="monza">Monza / Day</option><option value="las-vegas">Las Vegas / Night</option></select><select id="matchup-select" disabled aria-label="Driver matchup"><option value="jev-vs-jev">Jev vs Jev</option><option value="jev-vs-luna">Jev vs Luna</option></select></label><a id="solo-race" href="/?solo&local">Open solo lobby ↗</a><button id="title-button">Title sequence ↗</button><button id="share-toggle">Invite a team ＋</button></div></div>
  <div id="viewport" class="viewport"><div class="vignette"></div><div class="broadcast-bug">MCP <span>GP</span><small id="circuit-bug">MONZA / ITALY</small></div><div class="timing-tower"><div class="tower-header"><button id="grid-toggle" aria-expanded="false" aria-controls="timing-rows">Full grid ▾</button><b id="lap-counter">LAP 1 <small>/ 3</small></b></div><div id="timing-rows"></div><div class="tower-footer"><span id="race-phase">WAITING FOR TEAMS</span><span id="clock">00:00</span></div></div>
  <div class="race-conditions" id="race-conditions" role="status" hidden></div>
+ ${strategySeat?`<section id="autopilot-radio" class="autopilot-radio" aria-label="Driver radio" style="--team:${PERSONAS[strategySeat].colour}" hidden></section>`:''}
  <div id="event-flash" class="event-flash" hidden></div><div class="corner-chip"><span>TRACK POSITION</span><b id="corner">Rettifilo</b></div>
  <div class="feed-side">
   <section id="chatgpt-radio" class="chatgpt-radio" aria-label="ChatGPT radio" hidden></section>
@@ -255,6 +259,8 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
  Object.defineProperty(window,'__raceState',{configurable:true,get:()=>c.state});
  let displayedMatchup:Matchup|undefined,displayedCircuit:CircuitId|undefined;
  const radio=radioOverlay(el('chatgpt-radio'),el('radio-announcement'),presentation.audio.speakRadio);
+ const driverRadio=strategySeat?mountDriverRadio(el('autopilot-radio'),strategySeat,()=>c,{collapsible:true}):null;
+ if(driverRadio)c.onQuestionError=driverRadio.onError;
  const eventLog=mountEventLog(el('race-event-log'),c);
  const lightBulbs=Array.from(document.querySelectorAll<HTMLElement>('.lights i'));
  const sectorBars=Array.from(document.querySelectorAll<HTMLElement>('.sector-bars i'));
@@ -265,13 +271,15 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
   let latest:(Radio&Partial<ChatStrategyRadio>)|undefined;
   const seats=strategySeat?[strategySeat]:s.solo&&!s.guestChatStrategy?['a'] as const:team?[team]:TEAMS;
   for(const seat of seats){
-   const order=s.latestChatRadio?.[seat]??s.race.radio.findLast(x=>x.team===seat&&(x.strategist==='chatgpt'||(s.drive&&x.speaker==='ENGINEER'&&x.source==='live')));
+   const order=s.latestChatRadio?.[seat]??s.race.radio.findLast(x=>x.team===seat&&!x.consultation&&(x.strategist==='chatgpt'||(s.drive&&x.speaker==='ENGINEER'&&x.source==='live')));
    if(order&&(!latest||order.id>latest.id))latest=order;
   }
-  radio.show(latest);
+  const consultations=seats.flatMap(seat=>s.driverConsultRadio?.[seat]??[]).sort((a,b)=>a.id-b.id);
+  radio.show(latest,consultations);
  };
  let lastShot:CameraMode|undefined;
  function ui(s:RaceState,r:Race,now:number,shot:CameraMode|undefined){
+  driverRadio?.sync(replayActive);
   document.body.dataset.phase=s.race.phase;document.body.dataset.room=s.room;document.body.dataset.tick=String(s.race.tick);document.body.dataset.connected=String(s.connected.a&&s.connected.b);document.body.dataset.replay=String(replayActive);
   const view=shot??camera;
   const focus:Team=view==='cockpit-a'||view==='tcam-a'?'a':view==='cockpit-b'||view==='tcam-b'?'b':team??r.leader,car=r.cars[focus],rival=r.cars[focus==='a'?'b':'a'],gap=Math.abs(car.distance-rival.distance)/Math.max(30,car.speed),order=classification(r);speedTrap=car.speedTrap;

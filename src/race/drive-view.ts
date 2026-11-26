@@ -8,6 +8,7 @@ import {createScene, type CameraMode} from './scene';
 import {mountTcamTelemetry} from './tcam-telemetry';
 import {connect, createInterpolator, type Connection} from './network';
 import {mountEventLog} from './event-log-view';
+import {mountDriverRadio} from './driver-radio';
 import {blendRace} from './presentation-motion';
 import {getTrack, isCircuit, type CircuitId} from './track';
 import {classification, constructors, opponents, playerEntry} from './grid';
@@ -132,7 +133,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
 
  const app = document.getElementById('app')!;
  app.innerHTML = `
- <div class="drive-mode" id="drive-root" data-seat="${seat}"${embedded ? ' data-embedded="true"' : ''}>
+ <div class="drive-mode" id="drive-root" data-seat="${seat}"${embedded ? ' data-embedded="true"' : ''}${room.live ? ' data-live="true"' : ''}>
   <div class="drive-viewport" id="drive-viewport">
    <div class="drive-loading" id="drive-loading">
     <div class="drive-eyebrow">MCP GRAND PRIX · DRIVE MODE</div>
@@ -194,6 +195,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
      <span class="dst-tag" id="dst-tactic">HOLD</span>
      <span class="dst-box" id="dst-box" hidden>BOX THIS LAP</span>
     </div>
+    ${room.live ? '<section class="drive-team-radio" id="drive-team-radio" aria-labelledby="drive-team-radio-title" hidden></section>' : ''}
     <div class="drive-radio-banner" id="drive-radio-banner" hidden>
      <div class="drb-head">
       <span class="drb-speaker" id="drb-speaker">STRATEGY ENGINEER</span>
@@ -525,6 +527,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   app.querySelectorAll<HTMLElement>('[data-dmode="jev"]').forEach((node) => { node.hidden = true; });
  }
  const eventLog = embedded ? mountEventLog(el('race-event-log'), conn) : null;
+ const driverRadio = room.live ? mountDriverRadio(el('drive-team-radio'), seat, () => conn) : null;
  const viewport = el('drive-viewport');
  const hudEl = el('drive-hud');
  const loadingEl = el('drive-loading');
@@ -896,6 +899,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
  }
 
  function attachConnection(target: typeof conn) {
+ if (driverRadio) target.onQuestionError = driverRadio.onError;
  target.onReplay = (frames) => {
   if (!frames.length) return;
   replayFrames = frames;
@@ -955,7 +959,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   const engMode = currentEngineerMode(s);
   const liveStrategist = engMode === 'joined' || Boolean(s.chatStrategy || s.guestChatStrategy);
   const latestRadio = s.latestChatRadio?.[seat] ?? s.race.radio.filter((x) => {
-   if (x.team !== seat) return false;
+   if (x.team !== seat || x.consultation) return false;
    if (liveStrategist && x.source !== 'live') return false;
    if (x.speaker !== 'ENGINEER' && x.source === 'mock') return false;
    return true;
@@ -1091,6 +1095,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   lobbyEl.hidden = !inLobby;
   resultsEl.hidden = !isFinished;
   hudEl.hidden = inLobby;
+  driverRadio?.sync(replayActive);
 
   syncControlButtons(s);
 

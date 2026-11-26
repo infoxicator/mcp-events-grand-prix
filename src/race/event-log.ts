@@ -18,6 +18,7 @@ type DriverLogData={
 type RadioLogData={
  kind:'radio';speaker:Radio['speaker'];source:Radio['source'];text:string;responseMs:number;
  strategist?:Radio['strategist'];instruction?:Instruction;submittedText?:string;
+ consultation?:Radio['consultation'];consultationId?:string;
 };
 export type RaceLogData=StrategyLogData|DriverLogData|RadioLogData;
 export type RaceLogKind=RaceLogData['kind'];

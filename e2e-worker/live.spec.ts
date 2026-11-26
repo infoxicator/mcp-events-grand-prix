@@ -161,6 +161,65 @@ async function mcp(origin:string){
  return client;
 }
 
+for(const sep of [false,true])test(`driver question and completed elicitation air on team radio via ${sep?'SEP':'Work'} events`,async({request,baseURL})=>{
+ const path=sep?'/mcp/sep-events':'/mcp';
+ const auth:Record<string,string>=sep?{Authorization:'Bearer '+'e'.repeat(64)}:{};
+ const client=new Client({name:'Test pit wall',version:'1'},{versionNegotiation:{mode:'auto'},capabilities:{elicitation:{form:{}}}});
+ const question='How much tyre life do I have left?';
+ const suggestion='The tyres are good for this stint.';
+ const reply='Tyre wear is low. Stay on this set.';
+ let forms=0;
+ client.setRequestHandler('elicitation/create',async({params})=>{
+  expect(params.message).toContain(question);
+  expect(params).toMatchObject({requestedSchema:{properties:{reply:{type:'string',default:suggestion}}}});
+  forms++;
+  return {action:'accept',content:{reply}};
+ });
+ await client.connect(new StreamableHTTPClientTransport(new URL(path,baseURL),{requestInit:{headers:auth}}));
+ let probe:ReturnType<typeof watch>|undefined;
+ let stop:{room:string;key:string}|undefined;
+ try{
+  const race=await client.callTool({name:'open_grand_prix_strategy',arguments:{driver:'human'}});
+  const {room}=race._meta!.liveInvitation as {room:string};
+  stop={room,key:race._meta!.strategyKey as string};
+  const name='grand_prix.strategy_required';
+  const endpoint=(sep?'/sep-callback/':'/webhook/mcp-events/')+crypto.randomUUID();
+  const url=(sep?'https://callback.example.test':'https://connectors.api.openai.com')+endpoint;
+  const version='2026-07-28';
+  const subscribe=await request.post(path,{
+   headers:{...auth,Accept:'application/json, text/event-stream','Mcp-Protocol-Version':version,'Mcp-Method':'events/subscribe','Mcp-Name':name},
+   data:{jsonrpc:'2.0',id:1,method:'events/subscribe',params:{
+    _meta:{'io.modelcontextprotocol/protocolVersion':version,'io.modelcontextprotocol/clientCapabilities':{}},
+    name,arguments:(race.structuredContent as {event_filter:object}).event_filter,delivery:{mode:'webhook',url,secret:'whsec_'+Buffer.alloc(32,7).toString('base64')},
+   }},
+  });
+  expect(await subscribe.json()).toHaveProperty('result.id');
+  probe=watch(baseURL!,room,stop.key);
+  await expect.poll(()=>probe?.state()?.strategyWebhook).toBe('connected');
+  probe.ws.send(JSON.stringify({type:'start',startKey:stop.key}));
+  await expect.poll(()=>probe?.state()?.race.phase,{timeout:15_000}).toBe('racing');
+  probe.ws.send(JSON.stringify({type:'strategy-question',text:question}));
+  type Notice={eventId:string;data:{driverQuestion?:{text:string}}};
+  const receivedQuestion=async()=>{
+   const deliveries=await request.get(fixture+endpoint).then(r=>r.json());
+   const notices:Notice[]=sep?deliveries.attempts.map((a:{value:Notice})=>a.value):deliveries.events;
+   return notices.find(event=>event.data?.driverQuestion?.text===question);
+  };
+  await expect.poll(receivedQuestion).toBeTruthy();
+  const args={room,event_id:(await receivedQuestion())!.eventId,suggested_reply:suggestion};
+  expect((await client.callTool({name:'answer_grand_prix_driver',arguments:{...args,team:'b'}})).isError).toBe(true);
+  const accepted=await client.callTool({name:'answer_grand_prix_driver',arguments:args});
+  expect(accepted.isError,JSON.stringify(accepted.content)).toBeFalsy();
+  await expect.poll(()=>probe?.state()?.race.radio.filter(r=>r.team==='a'&&[question,reply].includes(r.text)).map(r=>r.text)).toEqual([question,reply]);
+  expect((await client.callTool({name:'answer_grand_prix_driver',arguments:args})).isError).toBe(true);
+  expect(forms).toBe(1);
+ }finally{
+  probe?.ws.close();
+  if(stop)await client.callTool({name:'stop_grand_prix_chat_strategy',arguments:stop});
+  await client.close();
+ }
+});
+
 function watch(origin:string,room:string,token:string){
  const ws=new WebSocket(origin.replace('http','ws')+`/api/rooms/${room}/ws`,{origin:'https://independent.example'});
  const messages:ServerMessage[]=[];

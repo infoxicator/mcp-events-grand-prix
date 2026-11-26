@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {observeStrategy} from '../src/race/strategy-observation';
-import {STRATEGY_EVENT,STRATEGY_RESPONSE_MS,type StrategyEventNotice} from '../src/race/strategy-events';
+import {DRIVER_RADIO_TEXT_LIMIT,STRATEGY_EVENT,STRATEGY_RESPONSE_MS,type DriverQuestion,type StrategyEventNotice} from '../src/race/strategy-events';
 import {VEHICLE} from '../src/race/vehicle';
 import {compounds,rainLevels} from '../src/race/race-control';
 import type {Car,Compound,Instruction,Race} from '../src/race/types';
@@ -11,6 +11,14 @@ export const eventInput=z.object({
  event_id:z.string().uuid().optional().describe('Event ID from the webhook notification. Omit to read live telemetry for the active race.'),
  team:z.enum(['a','b']).optional().describe('Assigned seat (optional in solo races; required only when omitting event_id in a two-strategist race).'),
 });
+const driverRadioText=z.string().trim().min(1).max(DRIVER_RADIO_TEXT_LIMIT);
+export const driverQuestionInput=eventInput.extend({
+ event_id:z.string().uuid().describe('Event ID of the driver question notification.'),
+});
+export const driverAnswerInput=driverQuestionInput.extend({
+ reply:driverRadioText.optional().describe('Short radio reply to the driver. Omit if the reply is declined or cancelled.'),
+});
+export type DriverAnswerInput=z.infer<typeof driverAnswerInput>;
 export const strategyFilter=z.object({room:z.string().uuid(),subscription_key:z.string().regex(/^[a-f0-9]{64}$/)});
 export const radioInput=eventInput.extend({
  action:z.enum(['hold','attack','defend','save-fuel','yield','push','manage','box','extend','cover','harvest','swap','swap-back']),
@@ -45,11 +53,12 @@ const replayNotice=eventNoticeBase.extend({
 
 export const strategyEventDefinition={
  name:STRATEGY_EVENT,
- description:'Telemetry for your strategy seat requires a radio decision. Open a seat with open_grand_prix_strategy or open_grand_prix_replay and use its event_filter. Act immediately from summary using submit_grand_prix_radio when the call is clear, or read full telemetry with get_grand_prix_strategy_event.',
+ description:'Your strategy seat needs a radio response. Open a seat with open_grand_prix_strategy or open_grand_prix_replay and use its event_filter. If driverQuestion is present, respond using answer_grand_prix_driver. For other events, use submit_grand_prix_radio or read full telemetry with get_grand_prix_strategy_event.',
  delivery:['webhook'],
  inputSchema:z.toJSONSchema(strategyFilter),
  payloadSchema:z.toJSONSchema(z.union([eventNoticeBase.extend({
   team:z.enum(['a','b']),lap:z.number().int(),reasons:z.array(z.string()),expiresAt:z.number(),
+  driverQuestion:z.object({text:driverRadioText,source:z.enum(['automatic','driver'])}).optional(),
   summary:z.object({
    speedKph:z.number(),position:z.number(),lapsRemaining:z.number(),
    compound:z.enum(compounds),tyreWear:z.number(),availableSets:compoundNumberSchema,
@@ -71,6 +80,8 @@ export interface StrategyEvent extends StrategyEventNotice {
  observation:ReturnType<typeof observeStrategy>;
  issuedAt:number;
 }
+export type DriverQuestionEvent=StrategyEvent&{driverQuestion:DriverQuestion};
+type DriverConsultation={event:DriverQuestionEvent;consultationId:string};
 export type LiveStrategyRead=Omit<StrategyEvent,'event_id'>&{
  event_id?:string;
  superseded?:boolean;
@@ -118,6 +129,7 @@ export class StrategyEvents {
  constructor(private readonly responseMs=STRATEGY_RESPONSE_MS){}
  private listeners=new Set<(event:StrategyEventNotice&{event_id:string},issuedAt:number)=>void>();
  pending?:PendingStrategy;
+ private driverConsultation?:DriverConsultation;
  private recent=new Map<string,PendingStrategy>();
  private consumed=new Set<string>();
 
@@ -134,6 +146,31 @@ export class StrategyEvents {
   }
   for(const listener of this.listeners)listener(this.notice(event),event.issuedAt);
   return event;
+ }
+
+ offerDriverQuestion(room:string,driverQuestion:DriverQuestion,consultationId:string,observation:StrategyEvent['observation'],now=Date.now()){
+  const event:DriverQuestionEvent={
+   room,team:observation.team,lap:observation.telemetry.lap,reasons:['Driver question'],summary:strategySummary(observation),
+   driverQuestion,observation:structuredClone(observation),issuedAt:now,expiresAt:now+this.responseMs,event_id:crypto.randomUUID(),
+  };
+  this.driverConsultation={event,consultationId};
+  return event;
+ }
+
+ publishDriverQuestion(){
+  const consultation=this.getDriverConsultation();
+  if(!consultation)return;
+  const {event}=consultation;
+  for(const listener of this.listeners)listener(this.notice(event),event.issuedAt);
+ }
+
+ getDriverConsultation(now=Date.now()){
+  const consultation=this.driverConsultation;
+  return consultation&&consultation.event.expiresAt>now?consultation:undefined;
+ }
+
+ clearDriverQuestion(){
+  delete this.driverConsultation;
  }
 
  find(eventId:string){
@@ -164,9 +201,11 @@ export class StrategyEvents {
  clear(){
   delete this.pending;
   this.recent.clear();
+  this.clearDriverQuestion();
  }
 
  prune(now=Date.now()){
+  if(this.driverConsultation&&this.driverConsultation.event.expiresAt<=now)this.clearDriverQuestion();
   for(const [id,entry] of this.recent){
    if(entry.event.expiresAt<=now)this.recent.delete(id);
   }
@@ -175,11 +214,13 @@ export class StrategyEvents {
  subscribe(listener:(event:StrategyEventNotice&{event_id:string},issuedAt:number)=>void){
   this.listeners.add(listener);
   if(this.pending&&this.pending.event.expiresAt>Date.now())listener(this.notice(this.pending.event),this.pending.event.issuedAt);
+  const question=this.getDriverConsultation()?.event;
+  if(question)listener(this.notice(question),question.issuedAt);
   return ()=>{this.listeners.delete(listener);};
  }
 
- private notice({room,team,lap,reasons,expiresAt,event_id,summary}:StrategyEvent){
-  return {room,team,lap,reasons,expiresAt,event_id,summary};
+ private notice({room,team,lap,reasons,expiresAt,event_id,summary,driverQuestion}:StrategyEvent){
+  return {room,team,lap,reasons,expiresAt,event_id,summary,...(driverQuestion?{driverQuestion}:{})};
  }
 }
 

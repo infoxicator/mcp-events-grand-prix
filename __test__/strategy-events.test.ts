@@ -1,9 +1,10 @@
 import {afterEach,expect,test,vi} from 'vitest';
 import {RaceRoom} from '../server/race-room';
-import {radioInput} from '../server/strategy-events';
-import {STRATEGY_RESPONSE_MS} from '../src/race/strategy-events';
+import {driverAnswerInput,radioInput} from '../server/strategy-events';
+import {STRATEGY_RESPONSE_MS,type StrategyEventNotice} from '../src/race/strategy-events';
 import {createRace,stepRace} from '../src/race/physics';
 import {getTrack} from '../src/race/track';
+import type {ServerMessage} from '../src/race/types';
 
 function liveRace(){
  const room=new RaceRoom(crypto.randomUUID(),'http://localhost:5277',{JEV_MOCK:'1'},1,'jev-vs-jev',{},'monza',true);
@@ -15,6 +16,134 @@ function liveRace(){
  return room;
 }
 afterEach(()=>vi.restoreAllMocks());
+
+test('answers a driver consultation over radio without consuming or changing a strategy order',async()=>{
+ const room=liveRace();
+ room.strategyPractice=true;
+ room.strategyDriverKeys={a:crypto.randomUUID()};
+ const messages:ServerMessage[]=[];
+ const driver=room.add(message=>messages.push(structuredClone(message)));
+ room.join(driver,'a',room.strategyDriverKeys.a!);
+ await room.message(driver,{type:'event-log',subscribe:true});
+ const order=room.strategyEvents!.pending!.event;
+ const notices:(StrategyEventNotice&{event_id:string})[]=[];
+ const unsubscribe=room.strategyEvents!.subscribe(notice=>notices.push(notice));
+ const question='Can I keep this pace on these tyres?';
+ await room.message(driver,{type:'strategy-question',text:` ${question} `});
+ expect(notices).toHaveLength(2);
+ const notice=notices[1];
+ expect(notice).toMatchObject({
+  room:room.id,team:'a',reasons:['Driver question'],driverQuestion:{text:question,source:'driver'},
+ });
+ expect(notice.event_id).not.toBe(order.event_id);
+ expect(room.readDriverQuestion(notice.event_id,'b')).toBeUndefined();
+ expect(room.readLiveStrategyEvent(notice.event_id,'a')?.observation.tyres.compound).toBe('soft');
+ expect(room.readLiveStrategyEvent(undefined,'a')?.event_id).toBe(order.event_id);
+ const orderInput={room:room.id,event_id:notice.event_id,action:'push',radio:'Push now.'} as const;
+ expect(room.submitStrategyEvent(orderInput)).toHaveProperty('error');
+ const car=room.race.cars.a,instruction=car.instruction,intent=car.intent;
+ const reply={room:room.id,event_id:notice.event_id,reply:' Keep this pace until the gap opens. '};
+ expect(room.answerDriver({...reply,room:crypto.randomUUID()})).toHaveProperty('error');
+ expect(room.answerDriver({...reply,team:'b'})).toHaveProperty('error');
+ expect(room.answerDriver({...reply,reply:'   '})).toHaveProperty('error');
+ expect(room.answerDriver(reply)).toEqual({team:'a',line:reply.reply.trim()});
+ expect(room.answerDriver(reply)).toHaveProperty('error');
+ expect(room.readDriverQuestion(notice.event_id)).toBeUndefined();
+ expect(car.instruction).toBe(instruction);
+ expect(car.intent).toBe(intent);
+ expect(room.strategyEvents!.pending!.event).toBe(order);
+ expect(room.state().latestChatRadio).toBeUndefined();
+ const lines=room.state().driverConsultRadio!.a!;
+ expect(lines).toMatchObject([
+  {consultation:'question',speaker:'DRIVER',text:question},
+  {consultation:'answer',speaker:'ENGINEER',strategist:'chatgpt',text:reply.reply.trim()},
+ ]);
+ expect(lines[0].consultationId).toBe(lines[1].consultationId);
+ expect(lines[0].consultationId).not.toBe(notice.event_id);
+ expect(room.race.radio).toEqual(expect.arrayContaining(lines));
+ expect(room.race.events.map(event=>event.message)).toEqual(expect.arrayContaining([question,reply.reply.trim()]));
+ const logged=messages.flatMap(message=>message.type==='event-log'?message.entries:[]);
+ expect(logged.map(entry=>entry.data)).toEqual(expect.arrayContaining([
+  expect.objectContaining({kind:'radio',consultation:'question',text:question}),
+  expect.objectContaining({kind:'radio',consultation:'answer',text:reply.reply.trim()}),
+ ]));
+ expect(JSON.stringify(messages)).not.toContain(notice.event_id);
+ expect(JSON.stringify(room.state())).not.toContain(room.elicitationKey);
+ unsubscribe();
+});
+
+test('limits driver consults to racing seats and expires unanswered questions',async()=>{
+ const room=liveRace();
+ room.strategyPractice=true;
+ room.viewerKey=crypto.randomUUID();
+ const messages:ServerMessage[]=[];
+ const viewer=room.add(message=>messages.push(message));
+ room.join(viewer,null,room.viewerKey);
+ await room.message(viewer,{type:'strategy-question',text:'How are the tyres?'});
+ expect(messages.at(-1)).toMatchObject({type:'error',code:'strategy-question'});
+ expect(room.state().driverConsultRadio).toBeUndefined();
+ room.enableChatStrategy(undefined,'b');
+ room.strategyWebhook='waiting';
+ expect(room.askDriverQuestion('a','Are you on the radio?').error).toContain('disconnected');
+ expect(room.state().driverConsultRadio).toBeUndefined();
+ room.strategyWebhook='connected';
+ const first=room.askDriverQuestion('a','Any traffic to worry about?');
+ const guest=room.askDriverQuestion('b','Can we extend this stint?');
+ expect(first.error??guest.error).toBeUndefined();
+ expect(room.askDriverQuestion('a','Another question?')).toHaveProperty('error');
+ expect(room.answerDriver({room:room.id,event_id:first.event_id!,team:'b',reply:'Keep going.'})).toHaveProperty('error');
+ room.releaseGuestStrategy();
+ expect(room.readDriverQuestion(guest.event_id!)).toBeUndefined();
+ expect(room.readDriverQuestion(first.event_id!)).toBeDefined();
+ const order=room.strategyEvents!.pending!.event;
+ expect(room.submitStrategyEvent({room:room.id,event_id:order.event_id,action:'hold',radio:'Hold this pace.'})).toMatchObject({team:'a'});
+ expect(room.readLiveStrategyEvent(undefined,'a')).toMatchObject({proactive:true});
+ expect(room.readLiveStrategyEvent(undefined,'a')?.event_id).toBeUndefined();
+ expect(room.readDriverQuestion(first.event_id!)).toBeDefined();
+ const expiresAt=room.readDriverQuestion(first.event_id!)!.expiresAt;
+ vi.spyOn(Date,'now').mockReturnValue(expiresAt);
+ expect(room.readDriverQuestion(first.event_id!)).toBeUndefined();
+ expect(room.answerDriver({room:room.id,event_id:first.event_id!,reply:'Keep going.'})).toHaveProperty('error');
+ expect(room.askDriverQuestion('a','Any update?')).toHaveProperty('event_id');
+ room.finishLive('stopped');
+ expect(room.askDriverQuestion('a','Are we done?')).toHaveProperty('error');
+});
+
+test('offers one automatic contextual question from lap two and lets the driver replace it',()=>{
+ const room=liveRace(),track=getTrack(room.race.circuit);
+ const notices:{event_id:string;driverQuestion?:{text:string;source:string}}[]=[];
+ room.strategyEvents!.subscribe(notice=>notices.push(notice));
+ expect(notices).toHaveLength(1);
+ expect(notices[0].driverQuestion).toBeUndefined();
+ const car=room.race.cars.a;
+ car.lap=1;
+ car.distance=track.LENGTH+10;
+ room.driverMode.a='human';
+ room.advance(1);
+ expect(notices.filter(notice=>notice.driverQuestion)).toHaveLength(0);
+ room.driverMode.a='autopilot';
+ room.advance(24);
+ const questions=notices.filter(notice=>notice.driverQuestion);
+ expect(questions).toHaveLength(1);
+ expect(questions[0].driverQuestion).toMatchObject({source:'automatic',text:expect.stringContaining(car.compound)});
+ const manual=room.askDriverQuestion('a','Is it time to box?');
+ expect(manual).toHaveProperty('event_id');
+ expect(room.answerDriver({room:room.id,event_id:questions[0].event_id,reply:'Save the tyres.'})).toHaveProperty('error');
+ expect(room.answerDriver({room:room.id,event_id:manual.event_id!,reply:'Tyres look good.'})).toMatchObject({team:'a'});
+ room.advance(24);
+ expect(notices.filter(notice=>notice.driverQuestion?.source==='automatic')).toHaveLength(1);
+});
+
+test('declining releases the driver question without adding a radio transmission',()=>{
+ const room=liveRace();
+ const {event_id}=room.askDriverQuestion('a','Should I look after the rears?');
+ const input={room:room.id,event_id:event_id!};
+ expect(driverAnswerInput.safeParse({...input,reply:'  '}).success).toBe(false);
+ expect(room.answerDriver(driverAnswerInput.parse(input))).toEqual({team:'a',sent:false});
+ expect(room.state().driverConsultRadio?.a).toHaveLength(1);
+ expect(room.askDriverQuestion('a','Can you update me on the gap?')).toHaveProperty('event_id');
+ expect(room.answerDriver({...input,reply:'Stay on the throttle.'})).toHaveProperty('error');
+});
 
 test('offers an immutable telemetry snapshot and applies the approved action once through radio',()=>{
  const room=liveRace();
