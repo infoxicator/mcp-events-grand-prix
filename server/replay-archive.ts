@@ -31,7 +31,7 @@ function sessionURL(id:string){
  return base+id.slice(0,4)+'/'+id.slice(5,-5)+'/race';
 }
 
-const fetchArchive:Fetcher=url=>fetch(url,{redirect:'error',signal:AbortSignal.timeout(22_000)});
+const fetchArchive:Fetcher=url=>fetch(url,{redirect:'manual',signal:AbortSignal.timeout(22_000),headers:{Accept:'application/json','User-Agent':'MCP Grand Prix historical replay'}});
 async function data<T>(url:string,fetcher:Fetcher){
  const response=await fetcher(url);
  if(!response.ok)throw new Error('The race archive returned HTTP '+response.status+'.');
@@ -176,7 +176,8 @@ export async function serveArchive(request:URL,route:NonNullable<ReturnType<type
   const response=await fetchArchive(url+'/'+kind+'?'+search);
   if(!response.ok)throw new Error('The telemetry archive returned HTTP '+response.status+'.');
   return new Response(response.body,{headers:{...archiveHeaders,'Content-Type':'application/json'}});
- }catch{
+ }catch(error){
+  console.warn('Historical race archive request failed',route.id,route.kind,error instanceof Error?error.message:String(error));
   return Response.json({error:'The race archive is unavailable. Try loading this race again.'},{status:502});
  }
 }
