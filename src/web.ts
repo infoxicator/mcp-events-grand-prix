@@ -1,10 +1,15 @@
 import {prepareRoom} from './race/network';
 import {isCircuit} from './race/track';
-import {mountRace} from './race/ui';
 import type {HostedRoom,RoomLinks} from './race/types';
 
 async function start(){
  const params=new URLSearchParams(location.search);
+ if(params.has('replay')){
+  const {mountReplay}=await import('./race/replay-view');
+  const dispose=mountReplay(params);
+  window.addEventListener('pagehide',dispose,{once:true});
+  return;
+ }
  if(params.has('drive')){
   const online=params.has('room')||params.has('live')||params.has('multiplayer')||params.has('online')||params.get('engineer')==='joined';
   let room:HostedRoom;
@@ -45,6 +50,7 @@ async function start(){
    const rawCircuit=params.get('circuit')??'monza';
    const circuit=isCircuit(rawCircuit)?rawCircuit:'monza';
    const room:HostedRoom={room:crypto.randomUUID(),token:'',links:null,local:{circuit,laps:3,speed:4,solo:true,drive:false,watch:false}};
+   const {mountRace}=await import('./race/ui');
    const view=mountRace(room);
    window.addEventListener('pagehide',view.dispose,{once:true});
    window.addEventListener('beforeunload',view.dispose,{once:true});
@@ -63,6 +69,7 @@ async function start(){
   const circuit=isCircuit(rawCircuit)?rawCircuit:'monza';
   if(!params.has('online')){
    const room:HostedRoom={room:crypto.randomUUID(),token:'',links:null,local:{circuit,laps:3,speed:1,solo:false,drive:false,watch:true}};
+   const {mountRace}=await import('./race/ui');
    const view=mountRace(room);
    window.addEventListener('pagehide',view.dispose,{once:true});
    window.addEventListener('beforeunload',view.dispose,{once:true});
@@ -75,6 +82,7 @@ async function start(){
   history.replaceState(null,'',url.pathname+url.search+url.hash);
  }
  const room=await prepareRoom();
+ const {mountRace}=await import('./race/ui');
  const view=mountRace(room);
  window.addEventListener('pagehide',view.dispose,{once:true});
  window.addEventListener('beforeunload',view.dispose,{once:true});

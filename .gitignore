@@ -18,3 +18,6 @@ worker-dist/
 
 # Blender/Python build caches
 __pycache__/
+
+# Cached OpenF1 replay downloads
+.replay-cache/

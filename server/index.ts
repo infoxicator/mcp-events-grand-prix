@@ -1,7 +1,12 @@
 import {benchmarkNames,runLiveStrategy,strategyModels,type BenchmarkName} from './strategy-benchmarks';
 import {isCircuit,type CircuitId} from '../src/race/track';
 import {CHAT_STRATEGY_LAPS,CHAT_STRATEGY_MAX_LAPS,newLiveKey,ROOM_EXPIRED_CLOSE_CODE,strategyTimeBudgetMs} from '../src/race/live';
-import {createServer} from 'node:http';
+import {createServer,type IncomingMessage} from 'node:http';
+import {ReplayBenchmark,isReplayAuthorization,type ReplayStrategyEvent,type StartReplayInput} from './replay-benchmark';
+import {isArchiveReplay,replayCatalog,type ReplayRace,type ReplayTiming} from '../src/race/replay';
+import {archivedTiming,archiveRequest,serveArchive} from './replay-archive';
+import {strategyEventDefinition} from './strategy-events';
+import {subscribeInput,unsubscribeInput} from '../worker/strategy-webhook';
 import {readFile} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {performance} from 'node:perf_hooks';
@@ -23,7 +28,35 @@ const strategyRooms=new Map<string,LocalStrategyRoom>();
 function create(mock=false,matchup:Matchup=initialMatchup as Matchup,circuit:CircuitId=initialCircuit as CircuitId,clock=speed,solo=false,laps=3,drive=false,watchMode=false){const r=new RaceRoom(crypto.randomUUID(),origin,mock?{JEV_MOCK:'1'}:process.env,clock,solo?'jev-vs-jev':matchup,{},circuit,solo,laps,drive,watchMode);rooms.set(r.id,r);return r;}
 const defaultRoom=create();
 const data=(r:RaceRoom)=>({links:r.links(),mcpToken:r.mcpToken,state:r.state()});
+const replays=new Map<string,ReplayBenchmark>();
+const replayAsset=async <T>(name:string)=>JSON.parse(await readFile(resolve(production?'dist':'public','replays',name+'.json'),'utf8')) as T;
+const replayRequest=(id:string,path:string,body:unknown,headers?:HeadersInit)=>replays.get(id)?.handle(
+ new Request(origin+'/internal-'+path,{method:'POST',headers,body:JSON.stringify(body)}),
+);
+async function startReplay(input:StartReplayInput){
+ for(const [id,replay] of replays)if(replay.expired)replays.delete(id);
+ const race=await (isArchiveReplay(input.race)?archivedTiming(input.race):replayAsset<ReplayTiming>(input.race)).catch(()=>null);
+ if(replays.size>=100)throw new Error('Replay benchmark limit reached.');
+ if(!race)throw new Error('This historical race is unavailable.');
+ const room=crypto.randomUUID();
+ const replay=ReplayBenchmark.create(room,input,race,false,{save:async()=>{},defer:promise=>void promise.catch(()=>{}),outbound:fetch});
+ replays.set(room,replay);
+ return replay.access(origin);
+}
+async function readMcpBody(req:IncomingMessage){
+ const chunks:Buffer[]=[];
+ let length=0;
+ for await(const part of req){
+  const bytes=Buffer.isBuffer(part)?part:Buffer.from(part);
+  length+=bytes.length;
+  if(length>1024*1024)throw new Error('MCP request is too large.');
+  chunks.push(bytes);
+ }
+ return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
 const gateway:RaceGateway={
+ replayCatalog:async()=>replayCatalog(await replayAsset<ReplayRace[]>('index'),await replayAsset<ReplayRace[]>('archive').catch(()=>[])),
+ startReplay,
  create:async (matchup,circuit,solo)=>data(create(true,matchup,circuit,speed,solo)),
  get:async id=>{const r=rooms.get(id);return r&&r.expiresAt>Date.now()?data(r):null;},
  watchLive:async invite=>{const r=rooms.get(invite.room);return r&&r.live&&r.viewerKey===invite.key&&r.expiresAt>Date.now()?r.state():null;},
@@ -74,10 +107,14 @@ const gateway:RaceGateway={
   return true;
  },
  strategyEvent:async (room,eventId,team)=>{
+  const replay=await replayRequest(room,'strategy-event',{room,event_id:eventId,team});
+  if(replay)return replay.ok?await replay.json() as ReplayStrategyEvent:null;
   const r=rooms.get(room);
   return r&&r.live&&r.expiresAt>Date.now()?r.readLiveStrategyEvent(eventId,team)??null:null;
  },
  submitStrategy:async input=>{
+  const replay=await replayRequest(input.room,'strategy-radio',input);
+  if(replay)return replay.json();
   const r=rooms.get(input.room);
   if(!r||!r.live||r.expiresAt<=Date.now())return {error:'Race not found or expired.'};
   return r.submitStrategyEvent(input);
@@ -91,7 +128,37 @@ const server=createServer(async(req,res)=>{
  if(path==='/mcp'){
   if(![new URL(origin).host,`localhost:${port}`].includes(req.headers.host??'')){json({error:'Invalid Host'},403);return;}
   const o=req.headers.origin;if(o){try{const u=new URL(o);if(u.protocol!=='http:'||!['localhost','127.0.0.1'].includes(u.hostname))throw new Error();}catch{json({error:'Invalid MCP origin'},403);return;}res.setHeader('Access-Control-Allow-Origin',o);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID');res.setHeader('Access-Control-Allow-Methods','POST, GET, DELETE, OPTIONS');}
-  if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}const mcp=createRaceMcp(origin,gateway),transport=new NodeStreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});res.on('close',()=>{void transport.close();void mcp.close();});try{await mcp.connect(transport);await transport.handleRequest(req,res);}catch{if(!res.headersSent)json({error:'MCP request failed'},500);}return;
+  if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}
+  let body;
+  if(req.method==='POST'){
+   try{body=await readMcpBody(req);}
+   catch{json({jsonrpc:'2.0',id:null,error:{code:-32700,message:'Invalid MCP request body.'}},400);return;}
+   if(body?.jsonrpc==='2.0'&&['events/list','events/subscribe','events/unsubscribe'].includes(body.method)){
+    const id=body.id;
+    if(typeof id!=='string'&&typeof id!=='number'){
+     json({jsonrpc:'2.0',id:null,error:{code:-32600,message:'An event request needs an ID.'}},400);return;
+    }
+    if(body.method==='events/list'){
+     json({jsonrpc:'2.0',id,result:{events:[strategyEventDefinition]}});return;
+    }
+    const subscribing=body.method==='events/subscribe';
+    const input=(subscribing?subscribeInput:unsubscribeInput).safeParse(body.params);
+    if(!input.success){
+     json({jsonrpc:'2.0',id,error:{code:-32602,message:'Use the replay event filter and a ChatGPT MCP Events webhook.'}});return;
+    }
+    const result=await replayRequest(input.data.arguments.room,subscribing?'strategy-subscribe':'strategy-unsubscribe',input.data);
+    json({jsonrpc:'2.0',id,...(result?.ok?await result.json():{error:{code:-32024,message:'This replay seat is invalid or expired.'}})});
+    return;
+   }
+  }
+  const mcp=createRaceMcp(origin,gateway);
+  const capabilities={tools:{},events:{}};
+  mcp.server.registerCapabilities(capabilities);
+  const transport=new NodeStreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
+  res.on('close',()=>{void transport.close();void mcp.close();});
+  try{await mcp.connect(transport);await transport.handleRequest(req,res,body);}
+  catch{if(!res.headersSent)json({error:'MCP request failed'},500);}
+  return;
  }
  if(path==='/health'){json({ok:true,game:'MCP Grand Prix',mode:defaultRoom.mode,matchup:defaultRoom.matchup,circuit:defaultRoom.race.circuit,players:defaultRoom.players,physicsHz:120,snapshotHz:30,speed,rooms:rooms.size,tick:defaultRoom.race.tick,connected:defaultRoom.connected(),drivers:Object.fromEntries(['a','b'].map(t=>{const team=t as 'a'|'b',d=defaultRoom.decisions[team];return [t,{...defaultRoom.driverStats[team],source:d?.source??null,api:d?.api,warning:d?.warning}];})),paidCalls:[...rooms.values()].reduce((n,r)=>n+r.paidCalls,0)});return;}
  if(path==='/api/config'){json({hosted:true,game:'grand-prix'});return;}
@@ -115,6 +182,24 @@ const server=createServer(async(req,res)=>{
   }catch{
    if(!abort.signal.aborted)json({error:'The model request failed or did not return a valid benchmark decision.'},502);
   }finally{benchmarkRunning=false;}
+  return;
+ }
+ const archived=archiveRequest(path);
+ if(archived&&req.method==='GET'){
+  const response=await serveArchive(url,archived);
+  res.writeHead(response.status,Object.fromEntries(response.headers));
+  res.end(Buffer.from(await response.arrayBuffer()));
+  return;
+ }
+ const replayMatch=path.match(/^\/api\/replay-benchmarks\/([a-f0-9-]{36})\/(status|next)$/);
+ if(replayMatch){
+  const [,id,action]=replayMatch,authorization=req.headers.authorization??null;
+  if(!isReplayAuthorization(authorization)||(action==='next'?(req.method!=='POST'||req.headers.origin!==`http://${req.headers.host}`):req.method!=='GET')){
+   json({error:'Replay controller required.'},403);return;
+  }
+  const response=await replayRequest(id,'replay-'+action,undefined,{Authorization:authorization!});
+  if(!response){json({error:'Replay benchmark expired.'},404);return;}
+  json(await response.json(),response.status);
   return;
  }
  if(path==='/api/default'){json(defaultRoom.links());return;}

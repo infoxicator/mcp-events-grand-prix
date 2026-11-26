@@ -149,6 +149,8 @@ Endpoint: `POST /mcp` (Streamable HTTP + native MCP Events JSON-RPC).
 - **Events:** `events/list`, `events/subscribe`, `events/unsubscribe` (`grand_prix.strategy_required`, webhook delivery with HMAC verification)
 - **Tools:**
   - `open_grand_prix_strategy` — Create or join a ChatGPT strategy race (`circuit`, `laps`, `driver`, `multiplayer`, `invite`)
+  - `list_grand_prix_replays` — List the available historical races and their IDs
+  - `open_grand_prix_replay` — Open a historical benchmark for a race ID and optional driver number
   - `open_grand_prix` — Open the MCP Grand Prix widget (defaults to ChatGPT strategy; accepts Team B strategy invitations and live spectator invitations)
   - `get_grand_prix_strategy_event` — Read telemetry for a pending `event_id` or pull fresh live mid-race telemetry
   - `submit_grand_prix_radio` — Submit a composable radio order for the active car
@@ -207,8 +209,26 @@ Open any of these routes on `http://127.0.0.1:5277` (or `https://f1.mcp-events.w
 - `/?watch` — Watch a local 1× AI race across the 22-car grid
 - `/?solo` — Solo pit-wall race (Ferrari #44 vs full grid)
 - `/?strategy` — Strategy scenario replays (undercuts, rain crossovers, fuel saving, double-stacks)
+- `/?replay` — Historical Formula One races. Pick a race, or open `/?replay=9590&view=telemetry` for Monza in 2D.
 - `/?track` — Circuit flythrough tour
 - `/?spectate&camera=showroom` — Car showroom (`&angle=front|rear|side|wheel|steering|airbox|sidepod|halo`)
+
+### Historical Formula One replays
+
+The race picker includes 193 archived Grand Prix races from 2018 through November 2026, grouped by season. The 2024 Italian and British Grands Prix are bundled. Other races load from [F1Archive](https://f1archive.org/docs) on demand. Coverage varies by race, especially for GPS in older sessions. Select a driver in the timing tower for speed, gear, throttle, brake, and lap time. Use **2D telemetry** to switch off the 3D track. Playback supports lap jumps, scrubbing, and speeds from 1× to 64×.
+
+To benchmark a model, connect it to the MCP server and call `list_grand_prix_replays`. Pass `year` to narrow the list. Open a session with `open_grand_prix_replay`, for example `{"race":"9558","driver":44}` for Lewis Hamilton at Silverstone. If you omit `driver`, the session uses the winner. Subscribe to `grand_prix.strategy_required` with the returned `event_filter`, then open the viewer link and choose **Start benchmark**. The same flow uses ChatGPT Work on `/mcp` or the configured bearer token on the Worker's `/mcp/sep-events`.
+
+Advance one checkpoint at a time. The event supplies timing and conditions at that point. The model can call `get_grand_prix_strategy_event` with the event ID for fuller telemetry. It calls `submit_grand_prix_radio` with the event ID and `action: "box"` plus a tyre compound, or `action: "extend"` to stay out. After the call or the two-minute response window, the viewer reveals what happened on that lap and records timing agreement, compound agreement, and response time. The cars follow the historical recording. Download the results to compare independent model runs.
+
+Run `python3 scripts/update-replay-catalog.py` to refresh the F1Archive season index. The bundled recordings use [OpenF1 historical data](https://openf1.org/docs/). Import another completed race from 2023 onward by finding its `session_key` in OpenF1 and running:
+
+```sh
+python3 scripts/import-f1-replay.py SESSION_KEY --name 'Grand Prix name'
+npm run build
+```
+
+The importer caches raw responses locally and updates the race picker. Imports can take several minutes because the API limits throughput. The 2D playback concept was inspired by [F1 Race Replay](https://github.com/IAmTomShaw/f1-race-replay).
 
 ---
 

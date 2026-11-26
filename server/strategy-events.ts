@@ -34,12 +34,21 @@ const compoundNumberSchema=z.object({
  soft:z.number(),medium:z.number(),hard:z.number(),intermediate:z.number(),wet:z.number(),
 });
 
+const replayNotice=eventNoticeBase.extend({
+ mode:z.literal('historical-replay'),team:z.literal('a'),lap:z.number().int(),reasons:z.array(z.string()),expiresAt:z.number(),
+ summary:z.object({
+  race:z.string(),driver:z.string(),timeMs:z.number(),lapsRemaining:z.number(),position:z.number().nullable(),
+  interval:z.union([z.number(),z.string()]).nullable(),compound:z.enum(compounds).nullable(),tyreAge:z.number().nullable(),
+  flag:z.string(),rain:z.boolean().nullable(),question:z.string(),
+ }),
+});
+
 export const strategyEventDefinition={
  name:STRATEGY_EVENT,
- description:'Telemetry for your strategy seat requires a proactive radio decision. Open that seat with open_grand_prix_strategy and use its event_filter. Act immediately from summary using submit_grand_prix_radio when the call is clear, or read full telemetry with get_grand_prix_strategy_event.',
+ description:'Telemetry for your strategy seat requires a radio decision. Open a seat with open_grand_prix_strategy or open_grand_prix_replay and use its event_filter. Act immediately from summary using submit_grand_prix_radio when the call is clear, or read full telemetry with get_grand_prix_strategy_event.',
  delivery:['webhook'],
  inputSchema:z.toJSONSchema(strategyFilter),
- payloadSchema:z.toJSONSchema(eventNoticeBase.extend({
+ payloadSchema:z.toJSONSchema(z.union([eventNoticeBase.extend({
   team:z.enum(['a','b']),lap:z.number().int(),reasons:z.array(z.string()),expiresAt:z.number(),
   summary:z.object({
    speedKph:z.number(),position:z.number(),lapsRemaining:z.number(),
@@ -54,7 +63,7 @@ export const strategyEventDefinition={
    rain:z.enum(rainLevels),wetness:z.number(),sectorWetness:z.tuple([z.number(),z.number(),z.number()]),
    wetGripByCompound:compoundNumberSchema,
   }),
- })),
+ }),replayNotice])),
 };
 
 export interface StrategyEvent extends StrategyEventNotice {

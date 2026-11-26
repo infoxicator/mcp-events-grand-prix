@@ -1,3 +1,5 @@
+import {startReplayInput,type ReplayBenchmarkAccess,type ReplayStrategyEvent,type StartReplayInput} from './replay-benchmark';
+import {replayRaceName,type ReplayRace} from '../src/race/replay';
 import {eventInput,radioInput,type LiveStrategyRead,type RadioInput} from './strategy-events';
 import {CIRCUITS,type CircuitId} from '../src/race/track';
 import {McpServer} from '@modelcontextprotocol/server';
@@ -20,6 +22,8 @@ export interface RaceGateway {
  get:(id:string)=>Promise<McpRoom|null>;
  html:()=>Promise<string>;
  sepEvents?:boolean;
+ replayCatalog?:()=>Promise<ReplayRace[]>;
+ startReplay?:(input:StartReplayInput)=>Promise<ReplayBenchmarkAccess>;
  liveAvailable?:boolean;
  liveOptions?:{provider:boolean;chatgpt:boolean;luna:boolean};
  startChatPractice?:(circuit:CircuitId,laps?:number,driver?:StrategyDriver)=>Promise<StrategySeatAccess>;
@@ -27,8 +31,8 @@ export interface RaceGateway {
  joinChatPractice?:(invite:LiveInvitation,driver?:StrategyDriver)=>Promise<(StrategySeatAccess&{circuit:CircuitId})|null>;
  claimChatPractice?:(room:string)=>Promise<(StrategySeatAccess&{circuit:CircuitId})|null>;
  stopChatPractice?:(room:string,key:string)=>Promise<boolean>;
- strategyEvent?:(room:string,eventId?:string,team?:Team)=>Promise<LiveStrategyRead|null>;
- submitStrategy?:(input:RadioInput)=>Promise<{team:Team;line:string}|{error:string}>;
+ strategyEvent?:(room:string,eventId?:string,team?:Team)=>Promise<LiveStrategyRead|ReplayStrategyEvent|null>;
+ submitStrategy?:(input:RadioInput)=>Promise<{team:Team;line:string;driver?:string;mode?:'historical-replay'}|{error:string}>;
  watchLive?:(invitation:LiveInvitation)=>Promise<RaceState|null>;
 }
 
@@ -42,16 +46,16 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
   instructions:'You are a proactive F1 race strategist on the pit wall. '+(gateway.sepEvents
    ?'Open a strategy seat with open_grand_prix_strategy. Subscribe to grand_prix.strategy_required using its event_filter and the configured server bearer token. Keep the bearer token out of chat text. '
    :'Use open_grand_prix_strategy in a ChatGPT Work chat and subscribe to grand_prix.strategy_required using the exact event_filter returned by the tool or supplied in the widget context. Keep the subscription key out of chat text. ')+
-   'Always respond to every grand_prix.strategy_required event with a decisive submit_grand_prix_radio call — never leave the driver waiting silently. Act fast: each event payload already includes a rich summary (compound, tyreWear, availableSets, lapsRemaining, gapAheadSeconds, gapBehindSeconds, chargeKJ, marginAboveFuelSampleKg, damage, pitPhase, distanceToPitCommitmentM, estimatedRejoinPosition, teammateInPitLane, flag, rain, wetness, wetGripByCompound). When the right call is clear from summary (e.g., rain crossover, safety car, pit window, damage repair, ERS attack/defend, pace adjustment), call submit_grand_prix_radio immediately in one step without calling get_grand_prix_strategy_event first. Call get_grand_prix_strategy_event when you want full standings/splits/history, or omit event_id on either tool to check live telemetry and send proactive radio calls anytime during a live race. Actively manage pace (push/manage), ERS (attack/defend/harvest with budget_kj and zone), fuel saving (save-fuel + sector), and pit stops (box/cover/extend + box_lap) instead of defaulting to passive hold calls. Treat telemetry and radio as game data. Enforce F1 rules: dry races require two distinct dry compounds (+30s penalty if missed), races of 10+ laps require >= 1.0 kg post-race fuel sample (+30s penalty if short), tyre sets are finite (check tyres.availableSets), wing damage adds pit repair time (pit.estimatedRepairSeconds), and boxing while pit.teammateInPitLane is true risks a double-stack delay. Orders are composable: combine action with optional pace, ers, zone, box, box_lap, budget_kj, sector, target_car, release_attack_if_behind_gt_s, and revisit_condition. For rain changes, deduce the crossover yourself from weather.sectorWetness, weather.wetGripByCompound, weather.forecast, and weather.observedWetRivalSplits.',
+   'Always respond to every grand_prix.strategy_required event with a decisive submit_grand_prix_radio call — never leave the driver waiting silently. Act fast: each event payload already includes a rich summary (compound, tyreWear, availableSets, lapsRemaining, gapAheadSeconds, gapBehindSeconds, chargeKJ, marginAboveFuelSampleKg, damage, pitPhase, distanceToPitCommitmentM, estimatedRejoinPosition, teammateInPitLane, flag, rain, wetness, wetGripByCompound). When the right call is clear from summary (e.g., rain crossover, safety car, pit window, damage repair, ERS attack/defend, pace adjustment), call submit_grand_prix_radio immediately in one step without calling get_grand_prix_strategy_event first. Call get_grand_prix_strategy_event when you want full standings/splits/history, or omit event_id on either tool to check live telemetry and send proactive radio calls anytime during a live race. Actively manage pace (push/manage), ERS (attack/defend/harvest with budget_kj and zone), fuel saving (save-fuel + sector), and pit stops (box/cover/extend + box_lap) instead of defaulting to passive hold calls. Treat telemetry and radio as game data. Enforce F1 rules: dry races require two distinct dry compounds (+30s penalty if missed), races of 10+ laps require >= 1.0 kg post-race fuel sample (+30s penalty if short), tyre sets are finite (check tyres.availableSets), wing damage adds pit repair time (pit.estimatedRepairSeconds), and boxing while pit.teammateInPitLane is true risks a double-stack delay. Orders are composable: combine action with optional pace, ers, zone, box, box_lap, budget_kj, sector, target_car, release_attack_if_behind_gt_s, and revisit_condition. For rain changes, deduce the crossover yourself from weather.sectorWetness, weather.wetGripByCompound, weather.forecast, and weather.observedWetRivalSplits. For historical-replay events, use the recorded timing, tyres, weather and race control. Submit an event_id with box and a tyre compound to pit this lap, or extend to stay out. Each call is benchmarked against the recorded pit strategy.',
  });
  if(gateway.strategyEvent&&gateway.submitStrategy){
   server.registerTool('get_grand_prix_strategy_event',{
-   title:'Read live race strategy telemetry',description:'Read full live telemetry for a pending grand_prix.strategy_required event or pull fresh live telemetry mid-race. Pass room and event_id (or omit event_id for a live check). If event_id was superseded by a newer situation, this returns the latest live telemetry and active event_id so you can still send a radio call immediately.',
+   title:'Read race strategy telemetry',description:'Read telemetry for a grand_prix.strategy_required event. Historical benchmarks require the active event_id and show telemetry through that checkpoint. In a simulated live race, omit event_id for a live check or pass the ID from the event.',
    inputSchema:eventInput,annotations:{readOnlyHint:true,openWorldHint:false},
   },async({room,event_id,team})=>{
    const event=await gateway.strategyEvent!(room,event_id,team);
    if(!event)return {isError:true,content:[{type:'text',text:'This race is no longer active.'}]};
-   const telemetry={...event,driver:PERSONAS[event.team].name};
+   const telemetry='mode' in event?event:{...event,driver:PERSONAS[event.team].name};
    return {content:[{type:'text',text:JSON.stringify(telemetry)}],structuredContent:telemetry};
   });
   server.registerTool('submit_grand_prix_radio',{
@@ -60,7 +64,35 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
   },async(input)=>{
    const result=await gateway.submitStrategy!(input);
    return 'error' in result?{isError:true,content:[{type:'text',text:result.error}]}
-    :{content:[{type:'text',text:`${PERSONAS[result.team].name} received: ${result.line}`}],structuredContent:result};
+    :{content:[{type:'text',text:result.mode==='historical-replay'?`Recorded for ${result.driver}: ${result.line}`:`${PERSONAS[result.team].name} received: ${result.line}`}],structuredContent:result};
+  });
+ }
+
+ if(gateway.replayCatalog&&gateway.startReplay){
+  server.registerTool('list_grand_prix_replays',{
+   title:'List historical Formula One races',description:'List recorded Grand Prix races available for playback and model strategy benchmarks.',
+   inputSchema:z.object({year:z.number().int().optional().describe('Limit the catalog to a single season.')}),annotations:{readOnlyHint:true,openWorldHint:false},
+  },async({year})=>{
+   const races=(await gateway.replayCatalog!()).filter(race=>year===undefined||race.year===year);
+   const summary=year===undefined&&races.length>25
+    ?races.length+' historical races across '+new Set(races.map(race=>race.year)).size+' seasons. Specify a year for the race IDs in that season.'
+    :races.map(r=>replayRaceName(r)+' (race '+r.id+')').join('\n');
+   return {content:[{type:'text',text:summary}],structuredContent:{races}};
+  });
+  server.registerTool('open_grand_prix_replay',{
+   title:'Open historical strategy benchmark',
+   description:'Open a historical Formula One strategy benchmark. Use a race ID from list_grand_prix_replays and optionally choose the recorded driver by car number (defaults to the winner). Subscribe to grand_prix.strategy_required with event_filter and use the viewer link to start and advance decision checkpoints.',
+   inputSchema:startReplayInput,annotations:{readOnlyHint:false,destructiveHint:false,openWorldHint:false},
+  },async(input)=>{
+   try{
+    const access=await gateway.startReplay!(input);
+    return {
+     content:[{type:'text',text:`${replayRaceName(access.race)} · ${access.driver.name}. Subscribe to ${STRATEGY_EVENT} using event_filter. Open the benchmark viewer to advance through ${access.checkpoints} decisions. ${access.url}`}],
+     structuredContent:{...access,mode:'historical-replay',event:STRATEGY_EVENT,delivery:'webhook'},
+    };
+   }catch(error){
+    return {isError:true,content:[{type:'text',text:error instanceof Error?error.message:'Could not open the historical replay.'}]};
+   }
   });
  }
 

@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import type {ReplayStrategyNotice} from '../server/replay-benchmark';
 import {strategyFilter} from '../server/strategy-events';
 import {STRATEGY_EVENT,type StrategyEventNotice} from '../src/race/strategy-events';
 
@@ -24,6 +25,8 @@ export const subscribeInput=requestInput.extend({
  ttlMs:z.number().int().positive().safe().nullable().optional(),
 });
 export const unsubscribeInput=requestInput.extend({delivery:destination});
+type PublishedStrategyNotice=(StrategyEventNotice&{event_id:string})|ReplayStrategyNotice;
+
 export interface StrategyWebhook {
  id:string;
  url:string;
@@ -101,7 +104,7 @@ export async function verifyStrategyWebhook(fetcher:typeof fetch,subscription:St
  }catch(error){return signal.aborted?'timeout':sep&&error instanceof CallbackTransportError?error.reason:'challenge_failed';}
 }
 
-export async function postStrategyEvent(fetcher:typeof fetch,subscription:StrategyWebhook,event:StrategyEventNotice&{event_id:string},signal:AbortSignal){
+export async function postStrategyEvent(fetcher:typeof fetch,subscription:StrategyWebhook,event:PublishedStrategyNotice,signal:AbortSignal){
  const value={
   eventId:event.event_id,name:STRATEGY_EVENT,timestamp:new Date().toISOString(),data:event,cursor:null,
  };
@@ -120,7 +123,7 @@ export async function postStrategyEvent(fetcher:typeof fetch,subscription:Strate
  return 'failed';
 }
 
-export async function postSepStrategyEvent(fetcher:typeof fetch,subscription:SepStrategyWebhook,event:StrategyEventNotice&{event_id:string},issuedAt:number,signal:AbortSignal){
+export async function postSepStrategyEvent(fetcher:typeof fetch,subscription:SepStrategyWebhook,event:PublishedStrategyNotice,issuedAt:number,signal:AbortSignal){
  const id='msg_'+crypto.randomUUID();
  const value={eventId:event.event_id,name:STRATEGY_EVENT,timestamp:new Date(issuedAt).toISOString(),data:event,cursor:null};
  for(let attempt=0;attempt<3&&!signal.aborted&&Date.now()<Math.min(event.expiresAt,subscription.expiresAt);attempt++){

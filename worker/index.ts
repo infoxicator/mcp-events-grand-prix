@@ -1,10 +1,13 @@
 import {strategyEventDefinition,eventInput,radioInput,type LiveStrategyRead} from '../server/strategy-events';
-import {STRATEGY_EVENT,WEBHOOK_STRATEGY_RESPONSE_MS,type LiveStrategist} from '../src/race/strategy-events';
+import {STRATEGY_EVENT,WEBHOOK_STRATEGY_RESPONSE_MS,type LiveStrategist,type StrategyEventNotice} from '../src/race/strategy-events';
 import {postStrategyEvent,postSepStrategyEvent,postSepTermination,subscribeInput,unsubscribeInput,verifyStrategyWebhook,webhookId,subscriptionId,type CallbackFailure,type SepStrategyWebhook,type StrategyWebhook} from './strategy-webhook';
 import {registerSepEvents,sepRequestAuthorized,sepEventHeaderError,sepEventsEnabled,SEP_AUTH_REQUIRED,SEP_EVENTS_PATH,SEP_EVENTS_PRINCIPAL,type SepEventsBindings,type SepSubscribe,type SepUnsubscribe} from './sep-events';
 import {resolveSepCallback,sepCallbackTransport} from './sep-webhook';
 import {DurableObject} from 'cloudflare:workers';
 import {createMcpHandler,isLegacyRequest,WebStandardStreamableHTTPServerTransport} from '@modelcontextprotocol/server';
+import {ReplayBenchmark,isReplayAuthorization,startReplayInput,type ReplayBenchmarkAccess,type ReplayStrategyEvent,type SavedReplay} from '../server/replay-benchmark';
+import {isArchiveReplay,isReplayId,replayCatalog,type ReplayRace,type ReplayTiming} from '../src/race/replay';
+import {archiveRequest,archivedTiming,serveArchive} from '../server/replay-archive';
 import {RaceRoom,type Peer} from '../server/race-room';
 import {createRaceMcp,type McpRoom,type StrategySeatAccess} from '../server/race-mcp';
 import {isCircuit,type CircuitId} from '../src/race/track';
@@ -117,6 +120,23 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
    const sepQuery=sep?'?sep=1':'';
    const factory=()=>createRaceMcp(origin,{
     sepEvents:sep,
+    replayCatalog:async()=>{
+     const asset=async(name:string)=>{
+      const response=await env.ASSETS.fetch(new Request(origin+'/replays/'+name+'.json'));
+      return response.ok?response.json<ReplayRace[]>():[];
+     };
+     const [bundled,archive]=await Promise.all([asset('index'),asset('archive')]);
+     return replayCatalog(bundled,archive);
+    },
+    startReplay:async input=>{
+     if(!(await allowMcpCreate()).success)throw new Error('Room creation limit');
+     const room=crypto.randomUUID();
+     const created=await roomStub(env,room).fetch(new Request(`${origin}/internal-replay-create?room=${room}${sep?'&sep=1':''}`,{
+      method:'POST',body:JSON.stringify(input),
+     }));
+     if(!created.ok)throw new Error((await created.json<{error:string}>()).error);
+     return created.json<ReplayBenchmarkAccess>();
+    },
     create:async (matchup,circuit,solo)=>{
      if(!(await allowMcpCreate()).success)throw new Error('Room creation limit');
      const created=await create(env,origin,matchup,circuit,4,solo);
@@ -158,7 +178,7 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
      const result=await roomStub(env,room).fetch(new Request(`${origin}/internal-strategy-event${sepQuery}`,{
       method:'POST',headers:credentialHeaders,body:JSON.stringify({room,...(eventId?{event_id:eventId}:{}),...(team?{team}:{})}),
      }));
-     return result.ok?result.json<LiveStrategyRead>():null;
+     return result.ok?result.json<LiveStrategyRead|ReplayStrategyEvent>():null;
     },
     submitStrategy:async input=>{
      const result=await roomStub(env,input.room).fetch(new Request(`${origin}/internal-strategy-radio${sepQuery}`,{
@@ -211,6 +231,16 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
    return new Response(response.body,{status:response.status,headers});
   }
 
+  const archived=archiveRequest(path);
+  if(archived&&req.method==='GET')return serveArchive(url,archived);
+  const replayMatch=path.match(/^\/api\/replay-benchmarks\/([^/]+)\/(status|next)$/);
+  if(replayMatch&&isRoomId(replayMatch[1])){
+   const [,room,action]=replayMatch;
+   if(!isReplayAuthorization(req.headers.get('Authorization')))return json({error:'Replay controller required.'},403);
+   if(action==='next'?(req.method!=='POST'||req.headers.get('Origin')!==origin):req.method!=='GET')return json({error:'Invalid replay request.'},403);
+   return roomStub(env,room).fetch(new Request(`${origin}/internal-replay-${action}`,{method:req.method,headers:{Authorization:req.headers.get('Authorization')!}}));
+  }
+
   const match=path.match(/^\/api\/rooms\/([^/]+)\/(info|links|status|ws)$/);
   if(match&&isRoomId(match[1])){
    const [,roomId,endpoint]=match;
@@ -261,6 +291,7 @@ interface Saved {
 
 export class GameRoom extends DurableObject<Env> {
  private room:RaceRoom|null=null;
+ private replay?:ReplayBenchmark;
  private peers=new Map<WebSocket,Peer>();
  private timer:ReturnType<typeof setInterval>|null=null;
  private prev=Date.now();
@@ -286,6 +317,14 @@ export class GameRoom extends DurableObject<Env> {
    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}','{"type":"pong"}'));
   }
   void ctx.blockConcurrencyWhile(async()=>{
+   const replay=await ctx.storage.get<SavedReplay>('replay');
+   if(replay){
+    if(replay.expiresAt>Date.now()){
+     const timing=await ctx.storage.get<ReplayTiming>('replay-timing')??await this.loadReplay(replay.race,replay.origin??'https://replay-assets.local');
+     if(timing)this.replay=new ReplayBenchmark(replay,timing,this.replayTransport());
+    }
+    return;
+   }
    const saved=await ctx.storage.get<Saved>('race');
    if(!saved)return;
    const waiting=saved.live?.phase==='running'&&saved.race.phase==='lobby'&&Date.now()<saved.live.deadline;
@@ -403,6 +442,7 @@ export class GameRoom extends DurableObject<Env> {
   for(const ws of this.peers.keys())ws.close(ROOM_EXPIRED_CLOSE_CODE,'Room expired');
   this.peers.clear();
   this.room=null;
+  this.replay=undefined;
   this.pairing=undefined;
   await this.ctx.storage.deleteAlarm();
   await this.ctx.storage.deleteAll();
@@ -608,7 +648,7 @@ export class GameRoom extends DurableObject<Env> {
   return events;
  }
 
- private async deliverSepStrategy(team:Team,seat:StrategySeat,subscription:SepStrategyWebhook,event:Parameters<typeof postSepStrategyEvent>[2],issuedAt:number){
+ private async deliverSepStrategy(team:Team,seat:StrategySeat,subscription:SepStrategyWebhook,event:StrategyEventNotice&{event_id:string},issuedAt:number){
   const signal=seat.webhookAbort!.signal;
   const delivered=await postSepStrategyEvent(this.outboundSep,subscription,event,issuedAt,signal);
   const room=this.room!;
@@ -618,7 +658,7 @@ export class GameRoom extends DurableObject<Env> {
   room.broadcast();
  }
 
- private async deliverStrategy(team:Team,seat:StrategySeat,subscription:StrategyWebhook,event:Parameters<typeof postStrategyEvent>[2]){
+ private async deliverStrategy(team:Team,seat:StrategySeat,subscription:StrategyWebhook,event:StrategyEventNotice&{event_id:string}){
   const room=this.room!,signal=seat.webhookAbort!.signal;
   const status=await postStrategyEvent(this.outbound.bind(this),subscription,event,signal);
   if(signal.aborted||seat.webhook!==subscription||room.live!=='running'||this.strategyDeliveries[team]!==event.event_id)return;
@@ -799,9 +839,54 @@ export class GameRoom extends DurableObject<Env> {
   return {failure};
  }
 
+ private async loadReplay(id:string,origin:string){
+  if(!isReplayId(id))return null;
+  if(isArchiveReplay(id))return archivedTiming(id).catch(()=>null);
+  const response=await this.env.ASSETS.fetch(new Request(`${origin}/replays/${id}.json`));
+  return response.ok&&response.headers.get('Content-Type')?.includes('application/json')?response.json<ReplayTiming>():null;
+ }
+
+ private replayTransport(){
+  return {
+   save:(state:SavedReplay)=>this.ctx.storage.put('replay',state),
+   defer:(promise:Promise<unknown>)=>this.ctx.waitUntil(promise),
+   outbound:this.outbound.bind(this),
+   outboundSep:this.outboundSep,
+   authorizeSep:(request:Request)=>sepRequestAuthorized(request,this.env),
+   verifySep:async(request:Request,subscription:StrategyWebhook)=>{
+    const verificationKey=await subscriptionId([SEP_EVENTS_PRINCIPAL,subscription.url]);
+    const verified=await roomStub(this.env,`sep-verification:${verificationKey}`).fetch(new Request(new URL('/internal-sep-verify',request.url),{
+     method:'POST',headers:{Authorization:request.headers.get('Authorization')!},body:JSON.stringify(subscription),
+    }));
+    return verified.json<SepVerificationReply>();
+   },
+  };
+ }
+
+ private async createReplay(req:Request,url:URL){
+  const room=url.searchParams.get('room');
+  const input=startReplayInput.safeParse(await req.json());
+  if(!input.success||!isRoomId(room)||this.room||this.replay)return json({error:'Invalid replay benchmark request.'},400);
+  const timing=await this.loadReplay(input.data.race,url.origin);
+  if(!timing)return json({error:'This historical race is unavailable.'},404);
+  // Creating a benchmark is the first operation on a newly allocated Durable Object.
+  if(this.replay||this.room)return json({error:'Race already exists.'},409);
+  try{
+   this.replay=ReplayBenchmark.create(room,input.data,timing,url.searchParams.has('sep'),this.replayTransport());
+  }catch(error){
+   return json({error:(error as Error).message},400);
+  }
+  this.replay.state.origin=url.origin;
+  await this.ctx.storage.setAlarm(this.replay.state.expiresAt);
+  await this.ctx.storage.put({replay:this.replay.state,'replay-timing':timing});
+  return json(this.replay.access(url.origin));
+ }
+
  private async internal(req:Request,url:URL){
   const path=url.pathname;
   if(path==='/internal-sep-verify'&&req.method==='POST')return this.verifySepCallback(req);
+  if(this.replay)return this.replay.handle(req);
+  if(path==='/internal-replay-create'&&req.method==='POST')return this.createReplay(req,url);
   if(path==='/internal-chat-practice'&&req.method==='POST')return this.startChatPractice(url);
   if(path==='/internal-start'&&req.method==='POST')return this.startLive(req,url);
   if(path==='/internal-pair'&&req.method==='POST'){

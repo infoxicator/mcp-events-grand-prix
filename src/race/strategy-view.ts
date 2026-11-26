@@ -68,7 +68,7 @@ function pitReplay(live?: LivePit) {
 export function mountStrategy() {
  const app = document.querySelector<HTMLElement>('#app')!;
  const options = Object.entries(strategyScenarios).map(([id,s]) => `<option value="${id}">${s.name}</option>`).join('');
- app.innerHTML = '<main class="strategy"><a href="/">MCP Grand Prix</a><h1>Race strategy replays</h1><label>Scenario <select><option value="corner">Corner judgement</option><option value="battery">One boost, two rivals</option><option value="pit-replay">Pit strategy benchmark</option>'+options+'</select></label> <button type="button" id="live-strategy" hidden></button> <button type="button" id="cancel-strategy" hidden>Cancel benchmark</button><p role="status" hidden></p><section></section></main>';
+ app.innerHTML = '<main class="strategy"><a href="/">MCP Grand Prix</a><h1>Race strategy replays</h1><p><a href="/?replay">Historical races</a></p><label>Scenario <select><option value="corner">Corner judgement</option><option value="battery">One boost, two rivals</option><option value="pit-replay">Pit strategy benchmark</option>'+options+'</select></label> <button type="button" id="live-strategy" hidden></button> <button type="button" id="cancel-strategy" hidden>Cancel benchmark</button><p role="status" hidden></p><section></section></main>';
  const select = app.querySelector('select')!;
  const panel = app.querySelector('section')!;
  const liveButton=app.querySelector<HTMLButtonElement>('#live-strategy')!;

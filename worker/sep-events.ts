@@ -48,7 +48,7 @@ type RoomReply={result?:Record<string,unknown>;error?:{code:number;message:strin
 export function registerSepEvents(server:McpServer,authenticated:boolean,roomRequest:(input:SepSubscribe|SepUnsubscribe,method:'subscribe'|'unsubscribe')=>Promise<RoomReply>){
  server.server.registerCapabilities({extensions:{[extension]:{}}});
  server.server.setRequestHandler('events/list',{params:z.object({cursor:z.string().optional()}).optional()},async()=>({
-  ...complete,events:[{...strategyEventDefinition,inputSchema:z.toJSONSchema(filter),description:'Live race telemetry requiring a strategy radio decision. Open a strategy seat and subscribe using its room and team.'}],
+  ...complete,events:[{...strategyEventDefinition,inputSchema:z.toJSONSchema(filter)}],
  }));
  for(const [method,schema] of [['subscribe',subscribe],['unsubscribe',unsubscribe]] as const){
   server.server.setRequestHandler(`events/${method}`,{params:schema},async input=>{
