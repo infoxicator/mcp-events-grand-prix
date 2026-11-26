@@ -247,6 +247,8 @@ npm run test:e2e         # Full Playwright browser suite
 npm run worker:check     # Wrangler dry-run bundle check
 ```
 
+Playwright runs headless by default. On macOS it uses full Chromium so the 3D renderer can use Metal. To show the browser windows for debugging, run `npm run test:e2e -- --headed`.
+
 Production deploys to Cloudflare Workers (`f1` via [`wrangler.jsonc`](wrangler.jsonc)) using Durable Objects (`GameRoom`), static `ASSETS`, and per-IP / per-session rate limiting (`ROOM_CREATION`, `MCP_ROOM_CREATION`).
 
 ---
