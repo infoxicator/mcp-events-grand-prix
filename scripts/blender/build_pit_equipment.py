@@ -116,6 +116,7 @@ rings([(0,0,.004,.074,.077),(0,.061,.015,.083,.09)],dark)
 rings([(0,.037,.036,.065,.098),(0,.058,.029,.095,.119),(0,.094,.025,.104,.134),
        (0,.151,.011,.118,.136),(0,.207,-.004,.117,.124),(0,.244,-.013,.095,.103),
        (0,.267,-.010,.064,.076),(0,.279,-.007,.022,.030)],(.08,.106,.145),32)
+make('Helmet')
 # Continuous wraparound visor and brow gasket, with shaped chin opening.
 for bottom,top,col in [(.113,.202,(.012,.015,.021)),(.119,.193,(.025,.069,.098)),
                        (.186,.192,(.125,.18,.21)),(.073,.087,(.024,.028,.035))]:
@@ -128,6 +129,7 @@ for bottom,top,col in [(.113,.202,(.012,.015,.021)),(.119,.193,(.025,.069,.098))
         rows.append(ring)
     for a,b in zip(rows,rows[1:]):
         for i in range(36):faces.append((a[i],a[i+1],b[i+1],b[i]))
+make('PitVisor')
 # Stack tear-offs along the visor edge and mould a ridge into the helmet shell.
 for side in [-1,1]:
     for j in range(2):
@@ -137,7 +139,9 @@ for j in range(4):rod((-.042,.102+j*.010,-.119),(.042,.102+j*.010,-.119),.003,da
 for side in (-1,1):
     rod((side*.104,.155,.030),(side*.12,.155,.030),.015,metal)
     rod((side*.10,.119,-.045),(side*.113,.119,-.045),.029,dark)
-make('Helmet')
+rod((-.104,.123,.058),(-.088,.096,.146),.004,dark)
+rod((-.088,.096,.146),(-.045,.093,.157),.006,dark)
+make('HelmetHardware')
 tailored(section([(-.054,.018,.023,0),(-.028,.069,.066,0),(.022,.086,.077,.004),
     (.095,.084,.080,.005),(.178,.075,.069,0),(.252,.063,.063,-.005),(.31,.059,.061,-.008),
     (.354,.065,.064,-.005),(.405,.066,.060,0),(.494,.050,.047,0),(.575,.039,.039,0)]),
@@ -154,7 +158,10 @@ for i in range(4):
     rod((x,.028,.016),(x,.042,reach),.012,dark,.011)
     rod((x,.042,reach),(x,.022,reach+.016),.011,dark,.009)
 rod((-.030,.009,.009),(-.050,.014,.040),.015,dark,.012)
+left=([( -x,y,z) for x,y,z in verts],[tuple(reversed(f)) for f in faces],cols.copy(),uvs.copy())
 make('Glove')
+verts[:],faces[:],cols[:],uvs[:]=left
+make('GloveLeft')
 rings([(0,-.004,.046,.062,.131),(0,.016,.049,.072,.142),
        (0,.035,.052,.074,.139),(0,.054,.039,.070,.126),
        (0,.075,.003,.062,.083),(0,.117,-.017,.052,.061)],dark,28)
@@ -216,8 +223,9 @@ for side in [-1,1]:
     rod((side*.195,.073,-.21),(side*.125,.078,.35),.032,metal)
     rod((side*.145,.085,.12),(side*.062,.20,.33),.027,red)
     rod((side*.20,.070,-.13),(side*.245,.070,-.13),.071,dark)
-rod((-.2,.09,-.15),(.2,.09,-.15),.031,metal);rod((-.113,.155,.345),(.113,.155,.345),.038,dark);make('JackFoot')
-rod((0,.09,-.13),(0,.91,-.82),.029,metal);rod((-.21,.91,-.82),(.21,.91,-.82),.028,dark);make('JackHandle')
+rod((-.2,.09,-.15),(.2,.09,-.15),.031,metal);make('JackFoot')
+rod((-.113,.155,.345),(.113,.155,.345),.038,dark);make('JackCradle')
+rod((0,0,0),(0,.82,-.69),.029,metal);rod((-.21,.82,-.69),(.21,.82,-.69),.028,dark);make('JackHandle')
 # Soft occlusion under an individual planted sole. The renderer follows each
 # boot so the contact opens out and fades as its weight shifts to the other leg.
 contact=bpy.data.materials.new('Sole contact');contact.use_nodes=True
@@ -235,6 +243,23 @@ contact.node_tree.links.new(tex.outputs['Alpha'],bs.inputs['Alpha'])
 for x,z,u,v in [(-.17,-.19,0,0),(-.17,.29,0,1),(.17,.29,1,1),(.17,-.19,1,0)]:
     vertex((x,0,z),white,(u,v))
 faces.append((0,1,2,3));make('SoleContact');parts[-1].data.materials[0]=contact
+# Replacement nose and layered carbon flaps carried in by the front-wing adjusters.
+for z,h,chord in [(.04,.07,.29),(-.15,.13,.21),(-.27,.20,.14)]:
+    for side in [-1,1]:
+        sections=[]
+        for w in [.06,.38,.71,.96]:
+            y=h+.045*w*w
+            sections.append([vertex((side*w,y+dy,z-w*.09+dz),dark) for dy,dz in [(0,0),(.023,-.13*chord),(.026,-chord),(.008,-chord)]])
+        for a,b in zip(sections,sections[1:]):
+            for j in range(4):faces.append((a[j],a[(j+1)%4],b[(j+1)%4],b[j]))
+        faces.append(tuple(sections[-1]))
+for z,rx,ry in [(.13,.087,.047),(-.22,.115,.068),(-.62,.17,.10)]:
+    ring=[vertex((rx*math.cos(j*math.tau/16),.21+ry*math.sin(j*math.tau/16),z),white) for j in range(16)]
+    if z==.13:faces.append(tuple(ring))
+    else:
+        for j in range(16):faces.append((prev[j],prev[(j+1)%16],ring[(j+1)%16],ring[j]))
+    prev=ring
+faces.append(tuple(reversed(prev)));make('ServiceNose')
 # Each mesh can be inspected individually in the native file.
 for i,o in enumerate(parts):o.location.x=i*.65
 bpy.ops.wm.save_as_mainfile(filepath=str(root/'scripts/blender/pit-equipment.blend'))

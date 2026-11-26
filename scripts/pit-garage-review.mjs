@@ -10,7 +10,8 @@ import {once} from 'node:events';
 import {spawn} from 'node:child_process';
 const [origin,out]=process.argv.slice(2);
 await mkdir(out,{recursive:true});
-const track=getTrack('monza'),race=createRace(3,'monza');race.phase='racing';
+const circuit=process.env.RACE_CIRCUIT??'monza';
+const track=getTrack(circuit),race=createRace(3,circuit);race.phase='racing';
 for(const c of [race.cars.a,race.cars.b,...race.field])c.finishTime=0;
 for(const [code,approach,speed] of [['NOR',2,6],['VER',2,6],['PIA',12,9]]){
  const i=opponents.findIndex(e=>e.code===code),box=pitBox(track,opponents[i].team),distance=box-approach+(i%2)*track.LENGTH;
@@ -26,21 +27,38 @@ try{
  page.on('console',m=>{if(/shader error|INVALID_OPERATION/i.test(m.text()))errors.push(m.text());});
  await page.route('**/garage-review',r=>r.fulfill({contentType:'text/html',body:'<style>*{margin:0}#v{width:100vw;height:100vh}</style><div id="v"></div>'}));
  await page.goto(origin+'/garage-review');
- await page.evaluate(async({frames,middle})=>{
+ await page.evaluate(async({frames,middle,circuit})=>{
   const source=await fetch('/src/race/scene.ts').then(r=>r.text());
   const T=await import(source.match(/from ["']([^"']*\/three\.js[^"']*)["']/)[1]);
   const {createScene}=await import('/src/race/scene.ts'),{getTrack}=await import('/src/race/track.ts'),{circuitHeight}=await import('/src/race/elevation.ts');
-  const track=getTrack('monza'),scene=createScene(document.querySelector('#v'),track);
-  const lens=track.pointAt(middle-2,9),aim=track.pointAt(middle-2,-23),height=circuitHeight('monza',middle);
+  const track=getTrack(circuit),scene=createScene(document.querySelector('#v'),track);
+  let lens,aim,eyeHeight,aimHeight,fov;
+  function camera(eye,edge,up,target,offset,height,angle){
+   lens=track.pointAt(eye,edge);aim=track.pointAt(target,offset);
+   eyeHeight=circuitHeight(circuit,eye)+up;aimHeight=circuitHeight(circuit,target)+height;fov=angle;
+  }
+  camera(middle-2,9,9,middle-2,-23,.85,42);
+  window.inspectPit=name=>{
+   const bay=middle-14;
+   if(name==='timing-stand')camera(bay-4.6,-6,3.0,bay,-13.28,1.89,44);
+   if(name==='idle-gantries')camera(bay+28,4,10,bay+84,-23,2.55,47);
+   if(name==='crew')camera(bay+4.8,-17.55,2.12,bay,-23,1.17,42);
+  };
   const update=T.PerspectiveCamera.prototype.updateProjectionMatrix;
   T.PerspectiveCamera.prototype.updateProjectionMatrix=function(){
-   if(this.far===5000){this.position.set(lens.x,height+9,lens.z);this.lookAt(aim.x,height+.85,aim.z);this.fov=42;}
+   if(this.name==='Race camera'){this.position.set(lens.x,eyeHeight,lens.z);this.lookAt(aim.x,aimHeight,aim.z);this.fov=fov;}
    return update.call(this);
   };
   scene.setMode('pits');
   await new Promise((ok,fail)=>{function warm(){scene.render(frames[0],performance.now());if(scene.info.modelError)fail(Error(scene.info.modelError));else if(scene.info.modelsReady)ok();else requestAnimationFrame(warm);}warm();});
-  window.draw=(i,type)=>{scene.render(frames[i],50000+i*1000/30);return document.querySelector('canvas').toDataURL(type,.89).split(',')[1];};
- },{frames,middle:(pitBox(track,'McLaren')+pitBox(track,'Red Bull Racing'))/2});
+  const output=document.createElement('canvas');output.width=innerWidth;output.height=innerHeight;
+  const ctx=output.getContext('2d'),raceCanvas=document.querySelector('canvas');
+  window.draw=(i,type)=>{
+   scene.render(frames[i],50000+i*1000/30);
+   ctx.drawImage(raceCanvas,0,0,output.width,output.height);
+   return output.toDataURL(type,.89).split(',')[1];
+  };
+ },{frames,circuit,middle:(pitBox(track,'McLaren')+pitBox(track,'Red Bull Racing'))/2});
  const encoder=spawn('ffmpeg',['-loglevel','error','-y','-f','image2pipe','-framerate','30','-vcodec','mjpeg','-i','-','-c:v','libx264','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',out+'/double-stack.mp4'],{stdio:['pipe','ignore','inherit']});
  const done=once(encoder,'close');
  for(let i=0;i<frames.length;i++){
@@ -48,5 +66,10 @@ try{
   if(!encoder.stdin.write(Buffer.from(img,'base64')))await once(encoder.stdin,'drain');
   if(i===35)await writeFile(out+'/parallel.png',Buffer.from(await page.evaluate(i=>window.draw(i,'image/png'),i),'base64'));
  }
- encoder.stdin.end();if((await done)[0]||errors.length)throw Error('Capture failed '+errors.join('\n'));
+ encoder.stdin.end();if((await done)[0])throw Error('Video encoding failed');
+ for(const name of ['timing-stand','idle-gantries','crew']){
+  const png=await page.evaluate(name=>{window.inspectPit(name);return window.draw(35,'image/png');},name);
+  await writeFile(out+'/'+name+'.png',Buffer.from(png,'base64'));
+ }
+ if(errors.length)throw Error('Capture failed '+errors.join('\n'));
 }finally{await browser.close();}

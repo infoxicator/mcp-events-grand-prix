@@ -137,9 +137,10 @@ test('MCP pit wall keeps its dark palette on a light host',async({page})=>{
   element.style.color='#141414';
  });
  await expect(body).toHaveCSS('background-color','rgb(255, 255, 255)');
- await expect(app.locator('#app')).toHaveCSS('background-color','rgb(16, 18, 20)');
+ await expect(app.locator('#app')).toHaveCSS('background-color','rgb(10, 13, 18)');
  await expect(app.locator('#app')).toHaveCSS('color-scheme','dark');
- for(const selector of ['.brand b','.race-heading > h1','#circuit-name']){
-  await expect(app.locator(selector)).toHaveCSS('color','rgb(239, 238, 232)');
+ for(const selector of ['.brand b','.race-heading > h1']){
+  await expect(app.locator(selector)).toHaveCSS('color','rgb(246, 248, 251)');
  }
+ await expect(app.locator('#circuit-name')).toHaveCSS('color','rgb(255, 255, 255)');
 });

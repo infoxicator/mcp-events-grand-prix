@@ -60,14 +60,14 @@ export function raceAudio(button:HTMLButtonElement,level:HTMLInputElement,connec
   });}finally{pending=false;}
  };
  level.oninput=()=>{volume=Number(level.value);save('jev-volume',String(volume));if(context&&output)output.gain.setTargetAtTime(volume*.52,context.currentTime,.025);};
- function cue(hz:number,end:number,duration:number,loudness:number,rough:boolean){
-  const a=context!,now=a.currentTime,g=a.createGain(),filter=a.createBiquadFilter();filter.type='bandpass';filter.Q.value=rough?.95:2.1;
+ function cue(hz:number,end:number,duration:number,loudness:number,rough:boolean,delay=0,pan=0){
+  const a=context!,now=a.currentTime+delay,g=a.createGain(),filter=a.createBiquadFilter();filter.type='bandpass';filter.Q.value=rough?.95:2.1;
   filter.frequency.setValueAtTime(hz,now);filter.frequency.exponentialRampToValueAtTime(end,now+duration);
   const src=rough?a.createBufferSource():a.createOscillator();
   if(src instanceof AudioBufferSourceNode){src.buffer=noise!;src.loop=true;}else{src.type='sawtooth';src.frequency.setValueAtTime(hz,now);src.frequency.exponentialRampToValueAtTime(end,now+duration);}
   g.gain.setValueAtTime(.001,now);g.gain.exponentialRampToValueAtTime(loudness,now+.012);g.gain.exponentialRampToValueAtTime(.001,now+duration);
-  src.connect(filter).connect(g).connect(output!);src.start(now);src.stop(now+duration+.012);
-  src.onended=()=>{src.disconnect();filter.disconnect();g.disconnect();};
+  const stereo=a.createStereoPanner();stereo.pan.value=pan;src.connect(filter).connect(g).connect(stereo).connect(output!);src.start(now);src.stop(now+duration+.012);
+  src.onended=()=>{src.disconnect();filter.disconnect();g.disconnect();stereo.disconnect();};
  }
  function update(r:Race,team:Team,connected:boolean){
   if(!context||!active)return;
@@ -82,7 +82,7 @@ export function raceAudio(button:HTMLButtonElement,level:HTMLInputElement,connec
   const impact=car.lastImpact?.time??-1,age=r.time-impact;
   if(impact>=0&&impact!==heard[team]&&age>=0&&age<.17&&gear){
    cue(820,82,.20,.47,true);lastFx=t;
-  }else if(phase>=0&&phase!==service){if(phase===1||phase===2)cue(1900,770,.18,.38,true);else cue(570,160,.105,.29,true);lastFx=t;}
+  }else if(phase>=0&&phase!==service){if(phase===1||phase===2){for(let corner=0;corner<4;corner++)cue(1900+corner*80,770,.12,.16,true,corner*.039,corner%2?.68:-.68);}else cue(570,160,.105,.29,true);lastFx=t;}
   else if(phase<0&&car.speed>15&&t-lastFx>.38){
    const track=getTrack(r.circuit);
    if(kerbHeight(track,car.distance,car.offset+.81)+kerbHeight(track,car.distance,car.offset-.81)>.019||Math.abs(car.lateralG)>3.9){

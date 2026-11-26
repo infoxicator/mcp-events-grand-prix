@@ -82,12 +82,14 @@ export function createInterpolator(delay=.12){
   }
   const xa=a.cars.a,ya=b.cars.a,xb=a.cars.b,yb=b.cars.b;
   if(!outCarA)outCarA={...xa};else Object.assign(outCarA,xa);
+  outCarA.totalStop=xa.totalStop;outCarA.damage=xa.damage;
   outCarA.distance=lerp(xa.distance,ya.distance,t);outCarA.offset=lerp(xa.offset,ya.offset,t);
   outCarA.speed=lerp(xa.speed,ya.speed,t);outCarA.heading=angle(xa.heading,ya.heading,t);
   outCarA.steering=lerp(xa.steering,ya.steering,t);outCarA.acceleration=lerp(xa.acceleration,ya.acceleration,t);
   outCarA.lateralG=lerp(xa.lateralG,ya.lateralG,t);outCarA.rpm=lerp(xa.rpm,ya.rpm,t);
   outCarA.pitTime=xa.pit===ya.pit?lerp(xa.pitTime,ya.pitTime,t):xa.pitTime;
   if(!outCarB)outCarB={...xb};else Object.assign(outCarB,xb);
+  outCarB.totalStop=xb.totalStop;outCarB.damage=xb.damage;
   outCarB.distance=lerp(xb.distance,yb.distance,t);outCarB.offset=lerp(xb.offset,yb.offset,t);
   outCarB.speed=lerp(xb.speed,yb.speed,t);outCarB.heading=angle(xb.heading,yb.heading,t);
   outCarB.steering=lerp(xb.steering,yb.steering,t);outCarB.acceleration=lerp(xb.acceleration,yb.acceleration,t);

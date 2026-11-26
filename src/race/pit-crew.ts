@@ -1,3 +1,5 @@
+import {pitHoses} from './pit-hoses';
+import {pitDisplay} from './pit-display';
 import * as T from 'three';
 import {embeddedGLB} from './embedded-glb';
 import {serviceSuit,suitFabric} from './service-suit';
@@ -5,19 +7,21 @@ import suitURL from './assets/service-suit.glb.gz?url';
 import library from './assets/pit-equipment.glb.gz?url';
 import type {Track} from './track';
 import {circuitHeight} from './elevation';
-import {cornerService,frontJackPose,jackLift,pitBox,releaseGreen,ramp,type PitTelemetry} from './pit-service';
+import {cornerService,frontJackPose,jackLift,pitBox,canRelease,serviceClock,ramp,type PitTelemetry} from './pit-service';
 import {BOX_OFFSET,garageBay,type Constructor} from './pit-service';
-import {constructors,grid} from './grid';
+import {compoundColors,constructors,grid} from './grid';
 import {wheelStations} from './suspension';
 
 const V=(x=0,y=0,z=0)=>new T.Vector3(x,y,z);
 const up=V(0,1),identity=new T.Quaternion(),unit=V(1,1,1);
-const colour=(compound?:string)=>compound==='hard'?'#e3dfd1':compound==='medium'?'#f2bd37':'#e4423e';
+const colour=(compound='medium')=>compoundColors[compound]??compoundColors.medium;
 
 /** One instance batch per Blender part. All service poses are calculated in box-local metres. */
 export function pitCrew(scene:T.Scene,track:Track){
  const groups=new Map<Constructor,T.Group>(),kits=new Map<T.Group,Map<string,T.InstancedMesh>>();
  let disposed=false,ready=false,error:string|undefined;
+ const hoses=new Map<T.Group,ReturnType<typeof pitHoses>>();
+ const displays=new Map<Constructor,ReturnType<typeof pitDisplay>>();
  const crews=new Map<T.Group,ReturnType<typeof serviceSuit>[]>();
  let build:((team:Constructor)=>void)|undefined,releaseSource:(()=>void)|undefined;
  const loaded=Promise.all([embeddedGLB(library,true),embeddedGLB(suitURL,true)]).then(([gltf,clothing])=>{
@@ -29,39 +33,58 @@ export function pitCrew(scene:T.Scene,track:Track){
    for(const mat of materials){for(const v of Object.values(mat))if(v instanceof T.Texture)v.dispose();mat.dispose();}
    return;
   }
-  for(const name of Object.keys(garageBay) as Constructor[]){
-   const box=pitBox(track,name),q=track.pointAt(box,-24.10),forward=track.tangentAt(box);
+  const signs=[...['FIA RACE CONTROL','MEDICAL CENTRE','PIRELLI'].map((name,bay)=>({name,box:track.PIT_STOP-200+28*bay,stripe:'#849099'})),
+   ...(Object.keys(garageBay) as Constructor[]).map(name=>({name,box:pitBox(track,name),stripe:constructors[name][0]}))];
+  for(const {name,box,stripe} of signs){
    const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=64;
    const ctx=canvas.getContext('2d')!;ctx.fillStyle='#181a1c';ctx.fillRect(0,0,1024,64);
-   ctx.fillStyle=constructors[name][0];ctx.fillRect(0,0,1024,9);ctx.fillRect(0,55,1024,9);
+   ctx.fillStyle=stripe;ctx.fillRect(0,0,1024,9);ctx.fillRect(0,55,1024,9);
    ctx.textAlign='center';ctx.fillStyle='#ffffff';ctx.font='bold 41px Arial';ctx.fillText(name.toUpperCase(),512,48);
    const drivers=grid.filter(entry=>entry.team===name);ctx.font='bold 29px Arial';
    drivers.forEach((driver,i)=>ctx.fillText(driver.number+'  '+driver.code,i===0?100:924,46));
    const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=4;
-   const sign=new T.Mesh(new T.PlaneGeometry(27,.75),new T.MeshBasicMaterial({map}));
-   sign.name=name+' garage';sign.position.set(q.x,circuitHeight(track.id,box)+4.31,q.z);
-   sign.rotation.y=Math.atan2(forward.x,forward.z)-Math.PI/2;scene.add(sign);
+   // Adjacent boards share an edge on the surveyed grade and curvature of the pit lane.
+   const panel=new T.PlaneGeometry(28,.75,4,1),positions=panel.getAttribute('position');
+   const center=track.pointAt(box,-24.10),height=circuitHeight(track.id,box)+4.31;
+   for(let i=0;i<positions.count;i++){
+    const station=box+positions.getX(i),point=track.pointAt(station,-24.10);
+    positions.setXYZ(i,point.x-center.x,circuitHeight(track.id,station)+4.31+positions.getY(i)-height,point.z-center.z);
+   }
+   panel.computeVertexNormals();
+   const sign=new T.Mesh(panel,new T.MeshStandardMaterial({map,emissiveMap:map,emissive:'#ffffff',emissiveIntensity:track.night?.54:.16,roughness:.48}));
+   sign.name=name+' garage';sign.position.set(center.x,height,center.z);scene.add(sign);
+  }
+  for(const name of Object.keys(garageBay) as Constructor[]){
+   const d=pitBox(track,name),t=track.tangentAt(d);
+   displays.set(name,pitDisplay(scene,track.pointAt(d,-20.9),circuitHeight(track.id,d)+2.9,Math.atan2(t.x,t.z)-Math.PI/2));
   }
   build=team=>{
    const group=new T.Group(),kit=new Map<string,T.InstancedMesh>();
    gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;
-    if(['Torso','Arm','Leg'].includes(o.name))return;
-    const material=o.material.clone() as T.MeshStandardMaterial;
+    if(['Torso','Arm','Leg','AirHose'].includes(o.name))return;
+    const material:T.MeshStandardMaterial=['Helmet','PitVisor'].includes(o.name)?
+     new T.MeshPhysicalMaterial({clearcoat:1,clearcoatRoughness:.12}):o.material.clone();
     if(o.name==='Helmet'){
+     material.vertexColors=false;material.color.set(constructors[team][0]);material.metalness=.22;
      material.onBeforeCompile=shader=>{
       shader.uniforms.crewStripe={value:new T.Color(constructors[team][1])};
       shader.vertexShader='varying vec3 shell;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nshell=position;');
       shader.fragmentShader='uniform vec3 crewStripe;varying vec3 shell;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-       if(shell.y>.202){
-        float stripe=1.-smoothstep(.010,.015,abs(abs(shell.x)-.042));
+       if(shell.y>.185){
+        float stripe=1.-smoothstep(.012,.016,abs(abs(shell.x)-.047));
         diffuseColor.rgb=mix(diffuseColor.rgb,crewStripe,stripe);
        }`);
      };material.customProgramCacheKey=()=>'constructor-helmet-stripe';
     }
-    material.roughness=o.name==='Helmet'?.29:o.name==='SocketGun'?.43:.91;
-    const batch=new T.InstancedMesh(o.geometry,o.name==='ReleaseLens'?new T.MeshBasicMaterial({toneMapped:false}):material,o.name==='AirHose'?64:36);batch.name=team+' pit '+o.name;
+    material.roughness=o.name==='Helmet'?.24:.85;
+    if(/Jack|SocketGun|HoseBoom/.test(o.name)){material.metalness=.72;material.roughness=.35;}
+    if(o.name==='SpareWheel'){material.roughness=.60;material.metalness=.13;}
+    if(o.name==='PitVisor'){material.vertexColors=false;material.color.set('#304956');material.metalness=.61;material.roughness=.08;}
+    const batch=new T.InstancedMesh(o.geometry,o.name==='ReleaseLens'?new T.MeshBasicMaterial({toneMapped:false}):material,48);batch.name=team+' pit '+o.name;
     batch.count=0;batch.boundingSphere=new T.Sphere(V(2,1,0),10);
-    batch.instanceMatrix.setUsage(T.DynamicDrawUsage);batch.castShadow=true;batch.receiveShadow=true;
+    batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
+    batch.castShadow=['Helmet','Boot','JackFoot','JackHandle','SpareWheel','SpareNose'].includes(o.name);
+    batch.receiveShadow=true;
     if(o.name==='ReleaseLens')material.dispose();
     if(o.name==='SoleContact'){
      batch.castShadow=false;batch.receiveShadow=false;material.transparent=true;
@@ -72,8 +95,9 @@ export function pitCrew(scene:T.Scene,track:Track){
    for(const name of ['Helmet','Boot','Glove','SocketGun','JackFoot','JackHandle','SpareWheel','CompoundBand','SoleContact'])
     if(!kit.has(name))throw Error('Missing Blender service part '+name);
    const fabric=suitFabric(source.material as T.MeshStandardMaterial,team);
-   const people=Array.from({length:16},()=>serviceSuit(source,fabric));crews.set(group,people);
+   const people=Array.from({length:20},()=>serviceSuit(source,fabric));crews.set(group,people);
    for(const actor of people)group.add(actor.mesh);
+   const lines=pitHoses();group.add(lines.mesh);hoses.set(group,lines);
    group.visible=false;scene.add(group);groups.set(team,group);kits.set(group,kit);
   }
   build('Ferrari');build('Mercedes');
@@ -85,7 +109,8 @@ export function pitCrew(scene:T.Scene,track:Track){
  const m=new T.Matrix4(),tint=new T.Color(),oldTyre:Partial<Record<Constructor,string>>={};
  const lastStop:Partial<Record<Constructor,{offset:number;yaw:number}>>={};
  function update(team:Constructor,car:PitTelemetry|undefined,time:number){
-  if(!car){const g=groups.get(team);if(g)g.visible=false;delete lastStop[team];return;}
+  displays.get(team)?.update(car);
+  if(!car){delete oldTyre[team];const g=groups.get(team);if(g)g.visible=false;delete lastStop[team];return;}
   if(!groups.has(team))build?.(team);
   const group=groups.get(team);if(!group)return;
   const stopped=car.pit==='stopped',entry=car.pit==='entry',exit=car.pit==='exit';
@@ -96,8 +121,8 @@ export function pitCrew(scene:T.Scene,track:Track){
   const gap=track.wrap(car.distance-box+track.LENGTH/2)-track.LENGTH/2;
   group.visible=(entry&&gap>=-135&&gap<=2)||stopped||(exit&&gap>=-2&&gap<36);
   if(!group.visible)return;
-  if(!exit)oldTyre[team]=car.compound??oldTyre[team];
-  const seconds=stopped?(car.pitTime??0):entry?-1:3;
+  if(entry||(!oldTyre[team]&&stopped))oldTyre[team]=car.compound??oldTyre[team];
+  const seconds=stopped?serviceClock(car):entry?-1:3;
   const progress=entry?ramp(gap,-135,-54):exit?1-ramp(gap,4,36):1;
   const mark=track.pointAt(box,parked?.offset??BOX_OFFSET),forward=track.tangentAt(box);
   group.position.set(mark.x,circuitHeight(track.id,box)+.031,mark.z);
@@ -119,6 +144,8 @@ export function pitCrew(scene:T.Scene,track:Track){
    actor.limb(name,side,base,joint,upper,lower,angle);return tip;
   }
   function person(hips:T.Vector3,yaw:number,lean:number,hands:T.Vector3[],role:'gun'|'carrier'|'jack'|'steady',phase:number,step:number,stride:number,stance:T.Vector3){
+   const walking=entry?1-ramp(progress,.35,.94):exit?1-ramp(progress,.78,1):0;
+   yaw+=Math.atan2(Math.sin((entry?-Math.PI/2:Math.PI/2)-yaw),Math.cos((entry?-Math.PI/2:Math.PI/2)-yaw))*walking;
    const dir=new T.Quaternion().setFromAxisAngle(up,yaw);
    const breath=Math.sin(time*2.8+phase);
    const twist=.10*Math.sin(phase)+.12*stride;
@@ -132,9 +159,10 @@ export function pitCrew(scene:T.Scene,track:Track){
    }
    const actor=people[personIndex++];actor.core(hips,torso);
    const eye=mount(0,.515,.012),aim=hands[0].clone().lerp(hands[1],.5).sub(eye);
+   if(entry)aim.lerp(V(-hips.x,-.7,gap-hips.z).normalize(),1-ramp(gap,-8,-1));
    const headYaw=Math.atan2(aim.x,aim.z),headPitch=Math.atan2(-aim.y,Math.hypot(aim.x,aim.z));
    const head=new T.Quaternion().setFromEuler(new T.Euler(T.MathUtils.clamp(headPitch*.65,.10,.79),headYaw+.023*breath,.035*Math.sin(phase),'YXZ'));
-   put('Helmet',eye,head);
+   put('Helmet',eye,head);put('PitVisor',eye,head);put('HelmetHardware',eye,head);
    for(const [i,side] of [-1,1].entries()){
     const kneeling=role==='gun',trail=side<0;
     const forward=kneeling?(trail?-.41:.37):.20*side;
@@ -156,33 +184,22 @@ export function pitCrew(scene:T.Scene,track:Track){
     if(planar>reach){foot.x=hip.x+dx*reach/planar;foot.z=hip.z+dz*reach/planar;}
     const knee=kneeling&&trail?V(side*.22,-1,.25):V(side*.21,.04,1);
     chain(actor,side,hip,foot,knee.applyQuaternion(dir),'Leg',.43,.43);
-    put('Boot',foot.clone().add(V(0,-.060,0)),dir);
+    const toe=kneeling&&trail?.64*progress:0;
+    put('Boot',foot.clone().add(V(0,-.060+.12*Math.sin(toe),0)),dir.clone().multiply(new T.Quaternion().setFromAxisAngle(V(1,0,0),toe)));
     const contact=Math.max(.2,1-(foot.y-.060)*7);
     put('SoleContact',V(foot.x,.008,foot.z),dir,V(contact,1,contact));
     const wrist=chain(actor,side,mount(side*.166,.425,0),hands[i],V(side*.80,-.85,-.23).applyQuaternion(dir),'Arm',.31,.27);
     const grip=dir.clone().multiply(new T.Quaternion().setFromAxisAngle(V(1,0,0),role==='gun'?.20:.56));
-    put('Glove',wrist,grip);
+    put(side<0?'GloveLeft':'Glove',wrist,grip);
    }
   }
   function tyre(p:T.Vector3,q:T.Quaternion,i:number,ink:string){
    const scale=V(i<2?.92:1.10,1,1);put('SpareWheel',p,q,scale);put('CompoundBand',p,q,scale,ink);
   }
-  // Two cross-bay booms feed the wheel guns from above. Leave the lane
-  // and the carriers' route clear; only the short working end travels.
-  const hoseRay=V(),hoseQ=new T.Quaternion();
-  function hose(anchor:T.Vector3,end:T.Vector3,side:number){
-   const curve=new T.CubicBezierCurve3(anchor,anchor.clone().add(V(side*.21,-.55,.02)),
-    end.clone().add(V(side*.39,-.28,-.09)),end);
-   let last=anchor;
-   for(let j=1;j<=10;j++){
-    const next=curve.getPoint(j/10);hoseRay.subVectors(next,last);
-    const length=hoseRay.length();hoseQ.setFromUnitVectors(up,hoseRay.normalize());
-    put('AirHose',last,hoseQ,V(1,length+.006,1));last=next;
-   }
-  }
-  for(const z of [1.55,-2.05])put('HoseBoom',V(3.62,0,z-.36));
+  group.updateWorldMatrix(true,false);
+  const lines=hoses.get(group)!;
   const lamp=V(.34,2.62,1.55-.36);put('ReleaseHousing',lamp);
-  put('ReleaseLens',lamp,identity,unit,releaseGreen(seconds)?'#67ff80':'#fc3127');
+  put('ReleaseLens',lamp,identity,unit,canRelease(car)?'#67ff80':'#fc3127');
   for(const [i,w] of wheelStations.entries()){
    const side=Math.sign(w.x),z=w.z,stage=cornerService(seconds,i),y=.365+jackLift(car);
    const clear=exit?1:ramp(seconds,2.0,2.42),idle=1-progress;
@@ -192,7 +209,9 @@ export function pitCrew(scene:T.Scene,track:Track){
    const gun=V(offset(side*(Math.abs(w.x)+.472+.23*back+.29*clear)),y+.012+.095*clear,z-.10*back);
    const gunQ=gunDir.clone().multiply(new T.Quaternion().setFromEuler(new T.Euler(.18*back,0,.045*stage.gun*Math.sin(seconds*79+i))));
    put('SocketGun',gun,gunQ);
-   hose(V(side>0?2.27:-.83,2.83,z-.36),V(0,-.145,.018).applyQuaternion(gunQ).add(gun),side);
+   const swivel=track.pointAt(box+z,BOX_OFFSET-side*.90);
+   const outlet=group.worldToLocal(V(swivel.x,circuitHeight(track.id,box+z)+2.97,swivel.z));
+   lines.connect(i,outlet,V(0,-.145,.018).applyQuaternion(gunQ).add(gun),side);
    const gunHome=V(offset(side*1.87),0,z-.10);
    const gunHands=[V(-.039,-.078,.018),V(.040,-.013,.109)].map(h=>h.applyQuaternion(gunQ).add(gun));
    // A short free-hand signal follows the final torque pulse at each corner.
@@ -210,7 +229,7 @@ export function pitCrew(scene:T.Scene,track:Track){
    const oldQ=new T.Quaternion().setFromEuler(new T.Euler(.16*carry,side*.31*carry,.09*side*carry));
    const newQ=new T.Quaternion().setFromEuler(new T.Euler(-.14*(1-align),-side*.29*(1-align),-.09*side*(1-align)));
    if(stage.off||stage.remove>=1)tyre(old,oldQ,i,colour(oldTyre[team]));
-   if(stage.fit<1)tyre(fresh,newQ,i,colour(car.instruction?.tyre));
+   if(stage.fit<1)tyre(fresh,newQ,i,colour(car.instruction?.tyre??car.compound));
    for(const k of [-1,1]){
     const removing=k<0,held=removing?old:fresh,q=removing?oldQ:newQ;
     const shift=removing?carry:1-align,transfer=removing?carry:align;
@@ -233,9 +252,11 @@ export function pitCrew(scene:T.Scene,track:Track){
   // Stabilisers steady the chassis beside the cockpit during the lift.
   for(const side of [-1,1]){
    const hold=ramp(seconds,-.06,.22)*(1-ramp(seconds,2.08,2.38));
-   const home=V(side*(1.16+(1-progress)*1.9),0,-.46);
+   const t=car.pitTime??0;
+   const repair=stopped&&(car.totalStop??2.6)>2.6?ramp(t,.4,1.6)*(1-ramp(t,(car.totalStop??2.6)-.9,(car.totalStop??2.6)-.55)):0;
+   const home=V(side*(1.16+(1-progress)*1.9),0,-.46+2.64*repair);
    const hips=home.clone().add(V(-side*.10*hold,.80-.085*hold,0));
-   const hands=[-.18,.14].map(dz=>V(side*(1.01-.55*hold+(1-progress)*1.9),.87+.025*hold,-.48+dz));
+   const hands=[-.18,.14].map(dz=>V(side*(1.01-.55*hold+(1-progress)*1.9),.87+.025*hold-.48*repair+.035*repair*Math.sin(t*7+side),home.z-.02+dz));
    person(hips,-side*Math.PI/2,.34+.72*hold,hands,'steady',side+7,0,0,home);
   }
   for(const side of [-1,1]){
@@ -248,14 +269,32 @@ export function pitCrew(scene:T.Scene,track:Track){
    const angle=stopped?.24*ramp(seconds,.02,.27)*(1-ramp(seconds,2.12,2.37)):0;
    const handleFace=face.clone().multiply(new T.Quaternion().setFromAxisAngle(up,side>0?sweep.handleYaw:0));
    const jack=handleFace.clone().multiply(new T.Quaternion().setFromAxisAngle(V(1,0,0),-angle));
-   put('JackFoot',origin,face);put('JackHandle',origin,jack);
-   const hands=[-1,1].map(k=>V(k*.17,.90,-.82).applyQuaternion(jack).add(origin));
+   const axle=V(0,.09,-.13).applyQuaternion(face).add(origin);
+   put('JackFoot',origin,face,side>0?unit:V(.82,.72,1.18));put('JackCradle',origin.clone().add(V(0,jackLift(car),0)),face);put('JackHandle',axle,jack);
+   const hands=[-1,1].map(k=>V(k*.17,.81,-.69).applyQuaternion(jack).add(axle));
    const pivot=side>0?sweep.pivot:0;
    const stance=V(side>0?approach+.76*pull:x-pull*.34,0,origin.z+side*(1.21-.47*pivot));
    const bodyX=side>0?approach+1.06*pivot+.65*pull:x;
    person(V(bodyX,.75+.09*pull,stance.z+side*.08),yaw+(side>0?sweep.handleYaw:0),.45+.16*ramp(seconds,.04,.27)-.15*pull,hands,'jack',side,side>0?pivot:pull,side>0?.85:.34,stance);
   }
+  // Two adjusters follow the front-wing repair, with a spotter and reserve jack behind the box.
+  const repair=stopped&&((car.totalStop??2.6)>2.7),reach=repair?ramp(car.pitTime??0,.45,1.5):0;
+  const repairDuration=Math.max(.1,(car.totalStop??2.6)-2.6);
+  const exchange=repair?T.MathUtils.clamp(((car.pitTime??0)-.65)/repairDuration,0,1):0;
+  const carrying=repair&&exchange>.05&&exchange<.96;
+  const noseX=carrying?3.4*(1-ramp(exchange,.05,.73)):0,noseZ=3.40-.47*ramp(exchange,.65,.96);
+  if(carrying)put('ServiceNose',V(noseX,.23*(1-ramp(exchange,.65,.96)),noseZ),identity,unit,constructors[team][0]);
+  for(const side of [-1,1]){
+   const home=V(side*(1.61+(1-progress)*2),0,2.51);
+   if(carrying){home.x=noseX+side*1.24;home.z=noseZ-.12;}
+   const hip=home.clone().add(V(0,.68-.13*reach,0));
+   person(hip,-side*Math.PI/2,.54+.28*reach,[-1,1].map(k=>V(home.x-side*(.38+.22*reach),.53-.19*reach,home.z+k*.14)),'steady',side+21,0,0,home);
+  }
+  for(const [j,z] of [3.75,-3.65].entries()){
+   const home=V(2.8+.55*j,0,z),hip=home.clone().add(V(0,.84,0));
+   person(hip,-Math.PI/2,.17,[-1,1].map(k=>V(home.x-.25,.95+(j===0&&canRelease(car)&&k>0?.42:0),z+k*.17)),'steady',j+25,0,0,home);
+  }
   for(const batch of kit.values()){batch.instanceMatrix.needsUpdate=true;if(batch.instanceColor)batch.instanceColor.needsUpdate=true;}
  }
- return {update,loaded,get ready(){return ready},get error(){return error},dispose(){disposed=true;releaseSource?.();for(const group of groups.values())for(const child of group.children){if(child instanceof T.SkinnedMesh)child.skeleton.dispose();else if(child instanceof T.InstancedMesh)child.dispose();}}};
+ return {update,loaded,get ready(){return ready},get error(){return error},dispose(){disposed=true;for(const lines of hoses.values())lines.dispose();for(const display of displays.values())display.dispose();releaseSource?.();for(const group of groups.values())for(const child of group.children){if(child instanceof T.SkinnedMesh)child.skeleton.dispose();else if(child instanceof T.InstancedMesh)child.dispose();}}};
 }

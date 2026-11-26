@@ -4,17 +4,18 @@ import * as T from 'three';
  * person have the same instance origin, so skin, clothes and cap share a pose. */
 export function tracksideMotion(){
  const clock={value:0},carA={value:new T.Vector2()},carB={value:new T.Vector2()};
- const green={value:new T.Vector2()},finish={value:0};
+ const green={value:new T.Vector2()},finish={value:0},yellow={value:0};
  function bind(material:T.MeshStandardMaterial){
   const name=material.name,seated=name.startsWith('Spectator')||name.startsWith('Seated');
   const marshal=name==='MarshalUniform'||name==='FinishUniform';
-  if(!seated&&!marshal&&name!=='PitCrewUniform')return;
+  if(!seated&&!name.endsWith('Uniform'))return;
   if(material.userData.articulated)return;
   material.userData.articulated=true;
   material.onBeforeCompile=shader=>{
-   Object.assign(shader.uniforms,{actorTime:clock,actorCarA:carA,actorCarB:carB,greenLaps:green,finishSignal:finish});
+   Object.assign(shader.uniforms,{actorTime:clock,actorCarA:carA,actorCarB:carB,greenLaps:green,finishSignal:finish,yellowFlag:yellow});
    const deform=seated?`
     float torso=smoothstep(.19,.55,p.y);
+    float cheer=nearby*smoothstep(.88,.98,sin(actorTime*.93+seed*47.));p.y+=.071*torso*cheer;
     yawPart(p,n,vec3(0.,.52,.018),nod*.31*torso+headTurn*uv.y);
     lean(p,n,vec3(0.,.20,0.),nod*torso);
    `:`
@@ -55,6 +56,12 @@ export function tracksideMotion(){
     }`).replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
      vec3 actorPosition=position;tracksidePose(actorPosition,objectNormal);`)
     .replace('#include <begin_vertex>','vec3 transformed=actorPosition;');
+   if(marshal&&name!=='FinishUniform'){
+    shader.vertexShader='uniform float yellowFlag;\n'+shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+    #ifdef USE_COLOR
+    if(uv.x>.86){vColor.rgb=mix(vColor.rgb,vec3(.98,.71,.035),yellowFlag);}
+    #endif`).replace('float swing=mix','signal=max(signal,yellowFlag);float swing=mix');
+   }
    if(seated)shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
     #if defined(USE_INSTANCING) && defined(USE_COLOR)
      vec2 seat=(modelMatrix*instanceMatrix[3]).xz;
@@ -73,12 +80,13 @@ export function tracksideMotion(){
      }
      else if(region<2.5)vColor.rgb*=mix(vec3(.22,.18,.16),vec3(2.7,2.3,1.85),hue);
      else if(region>3.5)vColor.rgb*=mix(vec3(.18,.22,.3),vec3(.66,.84,1.),hue);
+     if(region<.5&&tone>.95){float flash=smoothstep(.996,.999,sin(actorTime*1.71+tone*85.));vColor.rgb+=vec3(2.8)*flash;}
     #endif`);
   };
-  material.customProgramCacheKey=()=>'trackside-'+name;
+  material.customProgramCacheKey=()=>'trackside-'+(marshal?name:seated?'spectator':'crew');
  }
- return {bind,update(time:number,a:T.Vector3,b:T.Vector3,openingA:boolean,openingB:boolean,finished:boolean){
+ return {bind,update(time:number,a:T.Vector3,b:T.Vector3,openingA:boolean,openingB:boolean,finished:boolean,caution=false){
   clock.value=time;carA.value.set(a.x,a.z);carB.value.set(b.x,b.z);
-  green.value.set(+openingA,+openingB);finish.value=+finished;
+  green.value.set(+openingA,+openingB);finish.value=+finished;yellow.value=+caution;
  }};
 }

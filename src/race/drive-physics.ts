@@ -1,3 +1,4 @@
+import {contactNames} from './grid';
 import {
  DT,
  FIA_MIN_FUEL_KG,
@@ -16,7 +17,7 @@ import {
  tyreWearScale,
 } from './physics';
 import {VEHICLE, brakeCapacity, drivetrain, forces} from './vehicle';
-import {applyImpact, damageLevel, hitBarrier, longitudinalImpulse, trafficImpact, type Impact} from './crashes';
+import {applyImpact, damageLevel, hitBarrier, resolveTraffic, type Impact} from './crashes';
 import {advanceField, trafficAhead} from './field-physics';
 import {FIELD_STEP_TICKS, grid, gridSlot, opponents, playerEntry, type FieldCar} from './grid';
 import {pitBox, pitRoute, STACK_GAP, teammateInBox} from './pit-service';
@@ -449,8 +450,10 @@ function stepAiCar(
   c.throttle = 0;
   c.brake = 1;
   c.drs = false;
-  const totalStop = PIT_STOP_SECONDS + damageRepairSeconds(c.damage);
+  const totalStop = c.totalStop ?? (PIT_STOP_SECONDS + damageRepairSeconds(c.damage));
+  c.totalStop = totalStop;
   if (c.pitTime + 1e-8 >= totalStop) {
+   delete c.totalStop;
    delete c.damage;
    delete c.lastImpact;
    c.compound = c.instruction.tyre;
@@ -477,7 +480,7 @@ function stepAiCar(
  const boostRequested = !neutralised && c.intent.ers && c.pit === 'none' && c.ers > 2 && c.instruction.ers !== 'harvest';
  const boostPower = boostRequested && c.ersUsed < 4_000_000 ? VEHICLE.ersPower : 0;
 
- let target = racingSpeed({...c, distance: c.distance + c.speed * 0.18}, wake, track, sectorWet) * paceScale;
+ let target = racingSpeed(c, wake, track, sectorWet, c.distance + c.speed * 0.18) * paceScale;
  const neutralisedLeader = queue?.get(c);
  target = Math.min(target, restriction);
  if (neutralisedLeader) target = Math.min(target, neutralisedLeader.speed + Math.max(0, neutralisedLeader.distance - before - 9) * 0.8);
@@ -573,6 +576,7 @@ function stepAiCar(
   c.distance = Math.floor((c.distance - PIT_STOP) / LENGTH) * LENGTH + PIT_STOP;
   c.pit = 'stopped';
   c.pitTime = 0;
+  c.totalStop = PIT_STOP_SECONDS + damageRepairSeconds(c.damage);
   c.speed = 0;
  }
  if (c.pit === 'exit' && crossed(before, c.distance, PIT_EXIT)) c.pit = 'none';
@@ -721,25 +725,12 @@ export function stepDriveSession(session: DriveSession, raw: PlayerInputs) {
   return applied;
  };
 
- if (session.config.session === 'race' && c.finishTime === null && c.pit === 'none') {
-  let hit = trafficImpact(priorPlayer, priorAi, track, DT, playerEntry(aiSeat).code);
-  let fieldIdx = -1;
-  for (let i = 0; i < s.field.length; i++) {
-   const contact = trafficImpact(priorPlayer, s.field[i], track, DT, opponents[i].code, ((s.tick - 1) % FIELD_STEP_TICKS) * DT);
-   if (contact && (!hit || contact.closing > hit.closing)) {
-    hit = contact;
-    fieldIdx = i;
-   }
-  }
-  if (hit && crash(c, hit)) {
-   if (fieldIdx >= 0 && s.field[fieldIdx].service <= 0) {
-    const f = s.field[fieldIdx];
-    f.speed = Math.max(0, f.speed + (hit.lateralRate ? -0.06 * hit.closing : -longitudinalImpulse(hit)));
-    if (hit.lateralRate) f.impactSideSpeed = (f.impactSideSpeed ?? 0) + hit.side * hit.lateralRate * 0.53;
-   }
-  }
- }
-
+ const cars=[s.cars.a,s.cars.b,...s.field];
+ const notify=(car:Car,hit:Impact)=>{
+  event(s,'collision',car.team,`${playerEntry(car.team).code} · ${hit.source} CONTACT · ${Math.round(damageLevel(car.damage)*100)}% DAMAGE`);
+  if(car.team===seat)pushDriveAlert(session,'CAR CONTACT','red',2.4);
+ };
+ if(session.config.session==='race')resolveTraffic(cars,contactNames,track,s.time,DT,notify);
  // === PLAYER CAR INTEGRATION ===
  if (c.finishTime === null) {
   const before = c.distance;
@@ -755,8 +746,10 @@ export function stepDriveSession(session: DriveSession, raw: PlayerInputs) {
    tel.wheelspin = 0;
    tel.lockup = 0;
    const repairExtra = damageRepairSeconds(c.damage);
-   const totalStop = PIT_STOP_SECONDS + repairExtra;
+   const totalStop = c.totalStop ?? (PIT_STOP_SECONDS + repairExtra);
+   c.totalStop = totalStop;
    if (c.pitTime + 1e-8 >= totalStop) {
+    delete c.totalStop;
     const repaired = !!c.damage;
     delete c.damage;
     delete c.lastImpact;
@@ -1030,18 +1023,6 @@ export function stepDriveSession(session: DriveSession, raw: PlayerInputs) {
     c.offset += c.lateralVelocity * DT;
     c.distance += Math.max(0, progress) * DT;
 
-    // Prevent ghosting through cars ahead on the exact same line
-    if (session.config.session === 'race' && c.pit === 'none') {
-     for (const otherCar of [ai, ...s.field]) {
-      if (otherCar.finishTime !== null || otherCar.pit !== 'none') continue;
-      const aheadGap = otherCar.distance - before;
-      if (aheadGap >= 5.2 && c.distance > otherCar.distance - 5.2 && Math.abs(c.offset - otherCar.offset) < 1.75) {
-       c.distance = otherCar.distance - 5.2;
-       c.speed = Math.min(c.speed, otherCar.speed);
-      }
-     }
-    }
-
     const preBarrierOffset = c.offset;
     // Barrier collision (also invalidates Time Trial laps just like EA F1)
     const wall = hitBarrier(c, track, before);
@@ -1106,6 +1087,7 @@ export function stepDriveSession(session: DriveSession, raw: PlayerInputs) {
       c.distance = Math.floor((c.distance - PIT_STOP) / LENGTH) * LENGTH + PIT_STOP;
       c.pit = 'stopped';
       c.pitTime = 0;
+      c.totalStop = PIT_STOP_SECONDS + damageRepairSeconds(c.damage);
       c.speed = 0;
      }
      if (c.pit === 'exit' && crossed(before, c.distance, PIT_EXIT)) {
@@ -1244,6 +1226,7 @@ export function stepDriveSession(session: DriveSession, raw: PlayerInputs) {
   if (s.tick % FIELD_STEP_TICKS === 0 && s.field.length) {
    advanceField(s, track, FIELD_STEP_TICKS * DT * paceScale, queue);
   }
+  resolveTraffic(cars,contactNames,track,s.time,0,notify);
   s.leader = s.cars.a.distance >= s.cars.b.distance ? 'a' : 'b';
  }
 }

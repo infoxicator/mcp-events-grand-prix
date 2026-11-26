@@ -1,5 +1,6 @@
+import {contactNames} from './grid';
 import {boostJoulesLeft,remainingOrderJoules} from './strategy-radio';
-import {applyImpact,damageLevel,hitBarrier,longitudinalImpulse,trafficImpact,type Impact} from './crashes';
+import {applyImpact,damageLevel,hitBarrier,resolveTraffic,type Impact} from './crashes';
 import {FIELD_STEP_TICKS, classification, opponents, gridSlot, playerEntry, startingField, teammateEntry, type FieldCar} from './grid';
 import {advanceField,clearRacingLine,trafficAhead} from './field-physics';
 import {pitBox,pitRoute,teammateInBox,STACK_GAP} from './pit-service';
@@ -75,22 +76,23 @@ export function grip(c:Car,wetness=0){
  const thermal=1-Math.min(.26,Math.abs(c.temperature-opt)*.0032);
  return TYRES[c.compound].grip*(1-c.wear*.28-Math.max(0,c.wear-.65)*.8)*thermal*wetGrip(c.compound,wetness);
 }
-export function aero(c:Car,rival:FieldCar){const gap=rival.distance-c.distance,aligned=Math.abs(c.offset-rival.offset)<2.6;return {slipstream:gap>5&&gap<110&&aligned?(1-gap/110):0,dirtyAir:gap>3&&gap<55&&aligned?.22*(1-gap/55):0};}
+export function aero(c:Car,rival:FieldCar,distance=c.distance){const gap=rival.distance-distance,aligned=Math.abs(c.offset-rival.offset)<2.6;return {slipstream:gap>5&&gap<110&&aligned?(1-gap/110):0,dirtyAir:gap>3&&gap<55&&aligned?.22*(1-gap/55):0};}
 export function drsAllowed(c:Car,track:Track=getTrack()){const {inZone,DRS_ZONES,isDrsZone}=track;return c.pit==='none'&&c.eligible.some((ok,i)=>ok&&inZone(c.distance,DRS_ZONES[i].start,DRS_ZONES[i].end))&&isDrsZone(c.distance)&&c.brake<.1;}
 function crossedLine(before:number,after:number,mark:number,LENGTH:number){return Math.floor((before-mark)/LENGTH)<Math.floor((after-mark)/LENGTH);}
 // Precompute geometry only; grip, fuel, wake and strategy remain dynamic.
 const CURVE_STEP=4,curves=new WeakMap<Track,number[]>();
 export function pathCurvature(d:number,track:Track=getTrack()){let curveTable=curves.get(track);if(!curveTable){curveTable=Array.from({length:Math.ceil(track.LENGTH/CURVE_STEP)+1},(_,i)=>track.racingCurvature(i*CURVE_STEP));curves.set(track,curveTable);}const u=track.wrap(d)/CURVE_STEP,i=Math.floor(u);return curveTable[i]*(1-u+i)+curveTable[i+1]*(u-i);}
-export function racingSpeed(c:Car,rival:FieldCar,track:Track=getTrack(),wetness=0){
- const g=grip(c,wetness),air=aero(c,rival),mass=VEHICLE.dryMass+c.fuel;
+export function racingSpeed(c:Car,rival:FieldCar,track:Track=getTrack(),wetness=0,distance=c.distance){
+ const g=grip(c,wetness),air=aero(c,rival,distance),mass=VEHICLE.dryMass+c.fuel;
  let limit=105;
  const speedBias=clamp(c.intent.speedBias,-2,2);
  const brakeAgg=clamp(c.intent.brakeAggression,0,1);
  // Backwards velocity envelope: braking capacity grows with aerodynamic load.
  // Driver pace & brake aggression meaningfully shift corner speed and braking points.
- for(let ahead=320;ahead>=0;ahead-=8){const curve=pathCurvature(c.distance+ahead,track),v=cornerLimit(curve,mass,g,air.dirtyAir);
-  const comfort=c.instruction.pace==='manage'?.91:c.instruction.pace==='push'?.985:.96;
-  const corner=v*Math.min(1,comfort*(1+speedBias*.014));
+ const comfort=c.instruction.pace==='manage'?.91:c.instruction.pace==='push'?.985:.96;
+ const cornerScale=Math.min(1,comfort*(1+speedBias*.014));
+ for(let ahead=320;ahead>=0;ahead-=8){const curve=pathCurvature(distance+ahead,track),v=cornerLimit(curve,mass,g,air.dirtyAir);
+  const corner=v*cornerScale;
   const decel=brakeCapacity(limit,mass,g,Math.min(3*9.81,limit*limit*Math.abs(curve)),air.dirtyAir)*(.69+brakeAgg*.155);
   limit=Math.min(corner,Math.sqrt(limit*limit+2*decel*8));
  }
@@ -129,6 +131,10 @@ function findCarByCode(s:Race,code:string):FieldCar|undefined{
  return idx>=0?s.field[idx]:undefined;
 }
 
+function trafficSnapshot(c:Car){
+ return {distance:c.distance,offset:c.offset,speed:c.speed,pit:c.pit,lateralVelocity:c.lateralVelocity,
+  finishTime:c.finishTime,bestSectors:[...c.bestSectors]};
+}
 export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>>, fixedLine?: Team){
  const track=getTrack(s.circuit),{LENGTH,wrap,SECTORS,DRS_ZONES,PIT_ENTRY,PIT_EXIT,PIT_LIMIT,PIT_STOP_SECONDS,SPEED_TRAP,racingLineOffset,signedCurvatureAt,trackHalfWidth}=track;
  const crossed=(before:number,after:number,mark:number)=>crossedLine(before,after,mark,LENGTH);
@@ -140,32 +146,15 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
  stepRaceControl(s,track,DT);
  const restriction=speedRestriction(s.control),neutralised=Number.isFinite(restriction),queue=neutralisedQueue(s);
  // Read a stable pair to prevent team iteration order influencing aerodynamics.
- const prior={a:{...s.cars.a,bestSectors:[...s.cars.a.bestSectors]},b:{...s.cars.b,bestSectors:[...s.cars.b.bestSectors]}};
+ const prior={a:trafficSnapshot(s.cars.a),b:trafficSnapshot(s.cars.b)};
  function crash(car:Car,hit:Impact){
   const applied=applyImpact(car,hit,s.time);
   if(applied)event(s,'collision',car.team,`${playerEntry(car.team).code} · ${hit.source} CONTACT · ${Math.round(damageLevel(car.damage)*100)}% DAMAGE`);
   return applied;
  }
- // Sample both seats together so the second car cannot see the first impact's speed loss.
- const fieldImpulses:{index:number;delta:number;sideSpeed:number}[]=[];
- for(const team of TEAMS){
-  const driver=prior[team],rival=prior[other(team)];
-  if(driver.finishTime!==null||driver.pit==='stopped')continue;
-  let fieldIndex=-1;
-  let hit=trafficImpact(driver,rival,track,DT,playerEntry(other(team)).code);
-  for(let i=0;i<s.field.length;i++){
-   const contact=trafficImpact(driver,s.field[i],track,DT,opponents[i].code,((s.tick-1)%FIELD_STEP_TICKS)*DT);
-   if(contact&&(!hit||contact.closing>hit.closing)){hit=contact;fieldIndex=i;}
-  }
-  if(hit&&crash(s.cars[team],hit)&&fieldIndex>=0&&s.field[fieldIndex].service<=0){
-   fieldImpulses.push({index:fieldIndex,delta:hit.lateralRate?-.06*hit.closing:-longitudinalImpulse(hit),
-    sideSpeed:hit.side*(hit.lateralRate??0)*.53});
-  }
- }
- for(const {index,delta,sideSpeed} of fieldImpulses){
-  const car=s.field[index];car.speed=Math.max(0,car.speed+delta);
-  if(sideSpeed)car.impactSideSpeed=(car.impactSideSpeed??0)+sideSpeed;
- }
+ const cars=[s.cars.a,s.cars.b,...s.field];
+ const notify=(car:Car,hit:Impact)=>event(s,'collision',car.team,`${playerEntry(car.team).code} · ${hit.source} CONTACT · ${Math.round(damageLevel(car.damage)*100)}% DAMAGE`);
+ resolveTraffic(cars,contactNames,track,s.time,DT,notify);
  for(const team of TEAMS){const c=s.cars[team],rival=prior[other(team)];
   c.ersPowerKw=0;
   if(c.finishTime!==null)continue;
@@ -175,8 +164,9 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   if(c.pit==='stopped'){
    c.pitTime+=DT;c.speed=0;c.throttle=0;c.brake=1;c.drs=false;
    const repairExtra=damageRepairSeconds(c.damage);
-   const totalStop=PIT_STOP_SECONDS+repairExtra;
+   const totalStop=c.totalStop??(PIT_STOP_SECONDS+repairExtra);c.totalStop=totalStop;
    if(c.pitTime+1e-8>=totalStop){
+    delete c.totalStop;
     const repaired=!!c.damage;delete c.damage;delete c.lastImpact;
     let fitted:Compound=c.instruction.tyre;
     if(c.tyreSets&&c.tyreSets[fitted]<=0){
@@ -260,7 +250,7 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   // Aggressive ERS harvesting clips top-end straight power slightly in exchange for faster recharge.
   const harvestClipping=boostPower===0&&c.pit==='none'&&effectiveErsMode==='harvest'&&c.speed>72&&c.ersRecovered<2000000;
   const netBoostPower=boostPower>0?boostPower:harvestClipping?-25000:0;
-  let target=racingSpeed({...c,distance:c.distance+c.speed*.18},wake,track,sectorWet);
+  let target=racingSpeed(c,wake,track,sectorWet,c.distance+c.speed*.18);
   const neutralisedLeader=queue?.get(c);
   target=Math.min(target,restriction);
   if(neutralisedLeader)target=Math.min(target,neutralisedLeader.speed+Math.max(0,neutralisedLeader.distance-before-9)*.8);
@@ -362,7 +352,7 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   const driverFuelFactor=1+driverAttack*.06;
   c.fuel=Math.max(0,c.fuel-(FUEL_IDLE_BURN+FUEL_THROTTLE_BURN*c.throttle)*driverFuelFactor*DT);
   if(c.instruction.box&&c.pit==='none'&&crossed(before,c.distance,PIT_ENTRY)){c.pit='entry';event(s,'pit',team,'BOX BOX · pit limiter on');}
-  if(c.pit==='entry'&&!waiting&&crossed(before,c.distance,PIT_STOP)){c.distance=Math.floor((c.distance-PIT_STOP)/LENGTH)*LENGTH+PIT_STOP;c.pit='stopped';c.pitTime=0;c.speed=0;}
+  if(c.pit==='entry'&&!waiting&&crossed(before,c.distance,PIT_STOP)){c.distance=Math.floor((c.distance-PIT_STOP)/LENGTH)*LENGTH+PIT_STOP;c.pit='stopped';c.pitTime=0;c.totalStop=PIT_STOP_SECONDS+damageRepairSeconds(c.damage);c.speed=0;}
   if(c.pit==='exit'&&crossed(before,c.distance,PIT_EXIT)){c.pit='none';event(s,'pit',team,'Pit exit clear. Push now.');}
   if(c.pit==='none'&&Math.abs(c.offset)>trackHalfWidth(c.distance)+.8&&s.time-c.lastLimit>5){c.lastLimit=s.time;c.warnings++;if(c.warnings%3===0)c.penalty+=5;event(s,'limits',team,`TRACK LIMITS · warning ${c.warnings}${c.warnings%3===0?' / +5s':''}`);}
   for(let i=0;i<DRS_ZONES.length;i++)if(crossed(before,c.distance,DRS_ZONES[i].detection)){const delta=wake.distance-c.distance;c.eligible[i]=delta>0&&delta/Math.max(wake.speed,25)<=1&&(wake!==rival||rival.pit==='none');}
@@ -384,9 +374,9 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
    }
   }
  }
- // Prevent passing through a rival on the same line: fast intent must pick a side.
- const a=s.cars.a,b=s.cars.b;if(a.pit==='none'&&b.pit==='none'&&a.finishTime===null&&b.finishTime===null&&Math.abs(a.distance-b.distance)<5&&Math.abs(a.offset-b.offset)<1.75){const behind=prior.a.distance<prior.b.distance?a:b,ahead=behind===a?b:a;behind.distance=Math.min(behind.distance,ahead.distance-5);behind.speed=Math.min(behind.speed,ahead.speed);}
+ const {a,b}=s.cars;
  if(s.tick%FIELD_STEP_TICKS===0&&s.field.length)advanceField(s,track,FIELD_STEP_TICKS*DT,queue);
+ resolveTraffic(cars,contactNames,track,s.time,0,notify);
  const leader=a.distance>=b.distance?'a':'b';if(leader!==s.leader){s.leader=leader;if(a.finishTime===null&&b.finishTime===null&&a.pit==='none'&&b.pit==='none')event(s,'overtake',leader,`${playerEntry(leader).name.toUpperCase()} LEADS THE PLAYER DUEL`);}
  if(a.finishTime!==null&&b.finishTime!==null&&s.field.every(c=>c.finishTime!==null)){s.phase='finished';const first=classification(s)[0].entry;s.winner=first.seat??first.code;}
 }

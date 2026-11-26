@@ -9,6 +9,12 @@ for(const id of ['monza','las-vegas'] as const)describe(id+' Blender circuit',()
   expect(bytes.readUInt32LE(8)).toBe(bytes.length);expect(g.extensionsRequired??[]).not.toContain('KHR_draco_mesh_compression');expect(g.extensionsUsed).toContain('EXT_mesh_gpu_instancing');
   const poses=g.meshes.filter((m:any,i:number)=>m.name.startsWith('Grandstand pose')&&g.nodes.some((n:any)=>n.mesh===i&&n.extensions?.EXT_mesh_gpu_instancing));
   expect(poses).toHaveLength(12);
+  const stands=g.nodes.filter((n:any)=>n.mesh!==undefined&&g.meshes[n.mesh].name.startsWith('Pit wall engineer'));
+  expect(stands).toHaveLength(11);
+  for(const stand of stands){
+   const translation=stand.extensions.EXT_mesh_gpu_instancing.attributes.TRANSLATION;
+   expect(g.accessors[translation].count).toBe(4);
+  }
   for(const name of ['FinishUniform','MarshalUniform','PitCrewUniform']){
    const parts=g.meshes.flatMap((mesh:any)=>mesh.primitives.filter((p:any)=>g.materials[p.material].name===name));
    expect(parts.length).toBeGreaterThan(0);

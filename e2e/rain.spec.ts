@@ -1,5 +1,6 @@
 import {expect,test,type WebSocketRoute} from '@playwright/test';
 import sharp from 'sharp';
+import {FIELD_STEP_TICKS} from '../src/race/grid';
 import type {RaceState} from '../src/race/types';
 
 for(const circuit of ['monza','las-vegas'] as const){
@@ -32,7 +33,12 @@ for(const circuit of ['monza','las-vegas'] as const){
   await page.keyboard.press('b');
   await expect(page.locator('body')).toHaveClass(/clean-feed/);
   const stats=()=>page.evaluate(()=>(window as any).__renderStats as {rainDrops:number;sprayPackets:number;lensBeads:number});
-  const send=()=>{race.tick++;feed.send(JSON.stringify(state));};
+  // Send complete field snapshots, as the 30 Hz broadcast does. The
+  // presentation clock waits for the solved field pose between those ticks.
+  const send=()=>{
+   race.tick=Math.round(race.time*state.physicsHz/FIELD_STEP_TICKS)*FIELD_STEP_TICKS;
+   feed.send(JSON.stringify(state));
+  };
   // Rain reaching a stationary driver's visor on clear track, before any water
   // has accumulated on the road. There are no wheel or wake emitters.
   const field=race.field;
@@ -87,12 +93,24 @@ for(const circuit of ['monza','las-vegas'] as const){
   async function movingFraction(){
    const clip={x:250,y:150,width:520,height:250};
    const pixels=async()=>sharp(await page.screenshot({clip})).removeAlpha().raw().toBuffer();
-   const a=await pixels();
-   await page.waitForTimeout(140);
-   const b=await pixels();
-   let changed=0;
-   for(let i=0;i<a.length;i+=3)if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>48)changed++;
-   return changed/(clip.width*clip.height);
+   // Renderer stats describe the submitted draw. Allow the compositor to present
+   // the new media state before including a screenshot in either exposure.
+   await page.evaluate(()=>new Promise<void>(resolve=>{
+    requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+   }));
+   let previous=await pixels();
+   const coverage:number[]=[];
+   for(let interval=0;interval<3;interval++){
+    await page.waitForTimeout(140);
+    const next=await pixels();
+    let changed=0;
+    for(let i=0;i<previous.length;i+=3){
+     if(Math.abs(previous[i]-next[i])+Math.abs(previous[i+1]-next[i+1])+Math.abs(previous[i+2]-next[i+2])>48)changed++;
+    }
+    coverage.push(changed/(clip.width*clip.height));
+    previous=next;
+   }
+   return coverage.sort((a,b)=>a-b)[1];
   }
   const falling=await movingFraction();
   await page.emulateMedia({reducedMotion:'reduce'});

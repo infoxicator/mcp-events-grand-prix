@@ -116,3 +116,13 @@ it('folds rotated and translated decals with the laminate, and restores their ex
  for(const deform of bindings)deform([0,0,0,0]);
  expect(positions()).toEqual(before);
 });
+
+it.each(['side','rear','quarter'] as const)('keeps persistent %s contact solid during damage cooldown',face=>{
+ const race=setup('monza'),a=race.cars.a,b=race.cars.b;
+ a.speed=b.speed=0;
+ a.lastImpact={source:'RUS',time:race.time};b.lastImpact={source:'HAM',time:race.time};
+ Object.assign(b,{distance:a.distance+(face==='side'?0:5.4),offset:face==='rear'?0:1.81});
+ stepRace(race);
+ expect(Math.abs(b.distance-a.distance)>=5.61999||Math.abs(b.offset-a.offset)>=1.93999).toBe(true);
+ expect(race.events.filter(e=>e.kind==='collision')).toHaveLength(0);
+});

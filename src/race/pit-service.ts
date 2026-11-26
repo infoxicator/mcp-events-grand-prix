@@ -2,7 +2,7 @@ import {grid,opponents,playerEntry,type FieldCar,type GridEntry} from './grid';
 import type {Race,Team} from './types';
 import type {Track} from './track';
 
-export interface PitTelemetry{distance:number;pit?:string;pitTime?:number;offset?:number;heading?:number;compound?:string;instruction?:{tyre?:string}}
+export interface PitTelemetry{distance:number;pit?:string;pitTime?:number;totalStop?:number;offset?:number;heading?:number;compound?:string;instruction?:{tyre?:string}}
 export type Constructor=GridEntry['team'];
 // Indices of the 28 m garage modules authored in build_circuits.py.
 export const garageBay:Record<Constructor,number>={
@@ -64,10 +64,16 @@ export function garageVisits(track:Track,cars:Record<Team,PitTelemetry>,field:re
 export function ramp(x:number,start:number,end:number){
  const u=Math.max(0,Math.min(1,(x-start)/(end-start)));return u*u*(3-2*u);
 }
+// Wheel work finishes before an extended repair. Resume the drop and
+// withdrawal cues when the authoritative stop has its last 0.58 s to run.
+export function serviceClock(car:PitTelemetry){
+ const t=car.pitTime??0;
+ return Math.min(t,Math.max(2.02,t-Math.max(0,(car.totalStop??2.6)-2.6)));
+}
 /** Service seconds are authoritative, including when the viewer joins mid-stop or scrubs a replay. */
 export function jackLift(car:PitTelemetry){
  if(car.pit!=='stopped')return 0;
- const t=car.pitTime??0;return .086*ramp(t,.08,.34)*(1-ramp(t,2.13,2.40));
+ const t=serviceClock(car);return .086*ramp(t,.08,.34)*(1-ramp(t,2.13,2.40));
 }
 export function cornerService(seconds:number,index:number){
  const t=seconds-[.015,.05,.085,0][index];
@@ -82,4 +88,11 @@ export function frontJackPose(t:number){
 }
 export function releaseGreen(t:number){
  return t>=2.56 && [0,1,2,3].every(i=>{const c=cornerService(t,i);return !c.off&&c.fit===1&&c.gun===0;});
+}
+
+export function canRelease(car:PitTelemetry){
+ if(car.pit==='exit')return true;
+ if(car.pit!=='stopped')return false;
+ if((car.totalStop??2.6)>2.6&&(car.pitTime??0)<car.totalStop!)return false;
+ return releaseGreen(serviceClock(car));
 }

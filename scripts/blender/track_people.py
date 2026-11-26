@@ -14,7 +14,7 @@ def staff_material(mat, image, layer_name='Uniform and equipment'):
     links.new(colour.outputs['Color'],mix.inputs[1]);links.new(image_node.outputs['Color'],mix.inputs[2])
     links.new(mix.outputs[0],nodes.get('Principled BSDF').inputs['Base Color'])
 
-def staff_mesh(role, material, kit):
+def staff_mesh(role, material, kit, alternate=False):
     positions, faces, colours, controls = [], [], [], []
     artwork=[]
     navy=(.023,.039,.06); boot=(.021,.024,.029); silver=(.69,.73,.67)
@@ -26,7 +26,7 @@ def staff_mesh(role, material, kit):
     def vertex(p,colour,group,span=0,art=(.96,.327)):
         x,y,z=p
         positions.append((x,-z,y));colours.append((*colour,1));controls.append((group,1-span))
-        artwork.append(art)
+        artwork.append(((art[0]+int(alternate))*.5,art[1]))
         return len(positions)-1
 
     def loft(rows,colour,group=0):
@@ -145,6 +145,9 @@ def staff_mesh(role, material, kit):
         elbow=(side*.32,1.28,.07) if side==1 and signaller else (side*.239,1.14,.075)
         hand=(.48,1.50,.14) if side==1 and signaller else ((side*.13,1.17,.242) if side==1 else (side*.166,1.305,.25))
         if role=='crew' and side<0:hand=(-.027,1.241,.328);elbow=(-.242,1.151,.088)
+        if alternate:
+            elbow=(side*.258,1.17,.018) if side<0 else (.28,1.40,.13)
+            hand=(-.155,1.05,.106) if side<0 else (.115,1.616,.068)
         group=arm if side==1 else 0
         limb(start,elbow,.086,.065,suit,group);limb(elbow,hand,.067,.044,suit,group)
         x,y,z=hand;loft([(x,y-.032,z,.043,.042),(x,y+.026,z+.005,.056,.046),(x,y+.070,z,.038,.035)],boot,group)
@@ -154,7 +157,7 @@ def staff_mesh(role, material, kit):
             fx=x+side*(digit-1.5)*.018
             limb((fx,y+.041,z+.024),(fx,y+.032,z+.052),.012,.009,boot,group)
             limb((fx,y+.032,z+.052),(fx,y+.014,z+.052),.009,.008,navy,group)
-    if role=='crew':
+    if role=='crew' and not alternate:
         # One hand supports the socket gun, the other rests on its grip.
         limb((.130,1.145,.238),(.117,1.262,.258),.025,.033,boot,arm)
         a=Vector((.170,1.262,.236));b=Vector((-.078,1.268,.361));axis=(b-a).normalized()

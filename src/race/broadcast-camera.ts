@@ -12,8 +12,12 @@ export const BROADCAST_SHOTS=[
 export class BroadcastDirector {
  private index=0;
  private since:number|null=null;
- reset(){this.index=0;this.since=null;}
- update(now:number){
+ private incidentUntil=-Infinity;
+ private lastIncident=-Infinity;
+ reset(){this.index=0;this.since=null;this.incidentUntil=this.lastIncident=-Infinity;}
+ update(now:number,incident=false){
+  if(incident&&now-this.lastIncident>12000){this.incidentUntil=now+1600;this.lastIncident=now;}
+  if(now<this.incidentUntil)return 'trackside';
   if(this.since===null||now<this.since)this.since=now;
   if(now-this.since>=BROADCAST_SHOTS[this.index].seconds*1000){
    this.index=(this.index+1)%BROADCAST_SHOTS.length;this.since=now;
