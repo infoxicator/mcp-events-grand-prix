@@ -98,7 +98,10 @@ createServer(async(req,res)=>{
  }
  if(url.pathname.endsWith('/decisions')&&body.model==='gpt-6-luna'){
   calls.luna++;
-  return send({model:body.model,answers:Object.entries(choices).map(([name,choice])=>({name,...answer(choice)})),usage:{input_tokens:100,output_tokens:0}});
+  const raw=body.questions?.some((question:{name:string})=>question.name==='steer');
+  if(raw)await new Promise(resolve=>setTimeout(resolve,300));
+  const selected=raw?{steer:'straight',throttle:'full',brake:'none',ers:'no',drs:'no'}:choices;
+  return send({model:body.model,answers:Object.entries(selected).map(([name,choice])=>({name,...answer(choice)})),usage:{input_tokens:100,output_tokens:0}});
  }
  if(url.pathname.endsWith('/chat/completions')&&body.messages){
   calls.engineer++;

@@ -3,8 +3,10 @@ import {App,applyDocumentTheme,applyHostStyleVariables,applyHostFonts,type McpUi
 import {prepareDriveCircuit,cancelPreparedCircuit} from './race/circuit-model';
 import {prepareEmbeddedRace} from './race/scene';
 import {mountRace} from './race/ui';
+import type {SendDriverQuestion} from './race/driver-radio';
 import {connect,type Connection} from './race/network';
 import {PERSONAS,isJevProvider,isStrategyDriver,type HostedRoom,type JevProvider,type StrategyDriver,type Team} from './race/types';
+import {AI_CONTROL_INFO,AI_CONTROL_LABELS,isAiControlStyle,type AiControlStyle} from './race/ai-controls';
 import {CIRCUITS,isCircuit,type CircuitId} from './race/track';
 import {copyInvitation} from './clipboard';
 import {isLiveKey,isRoomId,liveInvitation,raceSessionLabel,liveSpectatorURL,ownerRaceURL,
@@ -27,6 +29,9 @@ const status=element('mcp-status'),menu=element('mcp-menu'),menuToggle=element<H
  driverKeyPanel=element('mcp-driver-key-panel'),driverKeyLabel=element('mcp-driver-key-label'),
  jevProviderSelect=element<HTMLSelectElement>('mcp-jev-provider'),
  driverKeyInput=element<HTMLInputElement>('mcp-driver-key'),
+ driverControlSelect=element<HTMLSelectElement>('mcp-driver-control-style'),
+ driverControlCadence=element('mcp-driving-mode-cadence'),
+ driverControlDesc=element('mcp-driving-mode-desc'),
  driverKeyToggle=element<HTMLButtonElement>('mcp-driver-key-toggle'),
  multiplayerToggle=element<HTMLInputElement>('mcp-multiplayer'),
  multiplayerBar=element('mcp-multiplayer-bar'),multiplayerTitle=element('mcp-multiplayer-title'),
@@ -45,7 +50,7 @@ let view:MountedView|null=null,mode:'inline'|'fullscreen'='inline';
 let live:LiveInvitation|null=null,knownLive:LivePhase='running',origin='';
 let strategyPractice=false,practiceKey:string|undefined,strategySeat:Team|undefined;
 let strategyDriver:StrategyDriver='autopilot',multiplayerActive=false,pendingAutoStart=false;
-let expectedLobby:{circuit:CircuitId;laps:number;driver:StrategyDriver;needsLiveDriver?:boolean}|null=null;
+let expectedLobby:{circuit:CircuitId;laps:number;driver:StrategyDriver;controlStyle?:AiControlStyle}|null=null;
 let lastAiDriver:'jev'|'luna'|null=null;
 let telemetry=false,setupBusy=false,stopBusy=false,joinBusy=false,hasActiveRace=false,menuAutoCollapsed=false;
 let mountSequence=0,driveOutput:AudioContext|null=null;
@@ -100,12 +105,22 @@ function syncDriverKeyPanel(locked=false){
  jevProviderSelect.disabled=locked;
  driverKeyInput.disabled=locked;
  driverKeyToggle.disabled=locked;
+ driverControlSelect.disabled=locked;
+ const style=selectedControlStyle();
+ const info=AI_CONTROL_INFO[style];
+ driverControlSelect.title=info.how;
+ driverControlCadence.textContent=info.cadence;
+ driverControlDesc.textContent=info.how;
 }
-async function submitDriverKey(roomId:string,seat:Team,key:string,engine:'jev'|'luna',apiKey:string,provider?:JevProvider){
+function selectedControlStyle():AiControlStyle{
+ const style=driverControlSelect.value;
+ return isAiControlStyle(style)?style:'tactical';
+}
+async function submitDriverKey(roomId:string,seat:Team,key:string,engine:'jev'|'luna',apiKey:string,controlStyle:AiControlStyle,provider?:JevProvider){
  const response=await fetch(`${origin}/api/rooms/${roomId}/driver-key`,{
   method:'POST',
   headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},
-  body:JSON.stringify({team:seat,engine,...(engine==='jev'?{provider}:{}),apiKey}),
+  body:JSON.stringify({team:seat,engine,...(engine==='jev'?{provider}:{}),apiKey,controlStyle}),
  });
  if(!response.ok){
   const body=await response.json().catch(()=>null) as {error?:unknown}|null;
@@ -144,7 +159,7 @@ function refreshSetup(){
  const showOwnerEnded=Boolean(live&&!strategyPractice&&knownLive!=='running');
  const stopLabel=stopBusy?'Stopping…':canStopOwner?'Stop live race ↗':'Stop race';
 
- const key=[running,locked,setupBusy,joinBusy,stopBusy,showStop,showOwnerEnded,stopLabel,menu.hidden,selectedDriver(),selectedJevProvider()].join('/');
+ const key=[running,locked,setupBusy,joinBusy,stopBusy,showStop,showOwnerEnded,stopLabel,menu.hidden,selectedDriver(),selectedJevProvider(),selectedControlStyle()].join('/');
  if(previousSetup===key)return;
  previousSetup=key;
  if(!menu.hidden){
@@ -212,7 +227,7 @@ function updateStatus(){
     race.circuit===expectedLobby.circuit&&
     race.laps===expectedLobby.laps&&
     (snapshot.driverMode?.a??'autopilot')===expectedLobby.driver&&
-    (!expectedLobby.needsLiveDriver||snapshot.players?.a?.mock===false)&&
+    (!expectedLobby.controlStyle||snapshot.aiControlStyle?.a===expectedLobby.controlStyle)&&
     (strategyDriver==='human'||document.body.dataset.circuit===expectedLobby.circuit)
    );
    const feedView=document.getElementById('viewport')?.getAttribute('data-feed-view');
@@ -243,9 +258,11 @@ function updateStatus(){
   const seatMode=snapshot&&strategySeat?snapshot.driverMode?.[strategySeat]:strategyDriver;
   let activeDriver=driverLabel(seatMode);
   if(snapshot&&strategySeat&&(seatMode==='jev'||seatMode==='luna')){
+   const style=snapshot.aiControlStyle?.[strategySeat];
    const stats=snapshot.driverStats?.[strategySeat];
    const dec=snapshot.decisions?.[strategySeat];
    const armed=snapshot.players?.[strategySeat]?.mock===false;
+   if(style)activeDriver+=` · ${AI_CONTROL_LABELS[style]}`;
    if(dec?.source==='fallback')activeDriver+=` · Fallback`;
    else if((stats?.successes??0)>0)activeDriver+=` · LIVE (${stats!.successes} calls · ${dec?.responseMs??0}ms)`;
    else if(armed)activeDriver+=` · Armed`;
@@ -254,6 +271,7 @@ function updateStatus(){
    message=`ChatGPT strategy · ${circuitName} · ${lapsCount} laps · ${activeDriver}`;
    if(strategySeat==='b')message+=' · Team B (Mercedes)';
    else if(snapshot?.guestChatStrategy)message+=' · Multiplayer';
+   if(snapshot?.stepLockWaiting)message+=' · Waiting on AI';
   }else{
    message=raceSessionLabel(knownLive,strategyPractice,Boolean(snapshot?.guestChatStrategy));
   }
@@ -338,6 +356,18 @@ function setLegacyInvitation(invite:string,label:string,button:string){
  legacyBar.hidden=play.hidden&&element('mcp-sharing').hidden;
 }
 
+const sendDriverQuestion:SendDriverQuestion=async({room,team,event_id,text})=>{
+ const prompt=[
+  `Team radio from the driver: ${text}`,
+  'Check telemetry with get_grand_prix_strategy_event, then use submit_grand_prix_radio with action "hold" and your spoken answer in "radio". Use this race reference for both calls.',
+  JSON.stringify({room,team,event_id}),
+ ].join('\n\n');
+ const result=await app.sendMessage({role:'user',content:[{type:'text',text:prompt}]}).catch(()=>{
+  throw new Error('The host could not confirm the chat message. Check the chat before retrying.');
+ });
+ if(result.isError)throw new Error('The host declined the radio message. Press Send to retry.');
+};
+
 async function showLive(invite:LiveInvitation,phase:LivePhase='running',strategyKey?:string,settings?:{
  practice:boolean;seat?:Team;guestInvitation?:string;circuit?:CircuitId;laps?:number;driver?:StrategyDriver;multiplayer?:boolean;collapseMenu?:boolean;autoStart?:boolean;
 }){
@@ -379,6 +409,7 @@ async function showLive(invite:LiveInvitation,phase:LivePhase='running',strategy
  hosted={room:invite.room,token:invite.key,links:null,origin,live:true};
 
  if(!reuseView){
+  const chatRadio=app.getHostCapabilities()?.message?.text?sendDriverQuestion:null;
   const canStart=()=>Boolean(strategyKey&&strategySeat==='a');
   const startReady=(state:{strategyWebhook?:string})=>state.strategyWebhook==='connected';
   const onStart=()=>view?.connection.send({type:'start',startKey:strategyKey});
@@ -391,13 +422,13 @@ async function showLive(invite:LiveInvitation,phase:LivePhase='running',strategy
     const {mountDrive}=await driverView;
     if(disposed||seq!==mountSequence){void output?.close().catch(()=>{});return;}
     const driverRoom:HostedRoom={room:invite.room,token:strategyKey,links:null,origin,live:true};
-    view=mountDrive(driverRoom,{team:strategySeat,circuit:settings?.circuit,audioOutput:output,embedded:true,canStart,startReady,onStart,autostart:pendingAutoStart});
+    view=mountDrive(driverRoom,{team:strategySeat,circuit:settings?.circuit,audioOutput:output,embedded:true,sendDriverQuestion:chatRadio,canStart,startReady,onStart,autostart:pendingAutoStart});
    }catch(error){void output?.close().catch(()=>{});throw error;}
   }else{
    if(disposed||seq!==mountSequence)return;
    const radioSeat=nextKey?strategySeat:undefined;
    const broadcastRoom=radioSeat&&nextKey?{...hosted,token:nextKey}:hosted;
-   view=mountRace(broadcastRoom,{team:null,controller:false,openLink,telemetry,strategySeat:radioSeat,canStart,startReady,onStart});
+   view=mountRace(broadcastRoom,{team:null,controller:false,openLink,telemetry,strategySeat:radioSeat,sendDriverQuestion:chatRadio,canStart,startReady,onStart});
   }
  }
  setMenuOpen(!settings?.collapseMenu);
@@ -638,6 +669,7 @@ backToFeed.onclick=()=>{
 };
 setup.onchange=()=>{refreshSetup();};
 jevProviderSelect.onchange=()=>{refreshSetup();};
+driverControlSelect.onchange=()=>{refreshSetup();};
 driverKeyInput.oninput=()=>{
  if(selectedDriver()!=='jev')return;
  const trimmed=driverKeyInput.value.trim();
@@ -667,6 +699,7 @@ setup.onsubmit=async event=>{
  const needsKey=isAiDriver(driver);
  const apiKey=needsKey?driverKeyInput.value.trim():'';
  const jevProvider=driver==='jev'?selectedJevProvider():undefined;
+ const controlStyle=selectedControlStyle();
  if(needsKey&&!apiKey){
   error.textContent=driver==='luna'?'Paste your OpenAI API key to drive with Luna.':'Paste your API key to drive with Jev System 1.';
   driverKeyInput.focus();
@@ -701,11 +734,11 @@ setup.onsubmit=async event=>{
   }
   if(needsKey){
    if(!live||!practiceKey||!strategySeat)throw new Error('Could not bind driver API key to this race seat.');
-   await submitDriverKey(live.room,strategySeat,practiceKey,driver,apiKey,jevProvider);
+   await submitDriverKey(live.room,strategySeat,practiceKey,driver,apiKey,controlStyle,jevProvider);
    clearDriverKeyInput();
    if(!multiplayer&&strategySeat==='a'){
     pendingAutoStart=true;
-    expectedLobby={circuit,laps,driver,needsLiveDriver:true};
+    expectedLobby={circuit,laps,driver,controlStyle};
     updateStatus();
    }
   }
@@ -751,6 +784,7 @@ joinForm.onsubmit=async event=>{
  const needsKey=isAiDriver(driver);
  const apiKey=needsKey?driverKeyInput.value.trim():'';
  const jevProvider=driver==='jev'?selectedJevProvider():undefined;
+ const controlStyle=selectedControlStyle();
  if(needsKey&&!apiKey){
   error.textContent=driver==='luna'?'Paste your OpenAI API key to drive with Luna.':'Paste your API key to drive with Jev System 1.';
   driverKeyInput.focus();
@@ -762,7 +796,7 @@ joinForm.onsubmit=async event=>{
   await openFromWidget('open_grand_prix',{invite:joinField.value.trim(),driver},{collapseMenu:true,autoStart:false});
   if(needsKey){
    if(!live||!practiceKey||!strategySeat)throw new Error('Could not bind driver API key to Team B.');
-   await submitDriverKey(live.room,strategySeat,practiceKey,driver,apiKey,jevProvider);
+   await submitDriverKey(live.room,strategySeat,practiceKey,driver,apiKey,controlStyle,jevProvider);
    clearDriverKeyInput();
   }
   joinField.value='';

@@ -3,7 +3,8 @@ import {CIRCUITS} from '../src/race/track';
 import {raceControlTelemetry,sectorWetnessOf} from '../src/race/race-control';
 import {drsAllowed,grip} from '../src/race/physics';
 import {getTrack} from '../src/race/track';
-import {nearbyTrafficState} from './race-brains';
+import {experimentalDriverDecision,experimentalDriverRequest,nearbyTrafficState} from './driver-prompt';
+import type {AiControlStyle} from '../src/race/ai-controls';
 /** Adapted from Jev Pong's OpenAI Decisions driver. Keys and HTTP stay server-side. */
 import {mockDriver} from '../src/race/brains';
 import {nearbyRival} from '../src/race/grid';
@@ -18,10 +19,17 @@ export function lunaConfig(env:Record<string,string|undefined>):LunaConfig{
  if(!Number.isFinite(tokensPerMinute)||tokensPerMinute<1)throw new Error('LUNA_TPM_BUDGET must be positive');
  return {mock,apiKey:env.OPENAI_API_KEY,baseURL:'https://api.openai.com/v1',model:LUNA_MODEL,intervalMs,tokensPerMinute};
 }
-export function lunaRequest(s:Race,team:Team){
+export function lunaRequest(s:Race,team:Team,style:AiControlStyle='tactical'){
+ const question=(name:string,instructions:string,choices:Record<string,string>)=>({type:'choice' as const,name,instructions,choices:Object.entries(choices).map(([value,description])=>({value,description}))});
+ if(style!=='tactical'){
+  const {instructions,telemetry,questions}=experimentalDriverRequest(s,team,style);
+  return {model:LUNA_MODEL,input:[{role:'user' as const,content:[
+   {type:'input_text' as const,text:instructions},
+   {type:'input_json' as const,data:telemetry},
+  ]}],questions:Object.entries(questions).map(([name,q])=>question(name,q.instructions,q.choices))};
+ }
  const c=s.cars[team],r=nearbyRival(s,team),fallback=mockDriver(s,team),track=getTrack(s.circuit);
  const sectorWet=sectorWetnessOf(s.control,c.sector);
- const question=(name:string,instructions:string,choices:Record<string,string>)=>({type:'choice' as const,name,instructions,choices:Object.entries(choices).map(([value,description])=>({value,description}))});
  return {model:LUNA_MODEL,input:[{role:'user' as const,content:[
   {type:'input_text' as const,text:`F1 at ${CIRCUITS[s.circuit??'monza'].name}. Follow engineer strategy; local control handles corners and smooths intent. Team ${team}: ${team==='a'?'calm Ferrari':'aggressive Mercedes'}. Pick independent driving choices.`},
   {type:'input_json' as const,data:{team,tick:s.tick,lap:c.lap+1,totalLaps:s.laps,sector:c.sector+1,metres:Math.round(c.distance),speedKmh:Math.round(c.speed*3.6),gapMetres:Math.round(r.distance-c.distance),rivalOffset:Math.round(r.offset*10)/10,offset:Math.round(c.offset*10)/10,racingLineOffset:Math.round(track.racingLineOffset(c.distance)*10)/10,nearbyTraffic:nearbyTrafficState(s,team),compound:c.compound,wear:Number(c.wear.toFixed(2)),tyreTempC:Math.round(c.temperature),lockup:Boolean(c.lockup),fuelKg:Math.round(c.fuel*100)/100,damagePercent:Math.round(damageLevel(c.damage)*100),battery:Math.round(c.ers),drsEligible:c.eligible.some(Boolean),inDrsZone:drsAllowed(c,track),pitPhase:c.pit,grip:Math.round(grip(c,sectorWet)*100)/100,raceControl:raceControlTelemetry(s),rain:s.control?.rain,sectorWetness:Math.round(sectorWet*100)/100,instruction:{...c.instruction}}},
@@ -41,9 +49,9 @@ function answer(answers:unknown,name:string,allowed:string[]):string{
  return a.choice;
 }
 const retryDelay=(header:string|null,now:number)=>header===null?0:/^\d+(?:\.\d+)?$/.test(header)?Number(header)*1000:Math.max(0,Date.parse(header)-now)||0;
-export function createLunaDriver(config:LunaConfig,transport:typeof fetch=fetch,clock:()=>number=Date.now){
+export function createLunaDriver(config:LunaConfig,transport:typeof fetch=fetch,clock:()=>number=Date.now,style:AiControlStyle='tactical'){
  let failures=0,nextAllowedAt=0,last:Decision|null=null;
- return async(s:Race,team:Team,sequence:number):Promise<Decision>=>{
+ return async(s:Race,team:Team,sequence:number,signal?:AbortSignal):Promise<Decision>=>{
   const start=performance.now(),fallback=mockDriver(s,team);
   const done=(source:Decision['source'],intent=fallback):Decision=>({engine:'luna',source,sequence,intent,responseMs:Math.max(1,Math.round(performance.now()-start)),attempted:false});
   if(config.mock)return done('mock');
@@ -51,11 +59,14 @@ export function createLunaDriver(config:LunaConfig,transport:typeof fetch=fetch,
   let api:NonNullable<Decision['api']>={provider:'openai',model:LUNA_MODEL},warning='Luna invalid response · local fallback',retryAfterMs=Math.max(config.intervalMs,2000);
   let permanent=false;
   try{
-   const request=lunaRequest(s,team);
-   const response=await transport(`${config.baseURL.replace(/\/$/,'')}/decisions`,{method:'POST',headers:{Authorization:`Bearer ${config.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(1500)});
+   const request=lunaRequest(s,team,style),timeout=AbortSignal.timeout(1500);
+   const requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;
+   const response=await transport(`${config.baseURL.replace(/\/$/,'')}/decisions`,{method:'POST',headers:{Authorization:`Bearer ${config.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(request),signal:requestSignal});
    const requestId=response.headers.get('x-request-id');api.status=response.status;if(requestId&&/^[a-zA-Z0-9._:-]{1,160}$/.test(requestId)&&(!config.apiKey||!requestId.includes(config.apiKey)))api.requestId=requestId;
    if(!response.ok){
-    const body=await response.json().catch(()=>null) as {error?:{message?:string}}|null;failures++;
+    const body=await response.json().catch(()=>null) as {error?:{message?:string}}|null;
+    requestSignal.throwIfAborted();
+    failures++;
     retryAfterMs=Math.max(config.intervalMs,Math.min(60000,1000*2**Math.min(failures,6)),retryDelay(response.headers.get('retry-after'),clock()));
     api.code=response.status===401?'authentication':response.status===403?'permission':response.status===429?'rate-limit':'provider';
     permanent=response.status===401||response.status===403;
@@ -65,15 +76,25 @@ export function createLunaDriver(config:LunaConfig,transport:typeof fetch=fetch,
     throw new Error('Decisions HTTP failure');
    }
    const result=await response.json() as {model?:unknown;answers?:unknown;usage?:{input_tokens?:unknown}};
+   requestSignal.throwIfAborted();
    if(typeof result.model!=='string'||!/^gpt-6-luna(?:-|$)/.test(result.model))throw new Error('Wrong model');
    const choices=Object.fromEntries(request.questions.map(q=>[q.name,answer(result.answers,q.name,q.choices.map(c=>c.value))]));
    if(typeof result.usage?.input_tokens==='number'&&Number.isFinite(result.usage.input_tokens)&&result.usage.input_tokens>=0)api.inputTokens=result.usage.input_tokens;
-   const limits=[config.tokensPerMinute,...['x-ratelimit-limit-tokens','x-ratelimit-limit-project-tokens'].map(h=>Number(response.headers.get(h)))].filter(n=>n>0&&Number.isFinite(n));
-   retryAfterMs=Math.max(config.intervalMs,Math.ceil((api.inputTokens??0)*60000/(Math.min(...limits)*.8)));
+   const limits=[style==='tactical'?config.tokensPerMinute:Infinity,...['x-ratelimit-limit-tokens','x-ratelimit-limit-project-tokens'].map(h=>Number(response.headers.get(h)))].filter(n=>n>0&&Number.isFinite(n));
+   // RaceRoom schedules real-time experiments from the start of the prior request.
+   // Keep only provider quota delays here for experimental styles.
+   retryAfterMs=Math.max(style==='tactical'?config.intervalMs:0,Math.ceil((api.inputTokens??0)*60000/(Math.min(...limits)*.8)));
    const rpm=Number(response.headers.get('x-ratelimit-limit-requests'));if(rpm>0&&Number.isFinite(rpm))retryAfterMs=Math.max(retryAfterMs,Math.ceil(60000/(rpm*.8)));
-   const reply=request.questions.find(q=>q.name==='reply')!.choices.find(c=>c.value===choices.reply)!.description;
-   last={...done('luna',{offset:choices.line==='left'?-3:choices.line==='right'?3:0,side:choices.line as 'left'|'right'|'hold',speedBias:choices.pace==='attack'?2:choices.pace==='cautious'?-2:0,brakeAggression:choices.brake==='late'?.9:choices.brake==='early'?.2:.55,ers:choices.ers==='yes',drs:choices.drs==='yes',reply}),attempted:true,retryAfterMs,api};failures=0;
+   if(style==='tactical'){
+    const reply=request.questions.find(q=>q.name==='reply')!.choices.find(c=>c.value===choices.reply)!.description;
+    last=done('luna',{offset:choices.line==='left'?-3:choices.line==='right'?3:0,side:choices.line as 'left'|'right'|'hold',speedBias:choices.pace==='attack'?2:choices.pace==='cautious'?-2:0,brakeAggression:choices.brake==='late'?.9:choices.brake==='early'?.2:.55,ers:choices.ers==='yes',drs:choices.drs==='yes',reply});
+   }else{
+    const {intent,control}=experimentalDriverDecision(style,choices);
+    last={...done('luna',intent),control};
+   }
+   last={...last,attempted:true,retryAfterMs,api};failures=0;
   }catch(error){
+   if(signal?.aborted)return done('fallback');
    if(error instanceof Error&&(error.name==='TimeoutError'||error.name==='AbortError')){warning='Luna request timed out · local fallback';api.code='timeout';}
    else if(api.status===200){api.code='invalid-response';warning='Luna invalid response · local fallback';}
    else if(!api.status){api.code='connection';warning='Cannot reach Luna Decisions · local fallback';}

@@ -1,4 +1,5 @@
-import type {RaceLogEntry,RaceLogKind} from './event-log';
+import {driverActions,type RaceLogEntry,type RaceLogKind} from './event-log';
+import {AI_CONTROL_LABELS} from './ai-controls';
 import type {Connection} from './network';
 import {PERSONAS} from './types';
 
@@ -25,33 +26,25 @@ function formatClock(secondsTotal:number){
 function describe(entry:RaceLogEntry){
  const {data}=entry;
  if(data.kind==='driver'){
-  const pace=data.intent.speedBias>0?'ATTACK':data.intent.speedBias<0?'CAUTIOUS':'NORMAL';
-  const brake=data.intent.brakeAggression>.7?'LATE':data.intent.brakeAggression<.35?'EARLY':'NORMAL';
-  const line=data.intent.side.toUpperCase();
+  const actions=driverActions(data.intent,data.control);
+  const inputs=actions.filter(([name])=>name!=='ERS'&&name!=='DRS');
   const engineName=data.engine==='luna'?'Luna':'Jev System 1';
-  const actor=data.source==='fallback'?`${engineName} · Fallback`:data.model?`${engineName} · ${data.model}`:engineName;
-  const title=data.warning
-   ?data.warning
-   :data.changed?.length
-    ?data.changed.join(' · ')
-    :data.sequence===1
-     ?`Active — Line ${line} · Pace ${pace} · Brake ${brake}`
-     :`Holding — Line ${line} · Pace ${pace} · Brake ${brake}`;
+  const actor=data.model?`${engineName} · ${data.model}`:engineName;
+  const title=data.changed?.length
+   ?data.changed.join(' · ')
+   :inputs.map(([name,value])=>`${name} ${value.toUpperCase()}`).join(' · ');
   const chips=[
-   data.source==='fallback'?'FALLBACK':`LIVE · ${data.responseMs} ms`,
-   `LINE ${line}`,
-   `PACE ${pace}`,
-   `BRAKE ${brake}`,
-   `ERS ${data.intent.ers?'DEPLOY':'HOLD'}`,
+   `LIVE · ${data.responseMs} ms`,
+   AI_CONTROL_LABELS[data.controlStyle??data.control?.style??'tactical'],
+   ...actions.map(([name,value])=>`${name.toUpperCase()} ${value.toUpperCase()}`),
+   `#${data.sequence}`,
   ];
-  if(data.intent.drs)chips.push('DRS OPEN');
-  chips.push(`#${data.sequence}`);
   return {
    kindLabel:'Driver',
    actor,
    title,
    chips,
-   stage:data.source==='fallback'?'driver-fallback':'driver-live',
+   stage:'driver-live',
   };
  }
  if(data.kind==='strategy'){

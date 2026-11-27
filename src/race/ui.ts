@@ -1,3 +1,4 @@
+import {AI_CONTROL_INFO,AI_CONTROL_LABELS} from './ai-controls';
 import {moveMapDot} from './hud-dom';
 import {raceSessionLabel} from './live';
 import {damageLevel} from './crashes';
@@ -16,7 +17,7 @@ import {getTrack,type CircuitId} from './track';
 import {parseInvitation,playerURL,invitationCode} from './invitation';
 import {copyInvitation} from '../clipboard';
 import {radioOverlay} from './radio-overlay';
-import {mountDriverRadio} from './driver-radio';
+import {mountDriverRadio,type SendDriverQuestion} from './driver-radio';
 import {mountEventLog} from './event-log-view';
 import {nextSafetyCarLap,raceControlTelemetry,rainLabel,rainLevels,type Hazard,type RainLevel} from './race-control';
 const stripe=(entry:GridEntry)=>paints(entry)[entry.team==='Mercedes'?1:0];
@@ -33,7 +34,7 @@ const rcIcons={
  heavy:rcSvg('<path d="M6.5 14.2h10.8a3.7 3.7 0 0 0 .5-7.35 5.2 5.2 0 0 0-10-1.45A3.8 3.8 0 0 0 6.5 14.2Z" fill="currentColor" fill-opacity=".2"/><path d="M8 17.2l-1 3.3M12.2 17.2l-1 3.3M16.4 17.2l-1 3.3"/>'),
 };
 const el=(id:string)=>document.getElementById(id)!;
-export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:boolean;telemetry?:boolean;strategySeat?:Team;canStart?:()=>boolean;startReady?:(state:RaceState)=>boolean;onStart?:()=>void;openLink?:(url:string)=>void}={}){
+export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:boolean;telemetry?:boolean;strategySeat?:Team;canStart?:()=>boolean;startReady?:(state:RaceState)=>boolean;onStart?:()=>void;openLink?:(url:string)=>void;sendDriverQuestion?:SendDriverQuestion|null}={}){
  const params=new URLSearchParams(location.search),team=room.live?null:options.team===undefined?(params.get('team')==='a'?'a':params.get('team')==='b'?'b':null):options.team;
  const strategySeat=options.strategySeat;
  const isEngineer=Boolean(team&&params.has('engineer'));
@@ -261,8 +262,11 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
  Object.defineProperty(window,'__raceState',{configurable:true,get:()=>c.state});
  let displayedMatchup:Matchup|undefined,displayedCircuit:CircuitId|undefined;
  const radio=radioOverlay(el('chatgpt-radio'),el('radio-announcement'),presentation.audio.speakRadio);
- const driverRadio=strategySeat?mountDriverRadio(el('autopilot-radio'),strategySeat,()=>c,{collapsible:true}):null;
- if(driverRadio)c.onQuestionError=driverRadio.onError;
+ const driverRadio=strategySeat?mountDriverRadio(el('autopilot-radio'),strategySeat,()=>c,{collapsible:true,sendDriverQuestion:options.sendDriverQuestion}):null;
+ if(driverRadio){
+  c.onQuestionAccepted=driverRadio.onAccepted;
+  c.onQuestionError=driverRadio.onError;
+ }
  const eventLog=mountEventLog(el('race-event-log'),c);
  const lightBulbs=Array.from(document.querySelectorAll<HTMLElement>('.lights i'));
  const gauges=['dock-rpm','dock-thr','dock-brk','dock-life','ers-bar'].map(id=>el(id));
@@ -366,7 +370,9 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
    text('battle-label','⚡ ON-TRACK BATTLE');
    launchSeats.querySelector<HTMLElement>('a:nth-child(2)')!.hidden=true;
   }
-  text('connection',room.local&&c.status==='CONNECTED'?'LOCAL':s.live&&c.status==='CONNECTED'?raceSessionLabel(s.live,s.strategyPractice,Boolean(s.guestChatStrategy)).toUpperCase():c.status);text('circuit-details',`${(track.OFFICIAL_LENGTH/1000).toFixed(3)} KM • ${track.corners} CORNERS • ${r.laps} LAPS`);const circuitSelector=el('circuit-select') as HTMLSelectElement;if(displayedCircuit!==s.race.circuit){displayedCircuit=s.race.circuit;circuitSelector.value=displayedCircuit??'monza';}circuitSelector.disabled=!c.canReset;circuitSelector.title=c.canReset?'Changing circuit opens a fresh lobby':'Only the race owner can change circuit';const selector=el('matchup-select') as HTMLSelectElement;if(displayedMatchup!==s.matchup){displayedMatchup=s.matchup;selector.value=displayedMatchup??'jev-vs-jev';}selector.disabled=!c.canReset||s.solo===true;selector.title=c.canReset?'Changing drivers opens a fresh lobby':'Only the race owner can change drivers';const observed=Object.values(s.decisions).filter(Boolean),hasFallback=observed.some(d=>d!.source==='fallback'),liveSeats=Object.values(s.players??{a:{mock:false},b:{mock:false}}).filter(p=>!p.mock),hasLive=liveSeats.length>0&&observed.filter(d=>(d!.source==='jev'||d!.source==='luna')).length>=liveSeats.length;const seatDriver=s.driverMode?.[strategySeat??'a'];const seatPlayer=s.players?.[strategySeat??'a'];const modeLabel=s.mode==='mock'?(seatDriver==='human'?'MANUAL':seatDriver==='luna'?'LUNA':seatDriver==='jev'?'JEV':'AUTOPILOT'):hasFallback?'API FALLBACK':!hasLive?(s.strategyPractice&&seatPlayer&&!seatPlayer.mock?`${seatPlayer.name} READY`:'APIS CONFIGURED'):s.strategyPractice&&seatPlayer&&!seatPlayer.mock?`${seatPlayer.name} LIVE`:s.mode==='mixed'?'LIVE + AUTOPILOT':s.matchup==='jev-vs-luna'?'JEV + LUNA LIVE':'JEV LIVE';text('mode',modeLabel);el('mode').classList.toggle('api-fallback',hasFallback);text('lap-counter',`LAP ${Math.min(r.laps,Math.max(0,Math.floor(order[0].car.distance/LENGTH))+1)} / ${r.laps}`);text('clock',`${Math.floor(r.time/60).toString().padStart(2,'0')}:${Math.floor(r.time%60).toString().padStart(2,'0')}`);text('race-phase',replayActive?'INSTANT REPLAY':r.phase==='racing'?(order.some(x=>x.car.finishTime!==null)?'CHEQUERED · '+order.filter(x=>x.car.finishTime!==null).length+'/'+order.length:flagLabel):r.phase.toUpperCase());
+  text('connection',room.local&&c.status==='CONNECTED'?'LOCAL':s.live&&c.status==='CONNECTED'?raceSessionLabel(s.live,s.strategyPractice,Boolean(s.guestChatStrategy)).toUpperCase():c.status);text('circuit-details',`${(track.OFFICIAL_LENGTH/1000).toFixed(3)} KM • ${track.corners} CORNERS • ${r.laps} LAPS`);const circuitSelector=el('circuit-select') as HTMLSelectElement;if(displayedCircuit!==s.race.circuit){displayedCircuit=s.race.circuit;circuitSelector.value=displayedCircuit??'monza';}circuitSelector.disabled=!c.canReset;circuitSelector.title=c.canReset?'Changing circuit opens a fresh lobby':'Only the race owner can change circuit';const selector=el('matchup-select') as HTMLSelectElement;if(displayedMatchup!==s.matchup){displayedMatchup=s.matchup;selector.value=displayedMatchup??'jev-vs-jev';}selector.disabled=!c.canReset||s.solo===true;selector.title=c.canReset?'Changing drivers opens a fresh lobby':'Only the race owner can change drivers';const observed=Object.values(s.decisions).filter(Boolean),hasFallback=observed.some(d=>d!.source==='fallback'),liveSeats=Object.values(s.players??{a:{mock:false},b:{mock:false}}).filter(p=>!p.mock),hasLive=liveSeats.length>0&&observed.filter(d=>(d!.source==='jev'||d!.source==='luna')).length>=liveSeats.length;const seatDriver=s.driverMode?.[strategySeat??'a'];const seatPlayer=s.players?.[strategySeat??'a'];const modeLabel=s.mode==='mock'?(seatDriver==='human'?'MANUAL':seatDriver==='luna'?'LUNA':seatDriver==='jev'?'JEV':'AUTOPILOT'):hasFallback?'API FALLBACK':!hasLive?(s.strategyPractice&&seatPlayer&&!seatPlayer.mock?`${seatPlayer.name} READY`:'APIS CONFIGURED'):s.strategyPractice&&seatPlayer&&!seatPlayer.mock?`${seatPlayer.name} LIVE`:s.mode==='mixed'?'LIVE + AUTOPILOT':s.matchup==='jev-vs-luna'?'JEV + LUNA LIVE':'JEV LIVE';const controlStyle=s.aiControlStyle?.[strategySeat??focus];
+  text('mode',controlStyle&&controlStyle!=='tactical'?AI_CONTROL_LABELS[controlStyle]:modeLabel);
+  el('mode').classList.toggle('api-fallback',hasFallback);text('lap-counter',`LAP ${Math.min(r.laps,Math.max(0,Math.floor(order[0].car.distance/LENGTH))+1)} / ${r.laps}`);text('clock',`${Math.floor(r.time/60).toString().padStart(2,'0')}:${Math.floor(r.time%60).toString().padStart(2,'0')}`);text('race-phase',replayActive?'INSTANT REPLAY':s.stepLockWaiting?'WAITING ON AI':r.phase==='racing'?(order.some(x=>x.car.finishTime!==null)?'CHEQUERED · '+order.filter(x=>x.car.finishTime!==null).length+'/'+order.length:flagLabel):r.phase.toUpperCase());
   const leader=order[0].car;
   const timingHtml=order.map(({entry,car:x},i)=>{
    if(!fullGrid&&(!entry.seat||solo&&entry.seat==='b')&&(!presentation.clean||i>=3))return '';
@@ -433,7 +439,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
   const source=decision?.source==='jev'?'JEV / SYSTEM ONE':decision?.source==='luna'?'LUNA / DECISIONS'
    :decision?.source==='fallback'?`${name} / FALLBACK`:`${name} / MOCK`;
   const stats=s.driverStats?.[focus]??{successes:0,attempts:0};
-  el('mode').title=`${source} · ${stats.successes} CONFIRMED / ${stats.attempts} ATTEMPTS${decision?.api?.status?' · HTTP '+decision.api.status:''}`;
+  el('mode').title=`${controlStyle?`${AI_CONTROL_LABELS[controlStyle]} (${AI_CONTROL_INFO[controlStyle].how}) · `:''}${source} · ${stats.successes} CONFIRMED / ${stats.attempts} ATTEMPTS${decision?.api?.status?' · HTTP '+decision.api.status:''}`;
   el('driver-warning').hidden=!decision?.warning;
   text('driver-warning',decision?.warning??'');
   const latest=r.events.filter(x=>['overtake','pit','lap','finish','incident','collision'].includes(x.kind)).at(-1);if(latest&&String(latest.id)!==lastEvent){lastEvent=String(latest.id);text('event-flash',latest.kind==='lap'&&r.fastest?.team===latest.team&&Math.abs(r.fastest.time-r.cars[latest.team].lastLap)<.01?'PURPLE LAP / '+latest.message:latest.message);el('event-flash').hidden=false;el('event-flash').style.setProperty('--flash-colour',latest.kind==='lap'?'#c399ff':PERSONAS[latest.team].colour);}if(latest&&r.time-latest.time>7)el('event-flash').hidden=true;

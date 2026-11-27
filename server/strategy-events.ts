@@ -8,21 +8,15 @@ import type {Car,Compound,Instruction,Race} from '../src/race/types';
 const eventNoticeBase=z.object({room:z.string().uuid(),event_id:z.string().uuid()});
 export const eventInput=z.object({
  room:z.string().uuid(),
- event_id:z.string().uuid().optional().describe('Event ID from the webhook notification. Omit to read live telemetry for the active race.'),
+ event_id:z.string().uuid().optional().describe('Event ID from the webhook notification or the driver question in chat. Omit to use live telemetry for the active race.'),
  team:z.enum(['a','b']).optional().describe('Assigned seat (optional in solo races; required only when omitting event_id in a two-strategist race).'),
 });
 const driverRadioText=z.string().trim().min(1).max(DRIVER_RADIO_TEXT_LIMIT);
-export const driverQuestionInput=eventInput.extend({
- event_id:z.string().uuid().describe('Event ID of the driver question notification.'),
-});
-export const driverAnswerInput=driverQuestionInput.extend({
- reply:driverRadioText.optional().describe('Short radio reply to the driver. Omit if the reply is declined or cancelled.'),
-});
-export type DriverAnswerInput=z.infer<typeof driverAnswerInput>;
+export const driverQuestionRequestId=z.string().uuid();
 export const strategyFilter=z.object({room:z.string().uuid(),subscription_key:z.string().regex(/^[a-f0-9]{64}$/)});
 export const radioInput=eventInput.extend({
  action:z.enum(['hold','attack','defend','save-fuel','yield','push','manage','box','extend','cover','harvest','swap','swap-back']),
- radio:z.string().trim().min(1).max(180).describe('Short radio instruction for this driver.'),
+ radio:driverRadioText.describe('Short radio instruction or spoken reply for this driver.'),
  budget_kj:z.number().int().positive().max(4000).optional().describe('Allocate ERS boost budget (kJ) for attack, defence, or an in-lap push. Omit to conserve energy.'),
  sector:z.number().int().min(1).max(3).optional().describe('One-based lift-and-coast fuel-saving sector (required for save-fuel; optional composable override on other actions).'),
  laps:z.number().int().min(1).max(3).optional().describe('Valid for one lap by default. Can extend fuel, energy, or team orders up to three laps.'),
@@ -53,7 +47,7 @@ const replayNotice=eventNoticeBase.extend({
 
 export const strategyEventDefinition={
  name:STRATEGY_EVENT,
- description:'Your strategy seat needs a radio response. Open a seat with open_grand_prix_strategy or open_grand_prix_replay and use its event_filter. If driverQuestion is present, respond using answer_grand_prix_driver. For other events, use submit_grand_prix_radio or read full telemetry with get_grand_prix_strategy_event.',
+ description:'Your strategy seat needs a radio response. Open a seat with open_grand_prix_strategy or open_grand_prix_replay and use its event_filter. Respond using submit_grand_prix_radio or read full telemetry with get_grand_prix_strategy_event. If driverQuestion is present, use its event_id with action=hold and a short spoken reply in radio.',
  delivery:['webhook'],
  inputSchema:z.toJSONSchema(strategyFilter),
  payloadSchema:z.toJSONSchema(z.union([eventNoticeBase.extend({
@@ -81,7 +75,8 @@ export interface StrategyEvent extends StrategyEventNotice {
  issuedAt:number;
 }
 export type DriverQuestionEvent=StrategyEvent&{driverQuestion:DriverQuestion};
-type DriverConsultation={event:DriverQuestionEvent;consultationId:string};
+type DriverConsultation={event:DriverQuestionEvent;consultationId:string;publish:boolean};
+type DriverQuestionRequest={event_id:string;line:string};
 export type LiveStrategyRead=Omit<StrategyEvent,'event_id'>&{
  event_id?:string;
  superseded?:boolean;
@@ -130,6 +125,7 @@ export class StrategyEvents {
  private listeners=new Set<(event:StrategyEventNotice&{event_id:string},issuedAt:number)=>void>();
  pending?:PendingStrategy;
  private driverConsultation?:DriverConsultation;
+ private driverQuestionRequests=new Map<string,DriverQuestionRequest>();
  private recent=new Map<string,PendingStrategy>();
  private consumed=new Set<string>();
 
@@ -148,18 +144,28 @@ export class StrategyEvents {
   return event;
  }
 
- offerDriverQuestion(room:string,driverQuestion:DriverQuestion,consultationId:string,observation:StrategyEvent['observation'],now=Date.now()){
+ offerDriverQuestion(room:string,driverQuestion:DriverQuestion,consultationId:string,observation:StrategyEvent['observation'],{publish,requestId}:{publish:boolean;requestId?:string}){
+  const now=Date.now();
   const event:DriverQuestionEvent={
    room,team:observation.team,lap:observation.telemetry.lap,reasons:['Driver question'],summary:strategySummary(observation),
    driverQuestion,observation:structuredClone(observation),issuedAt:now,expiresAt:now+this.responseMs,event_id:crypto.randomUUID(),
   };
-  this.driverConsultation={event,consultationId};
+  this.driverConsultation={event,consultationId,publish};
+  if(requestId){
+   this.driverQuestionRequests.set(requestId,{event_id:event.event_id,line:driverQuestion.text});
+   if(this.driverQuestionRequests.size>MAX_CONSUMED_IDS){
+    const oldest=this.driverQuestionRequests.keys().next().value;
+    if(oldest!==undefined)this.driverQuestionRequests.delete(oldest);
+   }
+  }
   return event;
  }
 
+ getDriverQuestionRequest(requestId:string){return this.driverQuestionRequests.get(requestId);}
+
  publishDriverQuestion(){
   const consultation=this.getDriverConsultation();
-  if(!consultation)return;
+  if(!consultation?.publish)return;
   const {event}=consultation;
   for(const listener of this.listeners)listener(this.notice(event),event.issuedAt);
  }
@@ -171,6 +177,11 @@ export class StrategyEvents {
 
  clearDriverQuestion(){
   delete this.driverConsultation;
+ }
+
+ consumeDriverQuestion(eventId:string){
+  this.rememberConsumed(eventId);
+  this.clearDriverQuestion();
  }
 
  find(eventId:string){
@@ -186,14 +197,16 @@ export class StrategyEvents {
   return this.consumed.has(eventId);
  }
 
- consume(eventId?:string){
-  if(eventId){
-   this.consumed.add(eventId);
-   while(this.consumed.size>MAX_CONSUMED_IDS){
-    const oldest=this.consumed.keys().next().value;
-    if(oldest!==undefined)this.consumed.delete(oldest);
-   }
+ private rememberConsumed(eventId:string){
+  this.consumed.add(eventId);
+  if(this.consumed.size>MAX_CONSUMED_IDS){
+   const oldest=this.consumed.keys().next().value;
+   if(oldest!==undefined)this.consumed.delete(oldest);
   }
+ }
+
+ consume(eventId?:string){
+  if(eventId)this.rememberConsumed(eventId);
   delete this.pending;
   this.recent.clear();
  }
@@ -202,6 +215,7 @@ export class StrategyEvents {
   delete this.pending;
   this.recent.clear();
   this.clearDriverQuestion();
+  this.driverQuestionRequests.clear();
  }
 
  prune(now=Date.now()){
@@ -214,8 +228,8 @@ export class StrategyEvents {
  subscribe(listener:(event:StrategyEventNotice&{event_id:string},issuedAt:number)=>void){
   this.listeners.add(listener);
   if(this.pending&&this.pending.event.expiresAt>Date.now())listener(this.notice(this.pending.event),this.pending.event.issuedAt);
-  const question=this.getDriverConsultation()?.event;
-  if(question)listener(this.notice(question),question.issuedAt);
+  const question=this.getDriverConsultation();
+  if(question?.publish)listener(this.notice(question.event),question.event.issuedAt);
   return ()=>{this.listeners.delete(listener);};
  }
 

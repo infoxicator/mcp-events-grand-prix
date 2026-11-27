@@ -8,6 +8,7 @@ import {getTrack,type Track,type CircuitId} from './track';
 import {VEHICLE,brakeCapacity,cornerLimit,drivetrain} from './vehicle';
 import {dryCompounds,followNeutralisedQueue,neutralisedQueue,sectorWetnessOf,speedRestriction,stepRaceControl,wetGrip} from './race-control';
 import { TEAMS,type Team,type Race,type Car,type Instruction,type DriverIntent,type Compound,type PanelDamage,type ErsMode,type HumanControlInput } from './types';
+import {AI_LANES,type AiControl,type AiPedal} from './ai-controls';
 export const DT=1/120;
 export const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 export const other=(t:Team):Team=>t==='a'?'b':'a';
@@ -82,15 +83,15 @@ function crossedLine(before:number,after:number,mark:number,LENGTH:number){retur
 // Precompute geometry only; grip, fuel, wake and strategy remain dynamic.
 const CURVE_STEP=4,curves=new WeakMap<Track,number[]>();
 export function pathCurvature(d:number,track:Track=getTrack()){let curveTable=curves.get(track);if(!curveTable){curveTable=Array.from({length:Math.ceil(track.LENGTH/CURVE_STEP)+1},(_,i)=>track.racingCurvature(i*CURVE_STEP));curves.set(track,curveTable);}const u=track.wrap(d)/CURVE_STEP,i=Math.floor(u);return curveTable[i]*(1-u+i)+curveTable[i+1]*(u-i);}
-export function racingSpeed(c:Car,rival:FieldCar,track:Track=getTrack(),wetness=0,distance=c.distance){
+export function racingSpeed(c:Car,rival:FieldCar,track:Track=getTrack(),wetness=0,distance=c.distance,pedal?:AiPedal){
  const g=grip(c,wetness),air=aero(c,rival,distance),mass=VEHICLE.dryMass+c.fuel;
  let limit=105;
  const speedBias=clamp(c.intent.speedBias,-2,2);
- const brakeAgg=clamp(c.intent.brakeAggression,0,1);
+ const brakeAgg=pedal==='overdrive'?1:pedal==='push'?.9:clamp(c.intent.brakeAggression,0,1);
  // Backwards velocity envelope: braking capacity grows with aerodynamic load.
  // Driver pace & brake aggression meaningfully shift corner speed and braking points.
  const comfort=c.instruction.pace==='manage'?.91:c.instruction.pace==='push'?.985:.96;
- const cornerScale=Math.min(1,comfort*(1+speedBias*.014));
+ const cornerScale=pedal==='overdrive'?1.12:pedal==='push'?1.04:Math.min(1,comfort*(1+speedBias*.014));
  for(let ahead=320;ahead>=0;ahead-=8){const curve=pathCurvature(distance+ahead,track),v=cornerLimit(curve,mass,g,air.dirtyAir);
   const corner=v*cornerScale;
   const decel=brakeCapacity(limit,mass,g,Math.min(3*9.81,limit*limit*Math.abs(curve)),air.dirtyAir)*(.69+brakeAgg*.155);
@@ -135,7 +136,7 @@ function trafficSnapshot(c:Car){
  return {distance:c.distance,offset:c.offset,speed:c.speed,pit:c.pit,lateralVelocity:c.lateralVelocity,
   finishTime:c.finishTime,bestSectors:[...c.bestSectors]};
 }
-export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>>, fixedLine?: Team){
+export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>>, fixedLine?: Team, aiControls?:Partial<Record<Team,AiControl>>){
  const track=getTrack(s.circuit),{LENGTH,wrap,SECTORS,DRS_ZONES,PIT_ENTRY,PIT_EXIT,PIT_LIMIT,PIT_STOP_SECONDS,SPEED_TRAP,racingLineOffset,signedCurvatureAt,trackHalfWidth}=track;
  const crossed=(before:number,after:number,mark:number)=>crossedLine(before,after,mark,LENGTH);
  const wearScale=tyreWearScale(s.laps);
@@ -201,7 +202,11 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   const wake=traffic&&(rival.distance<=c.distance||traffic.distance<rival.distance)?traffic:rival;
   const air=aero(c,wake),mode=c.instruction.pace,mass=VEHICLE.dryMass+c.fuel,g=grip(c,sectorWet);
   const rawInput=controls?.[team];
-  const inputs=!neutralised&&!(c.pit!=='none'&&rawInput?.pitAssist!==false)?rawInput:undefined;
+  const aiControl=aiControls?.[team],pit=c.pit!=='none';
+  const toEntry=wrap(PIT_ENTRY-c.distance),boxing=c.instruction.box&&toEntry<260;
+  const aiUnassisted=Boolean(aiControl&&!neutralised&&!pit&&!boxing);
+  const hybrid=aiUnassisted&&aiControl?.style==='no-assist'?aiControl:undefined;
+  const inputs=!neutralised&&!(pit&&rawInput?.pitAssist!==false)&&!(boxing&&aiControl&&rawInput?.pitAssist)?rawInput:undefined;
   const drsRequested=inputs?.drs!==undefined?inputs.drs:c.intent.drs;
   c.drs=!neutralised&&sectorWet<.3&&drsRequested&&drsAllowed(c,track)&&s.time>20&&Math.abs(pathCurvature(c.distance,track))<.004;
   const fuelOrder=c.instruction.fuelSave;
@@ -250,7 +255,7 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   // Aggressive ERS harvesting clips top-end straight power slightly in exchange for faster recharge.
   const harvestClipping=boostPower===0&&c.pit==='none'&&effectiveErsMode==='harvest'&&c.speed>72&&c.ersRecovered<2000000;
   const netBoostPower=boostPower>0?boostPower:harvestClipping?-25000:0;
-  let target=racingSpeed(c,wake,track,sectorWet,c.distance+c.speed*.18);
+  let target=inputs?0:racingSpeed(c,wake,track,sectorWet,c.distance+c.speed*.18,hybrid?.pedal);
   const neutralisedLeader=queue?.get(c);
   target=Math.min(target,restriction);
   if(neutralisedLeader)target=Math.min(target,neutralisedLeader.speed+Math.max(0,neutralisedLeader.distance-before-9)*.8);
@@ -260,17 +265,24 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   const outOfFuel=c.fuel<=.01;
   if(outOfFuel)target=Math.min(target,40);
   if(c.pit!=='none')target=Math.min(target,PIT_LIMIT);
-  const toEntry=wrap(PIT_ENTRY-c.distance);if(c.instruction.box&&c.pit==='none'&&toEntry<260)target=Math.min(target,Math.sqrt(PIT_LIMIT**2+2*28*toEntry));
+  if(boxing&&!pit)target=Math.min(target,Math.sqrt(PIT_LIMIT**2+2*28*toEntry));
   const waiting=c.pit==='entry'&&teammateInBox(s,track,playerEntry(team),before,PIT_STOP);
   const remaining=wrap(PIT_STOP-before);
   if(c.pit==='entry'){const toBox=Math.max(0,remaining-(waiting?STACK_GAP:0));if(toBox<35)target=Math.min(target,Math.sqrt(2*7*toBox));}
   if(yieldRival&&c.pit==='none')target=Math.min(target,Math.max(20,yieldRival.speed-4));
-  const lookahead=clamp(c.speed*.25,7,24),pit=c.pit!=='none';
-  const base=pit?pitRoute(track,c.distance+lookahead,PIT_STOP):racingLineOffset(c.distance+lookahead);
-  const margin=trackHalfWidth(c.distance)-1.05;
-  const yieldOffset=yieldRival&&c.pit==='none'?(yieldRival.offset>=0?-2.6:2.6):0;
-  const desired=pit||fixedLine===team||neutralised?base:yieldRival?clamp(base+yieldOffset,-margin,margin):Math.abs(c.intent.offset)>8?c.intent.offset:clearRacingLine(c,clamp(base+c.intent.offset,-margin,margin),margin,s.field,rival);
-  const steerTarget=inputs?.steering??steeringTo(track,c.distance,c.offset,c.heading,lookahead,desired);
+  let steerTarget=inputs?.steering;
+  if(steerTarget===undefined){
+   const lookahead=clamp(c.speed*.25,7,24);
+   const base=pit?pitRoute(track,c.distance+lookahead,PIT_STOP):racingLineOffset(c.distance+lookahead);
+   const margin=trackHalfWidth(c.distance)-1.05;
+   const yieldOffset=yieldRival&&!pit?(yieldRival.offset>=0?-2.6:2.6):0;
+   const desired=pit||fixedLine===team||neutralised?base
+    :hybrid?base+AI_LANES[hybrid.lane]
+    :yieldRival?clamp(base+yieldOffset,-margin,margin)
+    :Math.abs(c.intent.offset)>8?c.intent.offset
+    :clearRacingLine(c,clamp(base+c.intent.offset,-margin,margin),margin,s.field,rival);
+   steerTarget=steeringTo(track,c.distance,c.offset,c.heading,lookahead,desired);
+  }
   const steerRate=inputs?.steerRate??1.1;
   c.steering+=clamp(steerTarget-c.steering,-steerRate*DT,steerRate*DT);
   const demandedYaw=c.speed/VEHICLE.wheelbase*Math.tan(c.steering);
@@ -279,26 +291,30 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   const maxDrive=outOfFuel?drive.maxDrive*.15:drive.maxDrive;
   const brakeMax=brakeCapacity(c.speed,mass,g,Math.min(lateralAccel,drive.tyreForce/mass*.5),air.dirtyAir,damage);
   const gap=rival.distance-c.distance;
-  if(rival.finishTime===null&&gap>0&&gap<35&&Math.abs(c.offset-rival.offset)<2.1)target=Math.min(target,Math.sqrt(rival.speed**2+2*15*Math.max(0,gap-7)));
-  if(traffic&&traffic.distance-before<28)target=Math.min(target,traffic.speed+Math.max(0,traffic.distance-before-6.5)*.9);
+  if(!aiUnassisted){
+   if(rival.finishTime===null&&gap>0&&gap<35&&Math.abs(c.offset-rival.offset)<2.1)target=Math.min(target,Math.sqrt(rival.speed**2+2*15*Math.max(0,gap-7)));
+   if(traffic&&traffic.distance-before<28)target=Math.min(target,traffic.speed+Math.max(0,traffic.distance-before-6.5)*.9);
+  }
   const dv=target-c.speed;
   // Lift-and-coast fuel saving: lift early before corners, gentle cap elsewhere in the sector.
   const approachingCorner=saveFuel&&(Math.abs(pathCurvature(c.distance+130,track))>.005||Math.abs(pathCurvature(c.distance+70,track))>.006);
   const throttleCap=saveFuel?(approachingCorner?.14:.82):1;
-  let requestedThrottle=inputs?.throttle??(dv>0?clamp(dv*.65,0,throttleCap):0);
+  const pedal=hybrid?.pedal;
+  const directBrake=pedal==='brake-hard'?1:pedal==='brake-light'?.45:pedal==='coast'?0:undefined;
+  let requestedThrottle=inputs?.throttle??(directBrake!==undefined?0:dv>0?clamp(dv*.65,0,throttleCap):0);
   if(inputs&&c.pit==='none'&&c.speed<62&&Math.abs(c.lateralG)>1.6){
    if(inputs.tc==='full')requestedThrottle=Math.min(requestedThrottle,clamp(1-(Math.abs(c.lateralG)-1.6)*.18,.38,1));
    else if(inputs.tc==='medium')requestedThrottle=Math.min(requestedThrottle,clamp(1-(Math.abs(c.lateralG)-2.2)*.14,.55,1));
   }
-  const requestedBrake=inputs?.brake??(dv<0?clamp(-dv*3.5/Math.max(5,brakeMax),0,1):0);
+  const requestedBrake=inputs?.brake??directBrake??(dv<0?clamp(-dv*3.5/Math.max(5,brakeMax),0,1):0);
   const throttleUpRate=inputs?.steerRate!==undefined?9*DT:5*DT;
   c.throttle+=clamp(requestedThrottle-c.throttle,-12*DT,throttleUpRate);c.brake+=clamp(requestedBrake-c.brake,-12*DT,12*DT);
   if(c.brake>.05){c.throttle=0;c.drs=false;}
   // Late braking on worn or wet tyres risks a real wheel lockup (reduced decel + flat-spot wear).
-  const brakeAgg=clamp(c.intent.brakeAggression,0,1);
+  const brakeAgg=pedal==='overdrive'||pedal==='brake-hard'?1:pedal==='push'?.9:clamp(c.intent.brakeAggression,0,1);
   const driverAttack=clamp(c.intent.speedBias,-2,2)/2;
   const biasThreshold=clamp(.88-Math.max(0,((inputs?.brakeBias??56)-56)*.015),.72,.92);
-  const humanLockup=Boolean(inputs&&inputs.abs===false&&c.pit==='none'&&c.brake>biasThreshold&&c.speed>30&&(c.wear>.35||sectorWet>.2||c.brake>.95));
+  const humanLockup=Boolean((inputs?.abs===false||pedal==='brake-hard'||pedal==='overdrive')&&!pit&&c.brake>biasThreshold&&c.speed>30&&(c.wear>.35||sectorWet>.2||c.brake>.95));
   const lockedUp=humanLockup||(!inputs&&c.pit==='none'&&c.brake>.68&&brakeAgg>=.85&&(c.wear>.58||sectorWet>.25)&&c.speed>32);
   c.lockup=lockedUp?1:0;
   const effectiveBrakeMax=lockedUp?brakeMax*.82:brakeMax;
@@ -316,7 +332,7 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   c.lateralVelocity=-c.speed*Math.sin(c.heading);c.offset+=c.lateralVelocity*DT;
   c.distance+=Math.max(0,progress)*DT;
   followNeutralisedQueue(c,before,neutralisedLeader);
-  if(traffic){
+  if(traffic&&!aiUnassisted){
    const trafficEnd=traffic.distance+traffic.speed*(((s.tick-1)%FIELD_STEP_TICKS)+1)*DT;
    if(trafficEnd-before>=5.62&&c.distance>trafficEnd-5.62){
     c.distance=trafficEnd-5.62;c.speed=Math.min(c.speed,traffic.speed);

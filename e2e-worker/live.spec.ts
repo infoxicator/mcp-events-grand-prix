@@ -161,20 +161,12 @@ async function mcp(origin:string){
  return client;
 }
 
-for(const sep of [false,true])test(`driver question and completed elicitation air on team radio via ${sep?'SEP':'Work'} events`,async({request,baseURL})=>{
+for(const sep of [false,true])test(`driver radio questions receive a spoken reply via ${sep?'SEP':'Work'} events`,async({request,baseURL})=>{
  const path=sep?'/mcp/sep-events':'/mcp';
  const auth:Record<string,string>=sep?{Authorization:'Bearer '+'e'.repeat(64)}:{};
- const client=new Client({name:'Test pit wall',version:'1'},{versionNegotiation:{mode:'auto'},capabilities:{elicitation:{form:{}}}});
+ const client=new Client({name:'Test pit wall',version:'1'},{versionNegotiation:{mode:'auto'}});
  const question='How much tyre life do I have left?';
- const suggestion='The tyres are good for this stint.';
  const reply='Tyre wear is low. Stay on this set.';
- let forms=0;
- client.setRequestHandler('elicitation/create',async({params})=>{
-  expect(params.message).toContain(question);
-  expect(params).toMatchObject({requestedSchema:{properties:{reply:{type:'string',default:suggestion}}}});
-  forms++;
-  return {action:'accept',content:{reply}};
- });
  await client.connect(new StreamableHTTPClientTransport(new URL(path,baseURL),{requestInit:{headers:auth}}));
  let probe:ReturnType<typeof watch>|undefined;
  let stop:{room:string;key:string}|undefined;
@@ -199,6 +191,7 @@ for(const sep of [false,true])test(`driver question and completed elicitation ai
   probe.ws.send(JSON.stringify({type:'start',startKey:stop.key}));
   await expect.poll(()=>probe?.state()?.race.phase,{timeout:15_000}).toBe('racing');
   probe.ws.send(JSON.stringify({type:'strategy-question',text:question}));
+  await expect.poll(()=>probe?.state()?.race.radio.some(r=>r.team==='a'&&r.text===question)).toBe(true);
   type Notice={eventId:string;data:{driverQuestion?:{text:string}}};
   const receivedQuestion=async()=>{
    const deliveries=await request.get(fixture+endpoint).then(r=>r.json());
@@ -206,13 +199,15 @@ for(const sep of [false,true])test(`driver question and completed elicitation ai
    return notices.find(event=>event.data?.driverQuestion?.text===question);
   };
   await expect.poll(receivedQuestion).toBeTruthy();
-  const args={room,event_id:(await receivedQuestion())!.eventId,suggested_reply:suggestion};
-  expect((await client.callTool({name:'answer_grand_prix_driver',arguments:{...args,team:'b'}})).isError).toBe(true);
-  const accepted=await client.callTool({name:'answer_grand_prix_driver',arguments:args});
+  const args={room,event_id:(await receivedQuestion())!.eventId,team:'a',action:'hold',radio:reply};
+  const radio={name:'submit_grand_prix_radio',arguments:args};
+  expect((await client.callTool({...radio,arguments:{...args,team:'b'}})).isError).toBe(true);
+  expect((await client.callTool({...radio,arguments:{...args,action:'push'}})).isError).toBe(true);
+  const accepted=await client.callTool(radio);
   expect(accepted.isError,JSON.stringify(accepted.content)).toBeFalsy();
+  expect(accepted.structuredContent).toEqual({team:'a',line:reply});
   await expect.poll(()=>probe?.state()?.race.radio.filter(r=>r.team==='a'&&[question,reply].includes(r.text)).map(r=>r.text)).toEqual([question,reply]);
-  expect((await client.callTool({name:'answer_grand_prix_driver',arguments:args})).isError).toBe(true);
-  expect(forms).toBe(1);
+  expect((await client.callTool(radio)).isError).toBe(true);
  }finally{
   probe?.ws.close();
   if(stop)await client.callTool({name:'stop_grand_prix_chat_strategy',arguments:stop});
@@ -228,6 +223,54 @@ function watch(origin:string,room:string,token:string){
  const state=()=>messages.findLast((m):m is RaceState=>m.type==='state');
  return {ws,messages,state};
 }
+
+test('Worker validates driver-key modes and holds the race between live decisions',async({request,baseURL})=>{
+ const client=new Client({name:'Step-lock test',version:'1'});
+ await client.connect(new StreamableHTTPClientTransport(new URL('/mcp',baseURL)));
+ let seat:{room:string;key:string}|undefined;
+ let probe:ReturnType<typeof watch>|undefined;
+ try{
+  const race=await client.callTool({name:'open_grand_prix_strategy',arguments:{driver:'luna'}});
+  expect(race.isError).toBeFalsy();
+  const {room}=race._meta!.liveInvitation as {room:string};
+  seat={room,key:race._meta!.strategyKey as string};
+  const configure=(controlStyle?:unknown)=>request.post(`/api/rooms/${room}/driver-key`,{
+   headers:{Authorization:`Bearer ${seat!.key}`},
+   data:{team:'a',engine:'luna',apiKey:'fixture-only',controlStyle},
+  });
+  for(const controlStyle of [undefined,'raw','no-assist','step-locked']){
+   const response=await configure(controlStyle);
+   expect(response.status()).toBe(200);
+   expect(await response.json()).toMatchObject({controlStyle:controlStyle??'tactical'});
+  }
+  expect((await configure('invalid')).status()).toBe(400);
+  const version='2026-07-28',name='grand_prix.strategy_required';
+  const subscription=await request.post('/mcp',{
+   headers:{Accept:'application/json, text/event-stream','Mcp-Protocol-Version':version,'Mcp-Method':'events/subscribe','Mcp-Name':name},
+   data:{jsonrpc:'2.0',id:1,method:'events/subscribe',params:{
+    _meta:{'io.modelcontextprotocol/protocolVersion':version,'io.modelcontextprotocol/clientCapabilities':{}},
+    name,arguments:(race.structuredContent as {event_filter:object}).event_filter,
+    delivery:{mode:'webhook',url:'https://connectors.api.openai.com/webhook/mcp-events/'+crypto.randomUUID(),secret:'whsec_'+Buffer.alloc(32,7).toString('base64')},
+   }},
+  });
+  expect(await subscription.json()).toHaveProperty('result.id');
+  probe=watch(baseURL!,room,seat.key);
+  await expect.poll(()=>probe?.state()?.strategyWebhook).toBe('connected');
+  probe.ws.send(JSON.stringify({type:'start',startKey:seat.key}));
+  const held=(sequence:number)=>probe!.messages.filter((m):m is RaceState=>
+   m.type==='state'&&m.stepLockWaiting===true&&m.decisions.a?.source==='luna'&&m.decisions.a.sequence===sequence);
+  await expect.poll(()=>held(2).length,{timeout:15_000}).toBeGreaterThan(1);
+  expect(held(1).length).toBeGreaterThan(1);
+  const firstTick=held(1)[0].race.tick;
+  expect(new Set(held(1).map(s=>s.race.tick))).toEqual(new Set([firstTick]));
+  expect(new Set(held(2).map(s=>s.race.tick))).toEqual(new Set([firstTick+12]));
+  expect(held(1)[0]).toMatchObject({aiControlStyle:{a:'step-locked'},decisions:{a:{control:{style:'step-locked',throttle:'full'}}}});
+ }finally{
+  probe?.ws.close();
+  if(seat)await client.callTool({name:'stop_grand_prix_chat_strategy',arguments:seat});
+  await client.close();
+ }
+});
 
 test('workerd accepts signed header and cookie only, and rejects signing-key redirects',async({request,baseURL})=>{
  const {url,room,key,challenge}=await pair(request);

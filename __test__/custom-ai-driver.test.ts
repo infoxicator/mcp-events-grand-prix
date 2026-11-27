@@ -2,6 +2,10 @@ import {describe,expect,it,vi} from 'vitest';
 import {RaceRoom} from '../server/race-room';
 import {createRaceMcp} from '../server/race-mcp';
 import {LUNA_MODEL} from '../server/luna';
+import {DT,racingSpeed,steeringTo,stepRace} from '../src/race/physics';
+import {getTrack} from '../src/race/track';
+import {clearRacingLine} from '../src/race/field-physics';
+import type {RaceLogEntry} from '../src/race/event-log';
 
 describe('In-memory Jev System 1 and Luna AI driver keys',()=>{
  it('drives Team A with a session-only Jev System 1 API key and never exposes it in state',async()=>{
@@ -32,6 +36,7 @@ describe('In-memory Jev System 1 and Luna AI driver keys',()=>{
   expect(configured).toEqual({engine:'jev',provider:'typesafe',model:'jev-latest'});
   expect(room.hasCustomDriver('a')).toBe(true);
   expect(room.state().players.a.mock).toBe(false);
+  expect(room.state().aiControlStyle?.a).toBe('tactical');
   expect(room.state().mode).toBe('live');
   expect(JSON.stringify(room.state())).not.toContain(secretKey);
 
@@ -142,5 +147,212 @@ describe('In-memory Jev System 1 and Luna AI driver keys',()=>{
    }),
   });
   expect(server).toBeDefined();
+ });
+});
+
+const rawChoices={steer:'hard-left',throttle:'half',brake:'none',ers:'no',drs:'no'};
+const hybridChoices={lane:'far-right',pedal:'overdrive',ers:'no',drs:'no'};
+const jevResponse=(choices:Record<string,string>)=>Response.json({
+ answers:Object.fromEntries(Object.entries(choices).map(([name,choice])=>[name,{choice,confidence:.9}])),
+});
+const lunaResponse=(choices:Record<string,string>)=>Response.json({
+ model:LUNA_MODEL,answers:Object.entries(choices).map(([name,choice])=>({name,choice,type:'choice',confidence:.9})),
+});
+function experimentRoom(){
+ const room=new RaceRoom(crypto.randomUUID(),'https://race.example',{JEV_MOCK:'1'},1,'jev-vs-jev',{},'monza',true);
+ room.live='running';
+ room.strategyPractice=true;
+ room.viewerKey='viewer';
+ room.driverMode.b='autopilot';
+ room.engineerMode.a='joined';
+ room.race.phase='racing';
+ room.race.field=[];
+ room.race.cars.b.finishTime=0;
+ Object.assign(room.race.cars.a,{distance:100,speed:45,offset:0,heading:0,steering:0});
+ return room;
+}
+
+describe('AI driving experiments',()=>{
+ it.each(['jev','luna'] as const)('%s sends raw controls through the human physics path',async engine=>{
+  const room=experimentRoom(),car=room.race.cars.a;
+  const entries:RaceLogEntry[]=[];
+  const peer=room.add(message=>{if(message.type==='event-log')entries.push(...message.entries);});
+  room.join(peer,null,room.viewerKey!);
+  await room.message(peer,{type:'event-log',subscribe:true});
+  let request=0;
+  const transport:typeof fetch=async(_input,init)=>{
+   const body=String(init?.body);
+   for(const field of ['headingDeg','offsetErrorFromLineM','distToLeftEdgeM','distToRightEdgeM','lateralVelocityMps','upcomingTrack','cornerSpeedKmh','instruction']){
+    expect(body).toContain(field);
+   }
+   const choices=request++?{...rawChoices,steer:'hard-right',throttle:'none',brake:'hard'}:rawChoices;
+   return engine==='jev'?jevResponse(choices):lunaResponse(choices);
+  };
+  room.setCustomDriver('a',{engine,apiKey:'fixture-only',controlStyle:'raw'},transport);
+  expect(room.players.a.intervalMs).toBe(engine==='jev'?140:250);
+  room.driveLive(Date.now());
+  await vi.waitFor(()=>expect(room.decisions.a?.source).toBe(engine));
+  expect(room.decisions.a?.control).toEqual({style:'raw',steer:'hard-left',throttle:'half',brake:'none'});
+  room.advance(12);
+  expect(car.steering).toBeLessThan(-.15);
+  expect(car.throttle).toBe(.5);
+  expect(car.brake).toBe(0);
+
+  await vi.waitFor(()=>{
+   room.driveLive(Date.now());
+   expect(room.decisions.a?.control).toMatchObject({steer:'hard-right',throttle:'none',brake:'hard'});
+  },{interval:10});
+  const initialSpeed=car.speed;
+  room.advance(24);
+  expect(car.steering).toBeGreaterThan(.15);
+  expect(car.throttle).toBe(0);
+  expect(car.brake).toBe(1);
+  expect(car.speed).toBeLessThan(initialSpeed);
+  expect(car.lockup).toBe(1);
+  expect(entries.at(-1)?.data).toMatchObject({
+   kind:'driver',source:engine,controlStyle:'raw',changed:['Steer → HARD-RIGHT','Thr → NONE','Brk → HARD'],
+  });
+ });
+
+ it('waits for a fresh decision and advances at most 12 ticks per response',async()=>{
+  const room=experimentRoom(),now=Date.now();
+  const replies:((response:Response)=>void)[]=[];
+  room.setCustomDriver('a',{engine:'luna',apiKey:'fixture-only',controlStyle:'step-locked'},()=>new Promise(resolve=>replies.push(resolve)));
+  room.tick(100,now);
+  expect(replies).toHaveLength(1);
+  expect(room.race.tick).toBe(0);
+  expect(room.state()).toMatchObject({aiControlStyle:{a:'step-locked'},stepLockWaiting:true});
+  room.tick(100,now+300);
+  expect(room.race.tick).toBe(0);
+
+  replies[0](lunaResponse(rawChoices));
+  await vi.waitFor(()=>expect(room.state().stepLockWaiting).toBe(false));
+  room.tick(4,now+310);
+  expect(room.race.tick).toBe(4);
+  expect(replies).toHaveLength(1);
+  room.tick(100,now+320);
+  expect(room.race.tick).toBe(12);
+  expect(room.race.time).toBeCloseTo(12*DT);
+  expect(room.race.cars.a.throttle).toBe(.5);
+  expect(replies).toHaveLength(2);
+  expect(room.state().stepLockWaiting).toBe(true);
+  room.tick(100,now+500);
+  expect(room.race.tick).toBe(12);
+
+  replies[1](lunaResponse({...rawChoices,throttle:'none',brake:'hard'}));
+  await vi.waitFor(()=>expect(room.decisions.a?.sequence).toBe(2));
+  room.tick(100,now+510);
+  expect(room.race.tick).toBe(24);
+  expect(room.race.cars.a.brake).toBe(1);
+  expect(replies).toHaveLength(3);
+  room.finishLive('stopped');
+ });
+
+ it('bounds the step-lock wait and ignores a late response after cancellation',async()=>{
+  const room=experimentRoom(),now=Date.now();
+  const replies:((response:Response)=>void)[]=[];
+  const signals:(AbortSignal|null|undefined)[]=[];
+  room.setCustomDriver('a',{engine:'luna',apiKey:'fixture-only',controlStyle:'step-locked'},(_input,init)=>{
+   signals.push(init?.signal);
+   return new Promise(resolve=>replies.push(resolve));
+  });
+  room.tick(120,now);
+  room.tick(120,now+3499);
+  expect(room.race.tick).toBe(0);
+  room.tick(120,now+3500);
+  expect(signals[0]?.aborted).toBe(true);
+  expect(replies).toHaveLength(2);
+  expect(room.race.tick).toBe(12);
+  expect(room.decisions.a?.source).toBe('fallback');
+  replies[0](lunaResponse(rawChoices));
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(room.decisions.a?.source).toBe('fallback');
+  room.tick(120,now+3501);
+  expect(room.race.tick).toBe(12);
+  room.finishLive('stopped');
+  expect(signals[1]?.aborted).toBe(true);
+ });
+
+ it('uses one shared slice when both seats are step-locked',async()=>{
+  const room=experimentRoom(),now=Date.now();
+  room.race.cars.b.finishTime=null;
+  room.engineerMode.b='joined';
+  const responses:{a:((response:Response)=>void)[];b:((response:Response)=>void)[]}={a:[],b:[]};
+  for(const team of ['a','b'] as const){
+   room.setCustomDriver(team,{engine:'luna',apiKey:'fixture-only',controlStyle:'step-locked'},()=>new Promise(resolve=>responses[team].push(resolve)));
+  }
+  room.tick(120,now);
+  responses.a[0](lunaResponse(rawChoices));
+  await vi.waitFor(()=>expect(room.decisions.a?.source).toBe('luna'));
+  room.tick(120,now+100);
+  expect(room.race.tick).toBe(0);
+  expect(room.state().stepLockWaiting).toBe(true);
+  responses.b[0](lunaResponse(rawChoices));
+  await vi.waitFor(()=>expect(room.decisions.b?.source).toBe('luna'));
+  room.tick(120,now+200);
+  expect(room.race.tick).toBe(12);
+  expect(responses.a).toHaveLength(2);
+  expect(responses.b).toHaveLength(2);
+  room.clearCustomDrivers();
+  room.tick(20,now+210);
+  expect(room.race.tick).toBe(32);
+  expect(room.state().stepLockWaiting).toBe(false);
+ });
+
+ it('drops the custom key and aborts its request on the chequered flag',()=>{
+  const room=experimentRoom(),now=Date.now();
+  const finish=getTrack('monza').LENGTH*room.race.laps;
+  room.race.cars.a.distance=finish-.1;
+  let signal:AbortSignal|null|undefined;
+  room.setCustomDriver('a',{engine:'luna',apiKey:'fixture-only',controlStyle:'raw'},(_input,init)=>{
+   signal=init?.signal;
+   return new Promise(()=>{});
+  });
+  room.driveLive(now);
+  expect(signal?.aborted).toBe(false);
+  room.tick(1,now);
+  expect(room.race.phase).toBe('finished');
+  expect(room.hasCustomDriver('a')).toBe(false);
+  expect(signal?.aborted).toBe(true);
+ });
+
+ it('follows the exact hybrid lane beside traffic and relaxes the corner speed envelope',async()=>{
+  const room=experimentRoom(),track=getTrack(room.race.circuit),car=room.race.cars.a,rival=room.race.cars.b;
+  const distance=Array.from({length:Math.floor(track.LENGTH/4)},(_,i)=>i*4)
+   .find(d=>track.racingLineOffset(d+12)>1.3&&track.curvatureAt(d)>.006)!;
+  const target=track.racingLineOffset(distance+12)+5;
+  Object.assign(car,{distance,speed:48,offset:target,heading:0});
+  Object.assign(rival,{distance:distance+11,speed:18,offset:target,finishTime:null});
+  const margin=track.trackHalfWidth(distance)-1.05;
+  expect(target).toBeGreaterThan(margin);
+  expect(clearRacingLine(car,target,margin,[],rival)).not.toBe(target);
+  const expected=steeringTo(track,distance,car.offset,0,12,target);
+  const baseline=structuredClone(room.race);
+  room.setCustomDriver('a',{engine:'jev',apiKey:'fixture-only',controlStyle:'no-assist'},async()=>jevResponse(hybridChoices));
+  room.driveLive(Date.now());
+  await vi.waitFor(()=>expect(room.decisions.a?.control).toEqual({style:'no-assist',lane:'far-right',pedal:'overdrive'}));
+  room.advance(1);
+  stepRace(baseline);
+  expect(car.steering).toBeCloseTo(Math.max(-1.1*DT,Math.min(1.1*DT,expected)));
+  expect(car.steering).not.toBeCloseTo(baseline.cars.a.steering,6);
+
+  const sweep=structuredClone(baseline);
+  const testCar=sweep.cars.a;
+  sweep.cars.b.finishTime=0;
+  const normal=racingSpeed(testCar,sweep.cars.b,track,0,testCar.distance+testCar.speed*.18);
+  const overdrive=racingSpeed(testCar,sweep.cars.b,track,0,testCar.distance+testCar.speed*.18,'overdrive');
+  expect(overdrive).toBeGreaterThan(normal*1.08);
+  testCar.speed=Array.from({length:21},(_,i)=>20+i).find(speed=>{
+   const at=testCar.distance+speed*.18;
+   return speed>racingSpeed(testCar,sweep.cars.b,track,0,at)&&speed<racingSpeed(testCar,sweep.cars.b,track,0,at,'overdrive');
+  })!;
+  expect(testCar.speed).toBeDefined();
+  testCar.throttle=0;testCar.brake=0;
+  const tactical=structuredClone(sweep);
+  stepRace(tactical);
+  stepRace(sweep,undefined,undefined,{a:{style:'no-assist',lane:'line',pedal:'overdrive'}});
+  expect(tactical.cars.a.brake).toBeGreaterThan(0);
+  expect(testCar.brake).toBe(0);
+  expect(testCar.throttle).toBeGreaterThan(0);
  });
 });

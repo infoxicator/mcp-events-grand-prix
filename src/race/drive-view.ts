@@ -1,4 +1,5 @@
 import {moveMapDot,setTextIfChanged,setAttributeIfChanged} from './hud-dom';
+import {AI_CONTROL_LABELS} from './ai-controls';
 import './drive.css';
 import {damageLevel} from './crashes';
 import {damageRepairSeconds, drsAllowed, DT} from './physics';
@@ -9,7 +10,7 @@ import {createScene, type CameraMode} from './scene';
 import {mountTcamTelemetry} from './tcam-telemetry';
 import {connect, createInterpolator, type Connection} from './network';
 import {mountEventLog} from './event-log-view';
-import {mountDriverRadio} from './driver-radio';
+import {mountDriverRadio, type SendDriverQuestion} from './driver-radio';
 import {blendRace} from './presentation-motion';
 import {getTrack, isCircuit, type CircuitId} from './track';
 import {classification, constructors, opponents, playerEntry} from './grid';
@@ -72,6 +73,7 @@ export interface DriveMountOptions {
  startReady?: (state: RaceState) => boolean;
  onStart?: () => void;
  autostart?: boolean;
+ sendDriverQuestion?: SendDriverQuestion | null;
 }
 
 export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {connection: Connection; suspend3D: () => void; dispose: () => void} {
@@ -538,7 +540,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   app.querySelectorAll<HTMLElement>('[data-dmode="jev"]').forEach((node) => { node.hidden = true; });
  }
  const eventLog = embedded ? mountEventLog(el('race-event-log'), conn) : null;
- const driverRadio = room.live ? mountDriverRadio(el('drive-team-radio'), seat, () => conn) : null;
+ const driverRadio = room.live ? mountDriverRadio(el('drive-team-radio'), seat, () => conn, {sendDriverQuestion: options.sendDriverQuestion}) : null;
  const viewport = el('drive-viewport');
  const hudEl = el('drive-hud');
  const loadingEl = el('drive-loading');
@@ -920,7 +922,10 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
  }
 
  function attachConnection(target: typeof conn) {
- if (driverRadio) target.onQuestionError = driverRadio.onError;
+ if (driverRadio) {
+  target.onQuestionAccepted = driverRadio.onAccepted;
+  target.onQuestionError = driverRadio.onError;
+ }
  target.onReplay = (frames) => {
   if (!frames.length) return;
   replayFrames = frames;
@@ -1252,11 +1257,12 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   const driverLamp = el('drive-driver-lamp');
   setAttributeIfChanged(driverLamp,'data-mode',dMode);
   const dec = s.decisions[seat];
-  setTextIfChanged(driverLamp,dMode === 'human'
-    ? 'YOU'
-    : dMode === 'jev'
-     ? `JEV${dec ? ` · ${dec.responseMs}MS` : ''}`
-     : 'AUTO');
+  const style = s.aiControlStyle?.[seat];
+  const badge = style && style !== 'tactical' ? AI_CONTROL_LABELS[style]
+    : dMode === 'jev' || dMode === 'luna'
+     ? `${DRIVER_LABELS[dMode]}${dec ? ` · ${dec.responseMs}MS` : ''}`
+     : dMode === 'human' ? 'YOU' : 'AUTO';
+  setTextIfChanged(driverLamp,s.stepLockWaiting ? `${badge} · WAITING ON AI` : badge);
   driverLamp.classList.add('active');
 
   el('drive-tc-lamp').classList.toggle('active', dMode === 'human' && tractionControl !== 'off');

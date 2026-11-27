@@ -1,13 +1,22 @@
-import {test,expect} from '@playwright/test';import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client';import {RESOURCE_MIME_TYPE,getToolUiResourceUri} from '@modelcontextprotocol/ext-apps/app-bridge';
+import {test,expect,type Page} from '@playwright/test';import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client';import {RESOURCE_MIME_TYPE,getToolUiResourceUri} from '@modelcontextprotocol/ext-apps/app-bridge';
 import type {RaceState} from '../src/race/types';
 
-test('MCP autopilot lets the driver ask the strategist from the live feed',async({page,baseURL})=>{
- const host=new URL(baseURL!);
+async function openRadioTestHost(page:Page,baseURL:string,rejectFirst=false){
+ const host=new URL(baseURL);
  host.port=String(Number(host.port)+1);
- await page.setViewportSize({width:420,height:840});
- await page.route('**/mcp/assets/monza-mcp.glb-*.gz',route=>route.abort());
+ host.searchParams.set('test-messages','1');
+ if(rejectFirst)host.searchParams.set('reject-first','1');
+ await page.route(host.origin+'/config',async route=>{
+  const response=await route.fetch();
+  await route.fulfill({response,json:{...await response.json(),testStrategy:true}});
+ });
  await page.goto(host.href);
- const app=page.frameLocator('#app-frame').frameLocator('iframe');
+ return page.frameLocator('#app-frame').frameLocator('iframe');
+}
+
+test('MCP autopilot sends a driver question to chat and airs the strategist reply',async({page,baseURL})=>{
+ await page.setViewportSize({width:420,height:840});
+ const app=await openRadioTestHost(page,baseURL!,true);
  await app.getByRole('button',{name:'Accept',exact:true}).click();
  const talk=app.getByRole('button',{name:'Team radio',exact:true});
  const field=app.getByRole('textbox',{name:'Ask the strategist'});
@@ -23,17 +32,67 @@ test('MCP autopilot lets the driver ask the strategist from the live feed',async
  await talk.click();
  await expect(field).toHaveValue(question);
  await field.press('Enter');
+ const driverRadio=app.getByRole('region',{name:'Driver radio'});
+ await expect(driverRadio.getByRole('status')).toContainText('The host declined');
+ await expect(field).toHaveValue(question);
+ const hostBody=page.locator('body');
+ await expect(hostBody).toHaveAttribute('data-strategy-message-count','1');
+ const received=JSON.parse((await hostBody.getAttribute('data-last-strategy-message'))!);
+ expect(received.role).toBe('user');
+ expect(received.content).toEqual([{type:'text',text:expect.stringContaining(question)}]);
+ const prompt=received.content[0].text as string;
+ expect(prompt).toContain('submit_grand_prix_radio');
+ const target=JSON.parse(prompt.split('\n').at(-1)!);
+ expect(target).toEqual({room:expect.any(String),team:'a',event_id:expect.any(String)});
+ await driverRadio.getByRole('button',{name:'Send',exact:true}).click();
+ await expect(hostBody).toHaveAttribute('data-strategy-message-count','2');
+ expect(JSON.parse((await hostBody.getAttribute('data-last-strategy-message'))!)).toEqual(received);
  await expect(talk).toHaveAttribute('aria-expanded','false');
  const line=app.getByRole('region',{name:'ChatGPT radio'}).locator('.radio-transcript');
  await expect(line).toHaveText(`"${question}"`);
  const state=await app.locator('body').evaluate(()=> (window as Window&{__raceState?:RaceState}).__raceState);
  expect(state?.driverMode?.a).toBe('autopilot');
  expect(state?.driverConsultRadio?.a?.filter(r=>r.text===question)).toHaveLength(1);
- await talk.click();
- await field.fill('Is it time for inters?');
- await app.getByRole('button',{name:'Send',exact:true}).click();
- await expect(app.getByRole('region',{name:'Driver radio'}).getByRole('status')).toContainText('awaiting a reply');
- await expect(field).toHaveValue('Is it time for inters?');
+ expect(target.room).toBe(state?.room);
+ const client=new Client({name:'Test strategist',version:'1'});
+ try{
+  await client.connect(new StreamableHTTPClientTransport(new URL('/mcp',baseURL)));
+  const telemetry=await client.callTool({name:'get_grand_prix_strategy_event',arguments:target});
+  expect(telemetry.structuredContent).toMatchObject({driverQuestion:{text:question}});
+  const radio='You would rejoin in traffic. Stay out this lap.';
+  const result=await client.callTool({name:'submit_grand_prix_radio',arguments:{...target,action:'hold',radio}});
+  expect(result.isError).toBeFalsy();
+  await expect(line).toHaveText(`"${radio}"`,{timeout:12_000});
+ }finally{await client.close();}
+});
+
+test('MCP manual cockpit sends the typed driver question to chat',async({page,baseURL})=>{
+ const app=await openRadioTestHost(page,baseURL!);
+ await app.locator('input[name="driver"][value="human"]').check();
+ await app.getByRole('button',{name:'Accept',exact:true}).click();
+ const radio=app.getByRole('region',{name:'Team radio'});
+ const field=radio.getByRole('textbox',{name:'Ask the strategist'});
+ await expect(field).toBeEnabled({timeout:30_000});
+ const question='Is the pit lane clear?';
+ await field.fill(question);
+ await radio.getByRole('button',{name:'Send',exact:true}).click();
+ await expect(page.locator('body')).toHaveAttribute('data-strategy-message-count','1');
+ await expect(page.locator('body')).toHaveAttribute('data-last-strategy-message',/Is the pit lane clear\?/);
+ await expect(radio.getByRole('log')).toContainText(question);
+ await expect(field).toHaveValue('');
+});
+
+test('MCP team radio explains when the host cannot send chat messages',async({page,baseURL})=>{
+ const host=new URL(baseURL!);
+ host.port=String(Number(host.port)+1);
+ await page.route('**/mcp/assets/monza-mcp.glb-*.gz',route=>route.abort());
+ await page.goto(host.href);
+ const app=page.frameLocator('#app-frame').frameLocator('iframe');
+ await app.getByRole('button',{name:'Accept',exact:true}).click();
+ await app.getByRole('button',{name:'Team radio',exact:true}).click({timeout:30_000});
+ const radio=app.getByRole('region',{name:'Driver radio'});
+ await expect(radio.getByRole('status')).toContainText('support sending team radio questions to chat');
+ await expect(radio.getByRole('button',{name:'Send',exact:true})).toBeDisabled();
 });
 
 test('MCP shows a live map and waits at the grid until a delayed 3D frame is visible',async({page})=>{
@@ -198,6 +257,7 @@ test('MCP setup supports Jev System 1 and Luna with an in-memory API key',async(
  const keyPanel=app.locator('#mcp-driver-key-panel');
  const keyInput=app.locator('#mcp-driver-key');
  const providerSelect=app.locator('#mcp-jev-provider');
+ const drivingMode=keyPanel.getByLabel('Driving mode');
  const accept=app.getByRole('button',{name:'Accept',exact:true});
  await expect(accept).toBeEnabled({timeout:15_000});
  await expect(keyPanel).toBeHidden();
@@ -206,6 +266,20 @@ test('MCP setup supports Jev System 1 and Luna with an in-memory API key',async(
  await app.locator('input[name="driver"][value="jev"]').check();
  await expect(keyPanel).toBeVisible();
  await expect(providerSelect).toBeVisible();
+ await expect(drivingMode).toHaveValue('tactical');
+ await expect(drivingMode.locator('option')).toHaveText([
+  'Tactical (Default)','Exp A · Raw controls','Exp B · Step-locked raw','Exp C · Hybrid no-assist',
+ ]);
+ const modeHelp=app.locator('#mcp-driving-mode-help');
+ await expect(modeHelp).toContainText('120 Hz track-follower');
+ await drivingMode.selectOption('raw');
+ await expect(modeHelp).toContainText('7-step steering, throttle, brake');
+ await drivingMode.selectOption('no-assist');
+ await expect(modeHelp).toContainText('Overdrive (112% corner speed)');
+ await drivingMode.selectOption('tactical');
+ await keyPanel.locator('.mcp-mode-guide summary').click();
+ await expect(keyPanel.locator('.mcp-mode-list')).toContainText('Exp B · Step-locked raw');
+ await expect(keyPanel.locator('.mcp-mode-list')).toContainText('100 ms sim time');
  await accept.click();
  await expect(app.locator('#mcp-join-error')).toContainText('Jev System 1');
  await keyInput.fill('sk-or-test-key');
@@ -217,14 +291,20 @@ test('MCP setup supports Jev System 1 and Luna with an in-memory API key',async(
  await expect(keyInput).toHaveValue('');
  const secret='sk-luna-ephemeral-test-key-42';
  await keyInput.fill(secret);
+ await drivingMode.selectOption('step-locked');
  await accept.click();
 
  await expect(app.locator('body')).toHaveAttribute('data-phase','racing',{timeout:30_000});
+ await expect(app.locator('#mcp-status')).toContainText('EXP B · STEP-LOCK');
+ await expect(app.locator('#mode')).toHaveText('EXP B · STEP-LOCK');
  expect(keyRequest).not.toBeNull();
  expect(keyRequest!.auth).toMatch(/^Bearer [a-f0-9]{64}$/);
- expect(JSON.parse(keyRequest!.body)).toMatchObject({team:'a',engine:'luna',apiKey:secret});
+ expect(JSON.parse(keyRequest!.body)).toMatchObject({team:'a',engine:'luna',apiKey:secret,controlStyle:'step-locked'});
  // Never sent through MCP tool calls.
- for(const body of mcpBodies)expect(body).not.toContain(secret);
+ for(const body of mcpBodies){
+  expect(body).not.toContain(secret);
+  expect(body).not.toContain('step-locked');
+ }
  // Cleared from input and never persisted in browser storage.
  await expect(keyInput).toHaveValue('');
  const storage=await app.locator('body').evaluate(()=>({
@@ -239,5 +319,35 @@ test('MCP setup supports Jev System 1 and Luna with an in-memory API key',async(
  expect(state?.players?.a?.engine).toBe('luna');
  expect(state?.players?.a?.provider).toBe('openai');
  expect(state?.players?.a?.mock).toBe(false);
+ expect(state?.aiControlStyle?.a).toBe('step-locked');
  expect(JSON.stringify(state)).not.toContain(secret);
+});
+
+test('MCP driver-key endpoint accepts each driving mode and defaults to tactical',async({request,baseURL})=>{
+ const client=new Client({name:'Driver key test',version:'1'});
+ await client.connect(new StreamableHTTPClientTransport(new URL('/mcp',baseURL!)));
+ let seat:{room:string;key:string}|undefined;
+ try{
+  const race=await client.callTool({name:'open_grand_prix_strategy',arguments:{driver:'jev'}});
+  expect(race.isError).toBeFalsy();
+  const {room}=race._meta!.liveInvitation as {room:string};
+  seat={room,key:race._meta!.strategyKey as string};
+  const send=(controlStyle?:unknown)=>request.post(`/api/rooms/${room}/driver-key`,{
+   headers:{Authorization:`Bearer ${seat!.key}`},
+   data:{team:'a',engine:'jev',apiKey:'driver-key-fixture-only',controlStyle},
+  });
+  for(const controlStyle of ['raw','step-locked','no-assist','tactical',undefined]){
+   const response=await send(controlStyle);
+   expect(response.status()).toBe(200);
+   expect(await response.json()).toMatchObject({controlStyle:controlStyle??'tactical'});
+  }
+  for(const invalid of ['assisted',null]){
+   const response=await send(invalid);
+   expect(response.status()).toBe(400);
+   expect(await response.json()).toEqual({error:'Invalid AI control style.'});
+  }
+ }finally{
+  if(seat)await client.callTool({name:'stop_grand_prix_chat_strategy',arguments:seat});
+  await client.close();
+ }
 });

@@ -1,3 +1,4 @@
+import {isAiControlStyle} from '../src/race/ai-controls';
 import {benchmarkNames,runLiveStrategy,strategyModels,type BenchmarkName} from './strategy-benchmarks';
 import {isCircuit,type CircuitId} from '../src/race/track';
 import {CHAT_STRATEGY_LAPS,CHAT_STRATEGY_MAX_LAPS,newLiveKey,ROOM_EXPIRED_CLOSE_CODE,strategyTimeBudgetMs} from '../src/race/live';
@@ -177,15 +178,6 @@ const gateway:RaceGateway={
   if(!r||!r.live||r.expiresAt<=Date.now())return {error:'Race not found or expired.'};
   return r.submitStrategyEvent(input);
  },
- driverQuestion:async (room,eventId,team)=>{
-  const r=rooms.get(room);
-  const event=r&&r.expiresAt>Date.now()?r.readDriverQuestion(eventId,team):undefined;
-  return r&&event?{team:event.team,question:event.driverQuestion.text,elicitationKey:r.elicitationKey}:null;
- },
- answerDriver:async input=>{
-  const r=rooms.get(input.room);
-  return r&&r.expiresAt>Date.now()?r.answerDriver(input):{error:'Race not found or expired.'};
- },
  html:()=>readFile(resolve('dist/mcp/mcp-app.html'),'utf8'),
 };
 const modernMcp=createMcpHandler(()=>createRaceMcp(origin,gateway),{legacy:'reject'});
@@ -295,13 +287,14 @@ const server=createServer(async(req,res)=>{
   const entry=strategyRooms.get(keyMatch[1]);
   const r=entry?.room;
   if(!entry||!r||r.expiresAt<Date.now()){json({error:'Race expired'},404);return;}
-  if(!r.strategyPractice||r.live!=='running'){json({error:'Strategy race is not active.'},409);return;}
-  let payload:{team?:unknown;engine?:unknown;provider?:unknown;apiKey?:unknown};
+  if(!r.strategyPractice||r.live!=='running'||r.race.phase==='finished'){json({error:'Strategy race is not active.'},409);return;}
+  let payload:{team?:unknown;engine?:unknown;provider?:unknown;apiKey?:unknown;controlStyle?:unknown};
   try{
    const chunks:Buffer[]=[];let size=0;
    for await(const part of req){const buf=Buffer.isBuffer(part)?part:Buffer.from(part);size+=buf.length;if(size>2048){json({error:'Request too large.'},413);return;}chunks.push(buf);}
    payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));
   }catch{json({error:'Invalid JSON body.'},400);return;}
+  if(!payload||typeof payload!=='object'){json({error:'Invalid JSON body.'},400);return;}
   const team=payload.team==='a'||payload.team==='b'?payload.team:null;
   if(!team){json({error:'Invalid seat.'},400);return;}
   const expectedKey=entry.seats[team]?.key;
@@ -310,6 +303,8 @@ const server=createServer(async(req,res)=>{
   if(!engine){json({error:'Driver engine must be jev or luna.'},400);return;}
   const provider=payload.provider===undefined?undefined:isJevProvider(payload.provider)?payload.provider:null;
   if(engine==='jev'&&provider===null){json({error:'Invalid Jev provider.'},400);return;}
+  const controlStyle=payload.controlStyle===undefined?'tactical':payload.controlStyle;
+  if(!isAiControlStyle(controlStyle)){json({error:'Invalid AI control style.'},400);return;}
   const apiKey=typeof payload.apiKey==='string'?payload.apiKey.trim():'';
   if(!apiKey||apiKey.length>512||/[\x00-\x1f\x7f]/.test(apiKey)){json({error:'Provide a valid API key.'},400);return;}
   const abort=entry.driverAbort??=new AbortController();
@@ -319,8 +314,8 @@ const server=createServer(async(req,res)=>{
    const signal=init?.signal??(input instanceof Request?input.signal:null);
    return fetch(input,{...init,redirect:'manual',signal:signal?AbortSignal.any([signal,abort.signal]):abort.signal});
   };
-  const configured=r.setCustomDriver(team,{engine,provider:engine==='jev'?(provider??'typesafe'):undefined,apiKey,intervalMs:engine==='luna'?600:800},guardedFetch);
-  json({ok:true,...configured});
+  const configured=r.setCustomDriver(team,{engine,provider:engine==='jev'?(provider??'typesafe'):undefined,apiKey,controlStyle,intervalMs:controlStyle==='tactical'?(engine==='luna'?600:800):undefined},guardedFetch);
+  json({ok:true,...configured,controlStyle});
   return;
  }
  const match=path.match(/^\/api\/rooms\/([a-f0-9-]{36})\/(status|info|links)$/);
@@ -342,6 +337,6 @@ server.on('upgrade',(req,socket,head)=>{const u=new URL(req.url??'/',origin),mat
  const heartbeat=setInterval(()=>{if(Date.now()>r.expiresAt){ws.close(ROOM_EXPIRED_CLOSE_CODE,'Room expired');}else if(Date.now()-p.lastSeen>35000){ws.close(1000,'Heartbeat lost');}},2000);ws.on('close',()=>clearInterval(heartbeat));
  });});
 let previous=performance.now(),accumulator=0,realAccumulator=0,lastBroadcast=0;
-const timer=setInterval(()=>{const now=performance.now();const dt=Math.min((now-previous)/1000,.25);accumulator+=dt*speed;realAccumulator+=dt;const realSteps=Math.floor(realAccumulator*120);realAccumulator-=realSteps/120;previous=now;const steps=Math.min(120,Math.floor(accumulator*120));accumulator-=steps/120;const wall=Date.now();for(const [id,r] of rooms){if(wall>r.expiresAt){for(const p of r.peers)p.send({type:'error',message:'Room expired'});strategyRooms.get(id)?.driverAbort?.abort();r.clearCustomDrivers();rooms.delete(id);strategyRooms.delete(id);continue;}if(!r.live||r.live==='running'){r.advance(r.speed===speed?steps:realSteps);if(r.live==='running')r.driveLive(wall);}}if(now-lastBroadcast>=1000/30){lastBroadcast=now;for(const r of rooms.values())if(r.peers.size)r.broadcast();}},4);
+const timer=setInterval(()=>{const now=performance.now();const dt=Math.min((now-previous)/1000,.25);accumulator+=dt*speed;realAccumulator+=dt;const realSteps=Math.floor(realAccumulator*120);realAccumulator-=realSteps/120;previous=now;const steps=Math.min(120,Math.floor(accumulator*120));accumulator-=steps/120;const wall=Date.now();for(const [id,r] of rooms){if(wall>r.expiresAt){for(const p of r.peers)p.send({type:'error',message:'Room expired'});strategyRooms.get(id)?.driverAbort?.abort();r.clearCustomDrivers();rooms.delete(id);strategyRooms.delete(id);continue;}if(!r.live||r.live==='running'){r.tick(r.speed===speed?steps:realSteps,wall);}}if(now-lastBroadcast>=1000/30){lastBroadcast=now;for(const r of rooms.values())if(r.peers.size)r.broadcast();}},4);
 server.listen(port,'127.0.0.1',()=>console.log(`MCP GRAND PRIX · ${defaultRoom.race.circuit.toUpperCase()} · ${defaultRoom.matchup.toUpperCase()} · ${defaultRoom.mode.toUpperCase()} · ${speed}× race clock\n${origin}/?team=a\n${origin}/?spectate\n${origin}/?team=b\nMCP: ${origin}/mcp`));
 async function shutdown(){clearInterval(timer);for(const ws of wss.clients)ws.terminate();wss.close();server.close();await vite?.close();process.exit(0);}process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

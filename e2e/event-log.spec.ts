@@ -179,6 +179,32 @@ test('event log opens by default, hides driver events, filters cleanly, and pres
  await expect(log.locator('li.event-log-row')).toHaveCount(1);
  await expect(log.locator('li[data-kind="driver"]')).toHaveCount(1);
 
+ const intent={offset:0,speedBias:0,brakeAggression:.55,side:'hold' as const,ers:false,drs:false};
+ pushLog({type:'event-log',entries:[
+  {id:103,time:131,lap:6,team:'a',data:{
+   kind:'driver',engine:'jev',source:'jev',responseMs:130,sequence:3,controlStyle:'raw',
+   control:{style:'raw',steer:'slight-left',throttle:'half',brake:'light'},intent,
+   changed:['Steer → SLIGHT-LEFT','Thr → HALF','Brk → LIGHT'],
+  }},
+  {id:104,time:132,lap:6,team:'a',data:{
+   kind:'driver',engine:'jev',source:'jev',responseMs:130,sequence:1,controlStyle:'step-locked',
+   control:{style:'step-locked',steer:'straight',throttle:'full',brake:'none'},intent,
+  }},
+  {id:105,time:133,lap:6,team:'b',data:{
+   kind:'driver',engine:'luna',source:'luna',responseMs:210,sequence:2,controlStyle:'no-assist',
+   control:{style:'no-assist',lane:'far-right',pedal:'overdrive'},intent,
+   changed:['Lane → FAR-RIGHT','Pedal → OVERDRIVE'],
+  }},
+ ]});
+ await expect(log.locator('li[data-kind="driver"]')).toHaveCount(4);
+ const raw=log.locator('li').filter({hasText:'EXP A · RAW'});
+ await expect(raw).toContainText('Steer → SLIGHT-LEFT · Thr → HALF · Brk → LIGHT');
+ await expect(raw).toContainText('BRK LIGHT');
+ await expect(log.locator('li').filter({hasText:'EXP B · STEP-LOCK'})).toContainText('THR FULL');
+ const hybrid=log.locator('li').filter({hasText:'EXP C · NO-ASSIST'});
+ await expect(hybrid).toContainText('Lane → FAR-RIGHT · Pedal → OVERDRIVE');
+ await expect(hybrid).toContainText('PEDAL OVERDRIVE');
+
  // Resetting back to a session without an active AI driver hides the Driver tab again.
  pushLog({type:'event-log',reset:true,entries:initialEntries});
  await expect(log.getByRole('button',{name:'Driver',exact:true})).toHaveCount(0);

@@ -1,17 +1,18 @@
-import {boostJoulesLeft,boostZone,remainingOrderJoules} from '../src/race/strategy-radio';
 import {observeStrategy,sectorGaps,strategyRivals} from '../src/race/strategy-observation';
 import {pitCommitmentPoint} from '../src/race/strategy-calls';
 import {engineerProvider} from './engineer-provider';
 import {damageLevel} from '../src/race/crashes';
 import {drsAllowed,grip} from '../src/race/physics';
 import {compounds,raceControlTelemetry,sectorWetnessOf} from '../src/race/race-control';
-import {CIRCUITS,getTrack,type Track} from '../src/race/track';
+import {CIRCUITS,getTrack} from '../src/race/track';
 import {choice,TypeSafeClient,APIError,APIConnectionError,APITimeoutError,APIUserAbortError,type TypeSafeClientConfig} from '@typesafe-ai/sdk';
 import {z} from 'zod';
 import {providerConfig,type ProviderConfig} from './provider';
 import {mockDriver,mockEngineer} from '../src/race/brains';
-import {nearbyRival,opponents,playerEntry} from '../src/race/grid';
-import {type Car,type Race,type Team,type DriverIntent,type Instruction,type Decision} from '../src/race/types';
+import {nearbyRival} from '../src/race/grid';
+import {type Race,type Team,type DriverIntent,type Instruction,type Decision} from '../src/race/types';
+import type {AiControlStyle} from '../src/race/ai-controls';
+import {experimentalDriverDecision,experimentalDriverRequest,nearbyTrafficState,serializeInstruction} from './driver-prompt';
 export {providerConfig};
 
 const instructionSchema=z.object({
@@ -50,61 +51,29 @@ function replyChoices(team:Team,fallbackReply:string):Record<ReplyKey,string>{
  };
 }
 
-export function nearbyTrafficState(s:Race,team:Team){
- const c=s.cars[team],otherTeam:Team=team==='a'?'b':'a';
- const candidates=[
-  {code:playerEntry(otherTeam).code,car:s.cars[otherTeam]},
-  ...s.field.map((car,i)=>({code:opponents[i]?.code??`C${i}`,car})),
- ];
- return candidates
-  .filter(({car})=>car.finishTime===null&&Math.abs(car.distance-c.distance)<=60)
-  .map(({code,car})=>{
-   const metres=Math.round(car.distance-c.distance);
-   return {
-    code,
-    metres,
-    offset:Math.round(car.offset*10)/10,
-    closingMps:Math.round((c.speed-car.speed)*10)/10,
-    alongside:Math.abs(metres)<8&&Math.abs(car.offset-c.offset)<4,
-   };
-  })
-  .sort((a,b)=>Math.abs(a.metres)-Math.abs(b.metres))
-  .slice(0,4);
-}
-
-function serializeInstruction(c:Car,track:Track){
- const inst=c.instruction,energy=inst.energy;
- const zoneMode=energy?.zone??energy?.priority??'attack';
- return {
-  pace:inst.pace,
-  ers:inst.ers,
-  box:inst.box,
-  tyre:inst.tyre,
-  tactic:inst.tactic,
-  line:inst.line,
-  fuelSave:inst.fuelSave?{sector:inst.fuelSave.sector+1,expiresLap:inst.fuelSave.expiresLap}:null,
-  yielding:Boolean((inst.yieldUntilLap&&c.lap<inst.yieldUntilLap)||(inst.teamOrder?.kind==='swap-back'&&!inst.teamOrder.completed&&c.lap<inst.teamOrder.expiresLap)),
-  teamOrder:inst.teamOrder?{kind:inst.teamOrder.kind,completed:Boolean(inst.teamOrder.completed),expiresLap:inst.teamOrder.expiresLap}:null,
-  energy:energy?{
-   priority:energy.priority,
-   zone:zoneMode,
-   budgetKJ:energy.budgetKJ,
-   remainingKJ:Math.round(remainingOrderJoules(c,energy)/1000),
-   expiresLap:energy.expiresLap,
-   window:zoneMode==='any'?null:boostZone(track,zoneMode),
-   canDeployHere:boostJoulesLeft(c,track)>0,
-  }:null,
- };
-}
-
-export function createRaceDriver(config:ProviderConfig,transport?:TypeSafeClientConfig['fetch'],clock:()=>number=Date.now){
+export function createRaceDriver(config:ProviderConfig,transport?:TypeSafeClientConfig['fetch'],clock:()=>number=Date.now,style:AiControlStyle='tactical'){
  let blockedUntil=0,failures=0,lastFailure:Pick<Decision,'warning'|'api'>|null=null;
  const client=config.mock?null:new TypeSafeClient({apiKey:config.apiKey,baseURL:config.baseURL,compression:false,timeout:1200,retry:{maxRetries:0},logLevel:'off',...(transport?{fetch:transport}:{})});
- return async(s:Race,team:Team,sequence:number):Promise<Decision>=>{
+ return async(s:Race,team:Team,sequence:number,signal?:AbortSignal):Promise<Decision>=>{
   const start=performance.now(),fallback=mockDriver(s,team),done=(intent:DriverIntent,source:Decision['source']):Decision=>({sequence,intent,source,engine:'jev',responseMs:Math.max(1,Math.round(performance.now()-start))});
   if(!client)return {...done(fallback,'mock'),attempted:false};
   if(lastFailure&&clock()<blockedUntil)return {...done(fallback,'fallback'),...lastFailure,attempted:false,retryAfterMs:Number.isFinite(blockedUntil)?Math.max(1,blockedUntil-clock()):60_000};
-  try{const c=s.cars[team],r=nearbyRival(s,team),track=getTrack(s.circuit);
+  const timeout=AbortSignal.timeout(1400);
+  const requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;
+  const api={provider:config.provider,model:config.model};
+  try{
+   if(style!=='tactical'){
+    const {instructions,telemetry,questions}=experimentalDriverRequest(s,team,style);
+    const {answers}=await client.systemOne({model:config.model,state:{game:instructions,...telemetry},
+     questions:Object.fromEntries(Object.entries(questions).map(([name,q])=>[name,choice(q.instructions,q.choices)])),
+    },{signal:requestSignal});
+    requestSignal.throwIfAborted();
+    const selected=Object.fromEntries(Object.entries(answers).map(([name,answer])=>[name,answer.choice]));
+    const {intent,control}=experimentalDriverDecision(style,selected);
+    failures=0;blockedUntil=0;lastFailure=null;
+    return {...done(intent,'jev'),control,attempted:true,api};
+   }
+   const c=s.cars[team],r=nearbyRival(s,team),track=getTrack(s.circuit);
    const {ahead,behind}=strategyRivals(s,team);
    const nearby=(car:typeof ahead)=>car?{metres:Math.round(car.distance-c.distance),offset:Math.round(car.offset*10)/10,closingMps:Math.round((c.speed-car.speed)*10)/10}:null;
    const replies=replyChoices(team,fallback.reply);
@@ -135,15 +104,17 @@ export function createRaceDriver(config:ProviderConfig,transport?:TypeSafeClient
     ers:choice('Deploy battery now?',{yes:'Deploy if charge and strategy order permit',no:'Harvest or hold'}),
     drs:choice('Request DRS if eligible?',{yes:'Open DRS in eligible zone',no:'Keep closed'}),
     reply:choice('Short cockpit feedback for the race engineer over team radio.',replies),
-   }},{signal:AbortSignal.timeout(1400)});
+   }},{signal:requestSignal});
+   requestSignal.throwIfAborted();
    const line=answers.line.choice,pace=answers.pace.choice,brake=answers.brake.choice,reply=answers.reply.choice;
    if(!['left','hold','right'].includes(line)||!['cautious','normal','attack'].includes(pace)||!['early','normal','late'].includes(brake)||!(REPLY_KEYS as readonly string[]).includes(reply)||!['yes','no'].includes(answers.ers.choice)||!['yes','no'].includes(answers.drs.choice))throw new Error('Invalid Jev choice');
    failures=0;blockedUntil=0;lastFailure=null;
-   return {...done({offset:line==='left'?-3:line==='right'?3:0,side:line,speedBias:pace==='attack'?2:pace==='cautious'?-2:0,brakeAggression:brake==='late'?.9:brake==='early'?.2:.55,ers:answers.ers.choice==='yes',drs:answers.drs.choice==='yes',reply:replies[reply as ReplyKey]},'jev'),attempted:true,api:{provider:config.provider,model:config.model}};
+   return {...done({offset:line==='left'?-3:line==='right'?3:0,side:line,speedBias:pace==='attack'?2:pace==='cautious'?-2:0,brakeAggression:brake==='late'?.9:brake==='early'?.2:.55,ers:answers.ers.choice==='yes',drs:answers.drs.choice==='yes',reply:replies[reply as ReplyKey]},'jev'),attempted:true,api};
    }catch(error){
+   if(signal?.aborted)return {...done(fallback,'fallback'),attempted:false};
    failures++;
    const status=error instanceof APIError?error.status:undefined;
-   const timeout=error instanceof APITimeoutError||error instanceof APIUserAbortError;
+   const timeout=requestSignal.aborted||error instanceof APITimeoutError||error instanceof APIUserAbortError;
    const code=status===401?'authentication':status===403?'permission':status===429?'rate-limit':status===400||status===404||status===422?'request':status&&status>=500?'provider':timeout?'timeout':error instanceof APIConnectionError?'connection':'invalid-response';
    const warning=code==='authentication'?`${config.provider} rejected the API key (HTTP 401). Check the key and provider, then restart the server.`:code==='permission'?`${config.provider} denied access (HTTP 403). Check model permissions, then restart the server.`:code==='rate-limit'?`${config.provider} rate limit reached (HTTP 429). Waiting before another request.`:code==='request'?`${config.provider} rejected the request (HTTP ${status}). Check the selected Jev model.`:code==='provider'?`${config.provider} is unavailable (HTTP ${status}). Using local fallback temporarily.`:code==='timeout'?'Jev request timed out. Using local fallback temporarily.':code==='connection'?'Cannot reach Jev. Check server network access.':'Jev returned an invalid driving decision. Using local fallback.';
    const retryHeader=error instanceof APIError?error.headers.get('retry-after'):null;

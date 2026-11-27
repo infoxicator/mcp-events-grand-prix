@@ -63,10 +63,10 @@
     </fieldset>
     <fieldset class="mcp-choice-grid" data-group="driver" disabled>
      <legend>Who’s driving</legend>
-     <label class="mcp-choice"><input type="radio" name="driver" value="autopilot" checked><strong>Autopilot</strong><small>Optimal racing line obeying ChatGPT calls</small></label>
-     <label class="mcp-choice"><input type="radio" name="driver" value="human"><strong>Manual</strong><small>You drive with keyboard, gamepad, or touch</small></label>
-     <label class="mcp-choice"><input type="radio" name="driver" value="jev"><strong>Jev System 1</strong><small>TypeSafe AI model · Bring your API key</small></label>
-     <label class="mcp-choice"><input type="radio" name="driver" value="luna"><strong>Luna</strong><small>OpenAI gpt-6-luna · Bring your API key</small></label>
+     <label class="mcp-choice" title="Deterministic 120 Hz track-follower. Follows the optimal racing line, dodges traffic automatically, and obeys every ChatGPT strategy order."><input type="radio" name="driver" value="autopilot" checked><strong>Autopilot</strong><small>Optimal racing line obeying ChatGPT calls</small></label>
+     <label class="mcp-choice" title="Direct human control with keyboard, gamepad, or touch. No track-following steering or braking assists."><input type="radio" name="driver" value="human"><strong>Manual</strong><small>You drive with keyboard, gamepad, or touch</small></label>
+     <label class="mcp-choice" title="Live TypeSafe System 1 AI driver using your in-memory API key and the Driving mode chosen below."><input type="radio" name="driver" value="jev"><strong>Jev System 1</strong><small>TypeSafe AI model · Bring your API key</small></label>
+     <label class="mcp-choice" title="Live OpenAI gpt-6-luna AI driver using your in-memory OpenAI API key and the Driving mode chosen below."><input type="radio" name="driver" value="luna"><strong>Luna</strong><small>OpenAI gpt-6-luna · Bring your API key</small></label>
     </fieldset>
     <div id="mcp-driver-key-panel" class="mcp-key-panel" hidden>
      <div class="mcp-key-head">
@@ -81,6 +81,28 @@
       <input id="mcp-driver-key" type="password" placeholder="Paste TypeSafe API key" autocomplete="off" spellcheck="false" data-lpignore="true" maxlength="512">
       <button id="mcp-driver-key-toggle" type="button" aria-pressed="false">Show</button>
      </div>
+     <div class="mcp-key-head mcp-driving-mode">
+      <label for="mcp-driver-control-style">Driving mode</label>
+      <select id="mcp-driver-control-style" aria-describedby="mcp-driving-mode-help">
+       <option value="tactical" title="AI picks line, pace, brake aggression, ERS, and DRS; 120 Hz track-follower steers and brakes.">Tactical (Default)</option>
+       <option value="raw" title="Real-time raw 7-step steering, throttle, brake, ERS, and DRS on the human physics path.">Exp A · Raw controls</option>
+       <option value="step-locked" title="Same raw inputs as Exp A, but physics steps 100 ms per AI reply and waits for the next decision.">Exp B · Step-locked raw</option>
+       <option value="no-assist" title="Real-time exact lanes (-5 m to +5 m) and Overdrive pedal with automatic traffic dodging turned off.">Exp C · Hybrid no-assist</option>
+      </select>
+     </div>
+     <div id="mcp-driving-mode-help" class="mcp-mode-help" role="note">
+      <strong id="mcp-driving-mode-cadence">~600–800 ms · Track-assisted</strong>
+      <p id="mcp-driving-mode-desc">AI picks racing line, pace, braking aggression, ERS, and DRS. The 120 Hz track-follower handles steering, pedals, and traffic avoidance.</p>
+     </div>
+     <details class="mcp-mode-guide">
+      <summary>Compare all 4 driving modes</summary>
+      <dl class="mcp-mode-list">
+       <div><dt>Tactical (Default)</dt><dd>AI sets high-level line, pace, braking aggression, ERS &amp; DRS (~600–800 ms). The 120 Hz track-follower steers, brakes, and avoids traffic.</dd></div>
+       <div><dt>Exp A · Raw controls</dt><dd>Real-time (~140–250 ms). AI directly outputs 7-step steering, throttle, brake, ERS &amp; DRS on the human physics path (pit assist only) — can overshoot corners, lock up, or crash.</dd></div>
+       <div><dt>Exp B · Step-locked raw</dt><dd>Turn-based raw driving. Uses the same raw steering/pedals as Exp A, advancing 12 ticks (100 ms sim time) per AI reply and pausing until the next decision arrives (zero network lag).</dd></div>
+       <div><dt>Exp C · Hybrid no-assist</dt><dd>Real-time (~200–350 ms). Turns off automatic traffic dodging; AI targets exact lanes (-5 m to +5 m, including kerbs) and pedal modes up to Overdrive (112% corner speed).</dd></div>
+      </dl>
+     </details>
      <small class="mcp-key-note">Kept in memory for this game only — never persisted or sent to ChatGPT.</small>
     </div>
     <label class="mcp-addon-toggle" for="mcp-multiplayer">

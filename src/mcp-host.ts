@@ -25,9 +25,12 @@ try{
    if(testMessages)document.body.dataset.strategyContext=JSON.stringify(structuredContent);
    return {};
   };
-  if(testMessages)bridge.onmessage=async()=>{
+  if(testMessages)bridge.onmessage=async(message)=>{
+   const count=Number(document.body.dataset.strategyMessageCount??0)+1;
    document.body.dataset.strategyMessage='true';
-   return {isError:true};
+   document.body.dataset.strategyMessageCount=String(count);
+   document.body.dataset.lastStrategyMessage=JSON.stringify(message);
+   return {isError:count===1&&params.get('reject-first')==='1'};
   };
   bridge.onrequestdisplaymode=async({mode})=>{const display=mode==='fullscreen'?'fullscreen':'inline';document.body.classList.toggle('fullscreen',display==='fullscreen');bridge!.sendHostContextChange({displayMode:display});return {mode:display};};
   bridge.onerror=error=>{status.textContent='MCP app error';diagnostic.textContent=String(error);diagnostic.hidden=false;};

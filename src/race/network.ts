@@ -1,6 +1,6 @@
 import {isLiveKey,isRoomId,ROOM_EXPIRED_CLOSE_CODE} from './live';
 import {createLocalConnection} from './local-room';
-import type {HostedRoom,Team,RaceState,ClientMessage,ServerMessage,Race,PeerRole} from './types';
+import type {HostedRoom,Team,RaceState,ClientMessage,ServerMessage,Race,PeerRole,DriverQuestionAccepted} from './types';
 import type {RaceLogUpdate} from './event-log';
 
 export const PING_INTERVAL_MS = 10_000;
@@ -23,7 +23,7 @@ export interface ConnectOptions{
  reconnectMaxMs?:number;
  maxReconnectAttempts?:number;
 }
-export interface Connection{onSnapshot?:(s:RaceState,received:number)=>void;onAudioLost?:()=>void;onEventLog?:(log:RaceLogUpdate)=>void;onQuestionError?:(message:string)=>void;subscribeEventLog:(subscribe:boolean)=>void;claimAudio:()=>Promise<boolean>;releaseAudio:()=>void;state:RaceState|null;team:Team|null;role?:PeerRole;canReset:boolean;status:string;latency:number;received:number;onReplay:(frames:Race[])=>void;send:(msg:ClientMessage)=>void;close:()=>void;}
+export interface Connection{onSnapshot?:(s:RaceState,received:number)=>void;onAudioLost?:()=>void;onEventLog?:(log:RaceLogUpdate)=>void;onQuestionAccepted?:(message:DriverQuestionAccepted)=>void;onQuestionError?:(message:string,requestId?:string)=>void;subscribeEventLog:(subscribe:boolean)=>void;claimAudio:()=>Promise<boolean>;releaseAudio:()=>void;state:RaceState|null;team:Team|null;role?:PeerRole;canReset:boolean;status:string;latency:number;received:number;onReplay:(frames:Race[])=>void;send:(msg:ClientMessage)=>void;close:()=>void;}
 
 function isHidden(){
  return typeof document !== 'undefined' && (document.hidden || document.documentElement?.dataset?.mcpHidden === 'true');
@@ -181,7 +181,7 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
   audioReply?.(false);c.onAudioLost?.();
   if(ws){ws.onopen=ws.onmessage=ws.onerror=ws.onclose=null;ws.close(1000);ws=null;}
   c.team=null;c.role=undefined;c.canReset=false;c.status='DISCONNECTED';
-  c.onSnapshot=c.onEventLog=c.onQuestionError=c.onAudioLost=undefined;c.onReplay=()=>{};
+  c.onSnapshot=c.onEventLog=c.onQuestionAccepted=c.onQuestionError=c.onAudioLost=undefined;c.onReplay=()=>{};
  }};
  function open(){
   if(closed||terminal||pausedHidden||pausedFinished)return;
@@ -236,8 +236,9 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
    if(m.type==='pong'){const sent=m.sent??lastPingSent;if(sent>0)c.latency=Math.round(performance.now()-sent);}
    if(m.type==='replay')c.onReplay(m.frames);
    if(m.type==='event-log'&&eventLog)c.onEventLog?.(m);
+   if(m.type==='strategy-question-accepted')c.onQuestionAccepted?.(m);
    if(m.type==='error'){
-    if(m.code==='strategy-question'){c.onQuestionError?.(m.message);return;}
+    if(m.code==='strategy-question'){c.onQuestionError?.(m.message,m.requestId);return;}
     c.status=m.message;
     if(m.message.toLowerCase().includes('expired'))stopPermanently('RACE EXPIRED');
    }

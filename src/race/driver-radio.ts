@@ -1,8 +1,23 @@
 import type {Connection} from './network';
 import {DRIVER_RADIO_TEXT_LIMIT} from './strategy-events';
-import type {DriverConsultRadio, Team} from './types';
+import type {DriverConsultRadio, DriverQuestionAccepted, Team} from './types';
 
-export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () => Connection, {collapsible = false} = {}) {
+type ChatQuestion = Pick<DriverQuestionAccepted, 'room' | 'team' | 'event_id' | 'text'>;
+export type SendDriverQuestion = (question: ChatQuestion) => Promise<void>;
+const ACK_TIMEOUT_MS = 5_000;
+
+interface ChatSubmission {
+ connection: Connection;
+ room: string;
+ requestId: string;
+ text: string;
+ accepted?: {question: ChatQuestion; deadline: number};
+ timer?: ReturnType<typeof setTimeout>;
+ sending?: boolean;
+}
+
+export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () => Connection,
+ {collapsible = false, sendDriverQuestion}: {collapsible?: boolean; sendDriverQuestion?: SendDriverQuestion | null} = {}) {
  panel.innerHTML = `
   ${collapsible
    ? '<button type="button" class="radio-talk" aria-controls="driver-radio-form" aria-expanded="false"><i aria-hidden="true"></i>Team radio</button>'
@@ -23,8 +38,10 @@ export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () 
  const status = form.querySelector<HTMLElement>('[role="status"]')!;
  const rows = new Map<number, HTMLElement>();
  let sent: {text: string; afterId: number; deadline: number} | undefined;
+ let chat: ChatSubmission | undefined;
  let notice = '';
  let replaying = false;
+ let disposed = false;
 
  function updateLog(messages: readonly DriverConsultRadio[]) {
   if (!log) return;
@@ -53,6 +70,7 @@ export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () 
  }
 
  function sync(replay = replaying) {
+  if (disposed) return;
   replaying = replay;
   const conn = connection(), state = conn.state;
   const authorized = conn.team === seat && conn.role === 'driver' && state?.strategyPractice &&
@@ -60,6 +78,13 @@ export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () 
   const messages = state?.driverConsultRadio?.[seat] ?? [];
   const racing = authorized && state?.live === 'running' && state.race.phase === 'racing' &&
    state.race.cars[seat].finishTime === null && !replaying;
+  if (chat && !isCurrent(chat)) {
+   clearChat();
+   notice = '';
+  } else if (chat?.accepted && !chat.sending && performance.now() >= chat.accepted.deadline) {
+   clearChat();
+   notice = 'This radio question expired. Press Send to ask again.';
+  }
   panel.hidden = !authorized || (!racing && (!log || !messages.length));
   if (!racing) toggle?.setAttribute('aria-expanded','false');
   form.hidden = !racing || toggle?.getAttribute('aria-expanded') === 'false';
@@ -69,26 +94,90 @@ export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () 
   if (sent) {
    const {text, afterId, deadline} = sent;
    if (messages.some(message => message.id > afterId && message.consultation === 'question' && message.text === text)) {
-    if (input.value.trim() === text) {
-     input.value = '';
-     if (toggle) closeForm();
-    }
+    complete(text);
     sent = undefined;
-    notice = '';
    } else if (performance.now() >= deadline) {
-    onError('Radio transmission could not be confirmed.');
+    sent = undefined;
+    notice = 'Radio transmission could not be confirmed.';
    }
   }
 
-  input.disabled = conn.status !== 'CONNECTED';
+  input.disabled = conn.status !== 'CONNECTED' || sendDriverQuestion === null;
+  input.readOnly = Boolean(chat);
   const value = input.value.trim();
-  submit.disabled = input.disabled || !value || value.length > DRIVER_RADIO_TEXT_LIMIT || Boolean(sent);
-  const feedback = notice || (sent ? 'Transmitting…' : '');
+  const transmitting = Boolean(sent) || chat?.timer !== undefined;
+  submit.disabled = input.disabled || !value || value.length > DRIVER_RADIO_TEXT_LIMIT || transmitting || Boolean(chat?.sending);
+  let feedback = notice;
+  if (sendDriverQuestion === null) feedback = 'This host doesn’t support sending team radio questions to chat.';
+  else if (chat?.sending) feedback = 'Sending to chat…';
+  else if (transmitting) feedback = 'Transmitting…';
   if (feedback !== status.textContent) status.textContent = feedback;
   status.hidden = !feedback;
  }
 
- function onError(message: string) {
+ function complete(text: string) {
+  if (input.value.trim() === text) {
+   input.value = '';
+   if (toggle) closeForm();
+  }
+  notice = '';
+ }
+ function isCurrent(request: ChatSubmission) {
+  const conn = connection(), state = conn.state;
+  return chat === request && request.connection === conn && state?.room === request.room &&
+   state.live === 'running' && state.race.phase === 'racing' && state.race.cars[seat].finishTime === null;
+ }
+ function clearChat() {
+  clearTimeout(chat?.timer);
+  chat = undefined;
+ }
+ function transmitChat(request: ChatSubmission) {
+  request.timer = setTimeout(() => {
+   request.timer = undefined;
+   if (isCurrent(request)) {
+    notice = 'Radio transmission could not be confirmed. Press Send to retry.';
+    sync();
+   }
+  }, ACK_TIMEOUT_MS);
+  request.connection.send({type: 'strategy-question', text: request.text, delivery: 'chat', requestId: request.requestId});
+ }
+ async function sendToChat(request: ChatSubmission) {
+  if (!sendDriverQuestion || !request.accepted) return;
+  if (performance.now() >= request.accepted.deadline) { sync(); return; }
+  request.sending = true;
+  sync();
+  try {
+   await sendDriverQuestion(request.accepted.question);
+   if (!isCurrent(request)) return;
+   clearChat();
+   complete(request.text);
+  } catch (error) {
+   if (!isCurrent(request)) return;
+   request.sending = false;
+   notice = error instanceof Error && error.message ? error.message : 'Could not send the radio message to chat. Press Send to retry.';
+  }
+  sync();
+ }
+ function onAccepted({room, team, event_id, text, expiresAt, requestId}: DriverQuestionAccepted) {
+  const request = chat;
+  const state = request?.connection.state;
+  if (!request || !state || request.accepted || !isCurrent(request) || request.requestId !== requestId ||
+      request.room !== room || team !== seat || request.connection.team !== seat || request.connection.role !== 'driver' ||
+      request.text !== text) return;
+  clearTimeout(request.timer);
+  request.timer = undefined;
+  request.accepted = {
+   question: {room, team, event_id, text},
+   deadline: request.connection.received + expiresAt - state.serverTime,
+  };
+  notice = '';
+  void sendToChat(request);
+ }
+ function onError(message: string, requestId?: string) {
+  if (sendDriverQuestion) {
+   if (!chat || !isCurrent(chat) || chat.accepted || chat.requestId !== requestId) return;
+   clearChat();
+  }
   sent = undefined;
   notice = message;
   sync();
@@ -122,9 +211,16 @@ export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () 
   sync();
   if (form.hidden || submit.disabled) return;
   const conn = connection(), text = input.value.trim();
-  sent = {text, afterId: conn.state?.driverConsultRadio?.[seat]?.at(-1)?.id ?? 0, deadline: performance.now() + 5_000};
   notice = '';
-  conn.send({type: 'strategy-question', text});
+  if (sendDriverQuestion) {
+   if (!conn.state) return;
+   const request = chat ??= {connection: conn, room: conn.state.room, requestId: crypto.randomUUID(), text};
+   if (request.accepted) void sendToChat(request);
+   else transmitChat(request);
+  } else {
+   sent = {text, afterId: conn.state?.driverConsultRadio?.[seat]?.at(-1)?.id ?? 0, deadline: performance.now() + ACK_TIMEOUT_MS};
+   conn.send({type: 'strategy-question', text});
+  }
   if (!toggle) {
    input.blur();
    submit.blur();
@@ -132,7 +228,9 @@ export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () 
   sync();
  };
 
- return {sync,onError,dispose(){
+ return {sync,onAccepted,onError,dispose(){
+  disposed = true;
+  clearChat();
   if(toggle)toggle.onclick=null;
   panel.onkeydown=null;input.oninput=null;form.onsubmit=null;
   rows.clear();panel.replaceChildren();

@@ -3,6 +3,12 @@ import {RaceRoom} from '../server/race-room';
 import type {RaceLogUpdate} from '../src/race/event-log';
 import type {ServerMessage} from '../src/race/types';
 
+function liveDriverResponse(){
+ const choices={line:'left',pace:'attack',brake:'late',ers:'yes',drs:'yes',reply:'attack'};
+ const answers=Object.fromEntries(Object.entries(choices).map(([key,choice])=>[key,{type:'choice',choice,confidence:.95,probabilities:{[choice]:1}}]));
+ return Response.json({model:'jev-latest',answers,usage:{input_tokens:100,output_tokens:10}});
+}
+
 function eventPeer(room:RaceRoom){
  const log:RaceLogUpdate[]=[];
  const peer=room.add((message:ServerMessage)=>{
@@ -22,7 +28,7 @@ function liveRoom(){
  return {room,strategy};
 }
 
-test('the event log captures strategist telemetry and applied driver decisions without mock driver radio',async()=>{
+test('the event log captures strategist telemetry and leaves out mock driver decisions',async()=>{
  const {room,strategy}=liveRoom(),observer=eventPeer(room);
  await observer.subscribe();
  expect(observer.log).toEqual([]);
@@ -50,25 +56,22 @@ test('the event log captures strategist telemetry and applied driver decisions w
  const radio='Look after the tyres.';
  room.submitStrategyEvent({room:room.id,event_id:event.event_id,action:'manage',radio});
  room.driveLive(Date.now());
- await vi.waitFor(()=>expect(ferrari().map(entry=>entry.data)).toEqual([
+ await vi.waitFor(()=>expect(room.state().latestChatRadio?.a?.reply).toMatchObject({speaker:'JEV',source:'mock'}));
+ expect(ferrari().map(entry=>entry.data)).toEqual([
   expect.objectContaining({kind:'strategy',stage:'requested'}),
   expect.objectContaining({kind:'strategy',stage:'delivered'}),
   expect.objectContaining({kind:'strategy',stage:'telemetry-read'}),
   expect.objectContaining({kind:'radio',speaker:'ENGINEER',strategist:'chatgpt',text:radio,instruction:expect.objectContaining({pace:'manage'})}),
-  expect.objectContaining({kind:'driver',source:'mock',intent:expect.objectContaining({side:expect.any(String)})}),
- ]));
- expect(room.state().latestChatRadio?.a?.reply).toMatchObject({speaker:'JEV',source:'mock'});
+ ]);
  expect(observer.entries().some(entry=>entry.data.kind==='radio'&&entry.data.source==='mock')).toBe(false);
  const serialized=JSON.stringify(observer.log);
  expect(serialized).not.toContain(event.event_id);
  expect(serialized).not.toContain(room.viewerKey);
 });
 
-test('live driver radio still appears in the event log',async()=>{
- const choices={line:'left',pace:'attack',brake:'late',ers:'yes',drs:'yes',reply:'attack'};
- const answers=Object.fromEntries(Object.entries(choices).map(([key,choice])=>[key,{type:'choice',choice,confidence:.95,probabilities:{[choice]:1}}]));
+test('the event log keeps live decisions while cockpit replies stay in team radio',async()=>{
  const room=new RaceRoom(crypto.randomUUID(),'http://localhost:5277',{TYPESAFE_API_KEY:'fixture-only'},1,'jev-vs-jev',{
-  jev:async()=>Response.json({model:'jev-latest',answers,usage:{input_tokens:100,output_tokens:10}}),
+  jev:async()=>liveDriverResponse(),
  },'monza',true);
  room.live='running';
  room.viewerKey='test-viewer-key';
@@ -78,12 +81,12 @@ test('live driver radio still appears in the event log',async()=>{
  await observer.subscribe();
  room.driveLive(Date.now());
  await vi.waitFor(()=>expect(observer.entries()).toMatchObject([
-  {team:'a',data:{kind:'driver',source:'jev'}},
-  {team:'a',data:{kind:'radio',speaker:'JEV',source:'live',text:'Copy. Setting up the pass.'}},
+  {team:'a',data:{kind:'driver',source:'jev',controlStyle:'tactical'}},
  ]));
+ expect(room.race.radio).toContainEqual(expect.objectContaining({speaker:'JEV',source:'live',text:'Copy. Setting up the pass.'}));
 });
 
-test('switching off the event feed stops live messages and a new connection sees recent entries from every category',async()=>{
+test('switching off the event feed stops live messages and a new connection sees recent entries',async()=>{
  const {room}=liveRoom(),first=eventPeer(room);
  await room.message(first.peer,{type:'join',team:null,token:room.viewerKey!});
  await first.subscribe();
@@ -93,6 +96,14 @@ test('switching off the event feed stops live messages and a new connection sees
  expect(first.entries().at(-1)).toMatchObject({data:{kind:'radio',text:'Radio check.'}});
  await first.subscribe(false);
  room.advance(24*123);
+ room.setCustomDriver('a',{engine:'jev',apiKey:'fixture-only'},async()=>liveDriverResponse());
+ const now=Date.now();
+ for(let n=1;n<=123;n++){
+  await vi.waitFor(()=>{
+   room.driveLive(now+n*1000);
+   expect(room.driverStats.a.successes).toBe(n);
+  },{interval:1});
+ }
  expect(first.entries()).toHaveLength(subscribedCount);
  room.remove(first.peer);
  const replayed=eventPeer(room);

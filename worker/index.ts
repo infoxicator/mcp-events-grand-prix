@@ -1,4 +1,5 @@
-import {strategyEventDefinition,eventInput,radioInput,driverQuestionInput,driverAnswerInput,type LiveStrategyRead} from '../server/strategy-events';
+import {isAiControlStyle} from '../src/race/ai-controls';
+import {strategyEventDefinition,eventInput,radioInput,type LiveStrategyRead} from '../server/strategy-events';
 import {STRATEGY_EVENT,WEBHOOK_STRATEGY_RESPONSE_MS,type LiveStrategist,type StrategyEventNotice} from '../src/race/strategy-events';
 import {postStrategyEvent,postSepStrategyEvent,postSepTermination,subscribeInput,unsubscribeInput,verifyStrategyWebhook,webhookId,subscriptionId,type CallbackFailure,type SepStrategyWebhook,type StrategyWebhook} from './strategy-webhook';
 import {registerSepEvents,sepRequestAuthorized,sepEventHeaderError,sepEventsEnabled,SEP_AUTH_REQUIRED,SEP_EVENTS_PATH,SEP_EVENTS_PRINCIPAL,type SepEventsBindings,type SepSubscribe,type SepUnsubscribe} from './sep-events';
@@ -185,18 +186,6 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
       method:'POST',headers:credentialHeaders,body:JSON.stringify(input),
      }));
      return result.json<{team:'a'|'b';line:string}|{error:string}>();
-    },
-    driverQuestion:async(room,event_id,team)=>{
-     const result=await roomStub(env,room).fetch(new Request(`${origin}/internal-driver-question${sepQuery}`,{
-      method:'POST',headers:credentialHeaders,body:JSON.stringify({room,event_id,team}),
-     }));
-     return result.ok?result.json<{team:Team;question:string;elicitationKey:string}>():null;
-    },
-    answerDriver:async input=>{
-     const result=await roomStub(env,input.room).fetch(new Request(`${origin}/internal-driver-answer${sepQuery}`,{
-      method:'POST',headers:credentialHeaders,body:JSON.stringify(input),
-     }));
-     return result.json<{team:Team;line:string}|{team:Team;sent:false}|{error:string}>();
     },
     watchLive:async ({room,key})=>{
      const response=await roomStub(env,room).fetch(new Request(`${origin}/internal-watch`,{method:'POST',body:key}));
@@ -535,8 +524,7 @@ export class GameRoom extends DurableObject<Env> {
    this.prev=now;
    const steps=Math.min(120,Math.floor(this.accumulator*120));
    this.accumulator-=steps/120;
-   room.advance(steps);
-   room.driveLive(now);
+   room.tick(steps,now);
    if(now-this.broadcastAt>=30){
     room.broadcast();
     this.broadcastAt=now;
@@ -982,21 +970,6 @@ export class GameRoom extends DurableObject<Env> {
     const event=input?current.readLiveStrategyEvent(input.event_id,input.team):null;
     return event?json(event):json({error:'This race is no longer active.'},410);
    }
-   if(path==='/internal-driver-question'&&req.method==='POST'){
-    const parsed=driverQuestionInput.safeParse(await req.json());
-    const input=parsed.success&&parsed.data.room===current.id?this.scopeStrategyInput(req,url,parsed.data):null;
-    const event=input&&current.readDriverQuestion(input.event_id,input.team);
-    return event?json({team:event.team,question:event.driverQuestion.text,elicitationKey:current.elicitationKey})
-     :json({error:'This driver question is no longer available.'},410);
-   }
-   if(path==='/internal-driver-answer'&&req.method==='POST'){
-    const parsed=driverAnswerInput.safeParse(await req.json());
-    const input=parsed.success&&parsed.data.room===current.id?this.scopeStrategyInput(req,url,parsed.data):null;
-    if(!input)return json({error:'This driver question is unavailable for this seat.'},403);
-    const result=current.answerDriver(input);
-    if(result.team){this.lastStrategyRadioAt=Date.now();this.consecutiveWebhookFailures[result.team]=0;await this.save();}
-    return json(result);
-   }
    if(path==='/internal-strategy-radio'&&req.method==='POST'){
     const parsed=radioInput.safeParse(await req.json());
     if(!parsed.success)return json({error:'Invalid strategy order.'},400);
@@ -1069,11 +1042,12 @@ export class GameRoom extends DurableObject<Env> {
    return new Response(null,{status:101,webSocket:pair[0]});
   }
   if(url.pathname.endsWith('/driver-key')&&req.method==='POST'){
-   if(!room.strategyPractice||room.live!=='running')return json({error:'Strategy race is not active.'},409);
+   if(!room.strategyPractice||room.live!=='running'||room.race.phase==='finished')return json({error:'Strategy race is not active.'},409);
    const rawBody=await req.text();
    if(rawBody.length>2048)return json({error:'Request too large.'},413);
-   let payload:{team?:unknown;engine?:unknown;provider?:unknown;apiKey?:unknown};
+   let payload:{team?:unknown;engine?:unknown;provider?:unknown;apiKey?:unknown;controlStyle?:unknown};
    try{payload=JSON.parse(rawBody);}catch{return json({error:'Invalid JSON body.'},400);}
+   if(!payload||typeof payload!=='object')return json({error:'Invalid JSON body.'},400);
    const team=payload.team==='a'||payload.team==='b'?payload.team:null;
    if(!team)return json({error:'Invalid seat.'},400);
    const expectedKey=this.strategySeats[team]?.key;
@@ -1082,6 +1056,8 @@ export class GameRoom extends DurableObject<Env> {
    if(!engine)return json({error:'Driver engine must be jev or luna.'},400);
    const provider=payload.provider===undefined?undefined:isJevProvider(payload.provider)?payload.provider:null;
    if(engine==='jev'&&provider===null)return json({error:'Invalid Jev provider.'},400);
+   const controlStyle=payload.controlStyle===undefined?'tactical':payload.controlStyle;
+   if(!isAiControlStyle(controlStyle))return json({error:'Invalid AI control style.'},400);
    const apiKey=typeof payload.apiKey==='string'?payload.apiKey.trim():'';
    if(!apiKey||apiKey.length>512||/[\x00-\x1f\x7f]/.test(apiKey))return json({error:'Provide a valid API key.'},400);
    const abort=this.liveAbort??=new AbortController();
@@ -1093,10 +1069,10 @@ export class GameRoom extends DurableObject<Env> {
     const signal=init?.signal??(input instanceof Request?input.signal:null);
     return this.outbound(input,{...init,redirect:'manual',signal:signal?AbortSignal.any([signal,abort.signal]):abort.signal});
    };
-   const configured=room.setCustomDriver(team,{engine,provider:engine==='jev'?(provider??'typesafe'):undefined,apiKey,intervalMs:engine==='luna'?600:800},guardedFetch);
+   const configured=room.setCustomDriver(team,{engine,provider:engine==='jev'?(provider??'typesafe'):undefined,apiKey,controlStyle,intervalMs:controlStyle==='tactical'?(engine==='luna'?600:800):undefined},guardedFetch);
    // Save only non-secret driverMode/players metadata. The API key stays in memory only.
    await this.save();
-   return json({ok:true,...configured});
+   return json({ok:true,...configured,controlStyle});
   }
   if(room.live)return json({error:'Not found'},404);
   if(url.pathname.endsWith('/info'))return json({room:room.id,expiresAt:room.expiresAt});
