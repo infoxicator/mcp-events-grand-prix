@@ -65,8 +65,24 @@
      <legend>Who’s driving</legend>
      <label class="mcp-choice"><input type="radio" name="driver" value="autopilot" checked><strong>Autopilot</strong><small>Optimal racing line obeying ChatGPT calls</small></label>
      <label class="mcp-choice"><input type="radio" name="driver" value="human"><strong>Manual</strong><small>You drive with keyboard, gamepad, or touch</small></label>
-     <label class="mcp-choice" id="mcp-driver-jev-option" hidden><input type="radio" name="driver" value="jev" disabled><strong>Jev</strong><small>AI driver · Coming soon</small></label>
+     <label class="mcp-choice"><input type="radio" name="driver" value="jev"><strong>Jev System 1</strong><small>TypeSafe AI model · Bring your API key</small></label>
+     <label class="mcp-choice"><input type="radio" name="driver" value="luna"><strong>Luna</strong><small>OpenAI gpt-6-luna · Bring your API key</small></label>
     </fieldset>
+    <div id="mcp-driver-key-panel" class="mcp-key-panel" hidden>
+     <div class="mcp-key-head">
+      <label for="mcp-driver-key" id="mcp-driver-key-label">TypeSafe API key</label>
+      <select id="mcp-jev-provider" aria-label="Jev System 1 provider">
+       <option value="typesafe" selected>TypeSafe</option>
+       <option value="openrouter">OpenRouter</option>
+       <option value="vercel">Vercel AI Gateway</option>
+      </select>
+     </div>
+     <div class="mcp-field-actions">
+      <input id="mcp-driver-key" type="password" placeholder="Paste TypeSafe API key" autocomplete="off" spellcheck="false" data-lpignore="true" maxlength="512">
+      <button id="mcp-driver-key-toggle" type="button" aria-pressed="false">Show</button>
+     </div>
+     <small class="mcp-key-note">Kept in memory for this game only — never persisted or sent to ChatGPT.</small>
+    </div>
     <label class="mcp-addon-toggle" for="mcp-multiplayer">
      <input id="mcp-multiplayer" type="checkbox" disabled>
      <span class="mcp-addon-copy">

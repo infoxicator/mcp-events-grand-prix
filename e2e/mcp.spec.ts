@@ -179,3 +179,65 @@ test('MCP pit wall keeps its dark palette on a light host',async({page})=>{
  }
  await expect(app.locator('#circuit-name')).toHaveCSS('color','rgb(255, 255, 255)');
 });
+
+test('MCP setup supports Jev System 1 and Luna with an in-memory API key',async({page,baseURL})=>{
+ const host=new URL(baseURL!);
+ host.port=String(Number(host.port)+1);
+ await page.setViewportSize({width:560,height:860});
+ await page.route('**/mcp/assets/monza-mcp.glb-*.gz',route=>route.abort());
+ const mcpBodies:string[]=[];
+ let keyRequest:{url:string;auth:string|null;body:string}|null=null;
+ page.on('request',req=>{
+  if(req.url().endsWith('/mcp')&&req.method()==='POST')mcpBodies.push(req.postData()??'');
+  if(req.url().includes('/driver-key')&&req.method()==='POST'){
+   keyRequest={url:req.url(),auth:req.headers()['authorization']??null,body:req.postData()??''};
+  }
+ });
+ await page.goto(host.href);
+ const app=page.frameLocator('#app-frame').frameLocator('iframe');
+ const keyPanel=app.locator('#mcp-driver-key-panel');
+ const keyInput=app.locator('#mcp-driver-key');
+ const providerSelect=app.locator('#mcp-jev-provider');
+ const accept=app.getByRole('button',{name:'Accept',exact:true});
+ await expect(accept).toBeEnabled({timeout:15_000});
+ await expect(keyPanel).toBeHidden();
+
+ // Select Jev System 1: provider selector appears, OpenRouter prefix auto-detects, empty key blocked.
+ await app.locator('input[name="driver"][value="jev"]').check();
+ await expect(keyPanel).toBeVisible();
+ await expect(providerSelect).toBeVisible();
+ await accept.click();
+ await expect(app.locator('#mcp-join-error')).toContainText('Jev System 1');
+ await keyInput.fill('sk-or-test-key');
+ await expect(providerSelect).toHaveValue('openrouter');
+
+ // Switch to Luna: provider selector hides and prior input is cleared.
+ await app.locator('input[name="driver"][value="luna"]').check();
+ await expect(providerSelect).toBeHidden();
+ await expect(keyInput).toHaveValue('');
+ const secret='sk-luna-ephemeral-test-key-42';
+ await keyInput.fill(secret);
+ await accept.click();
+
+ await expect(app.locator('body')).toHaveAttribute('data-phase','racing',{timeout:30_000});
+ expect(keyRequest).not.toBeNull();
+ expect(keyRequest!.auth).toMatch(/^Bearer [a-f0-9]{64}$/);
+ expect(JSON.parse(keyRequest!.body)).toMatchObject({team:'a',engine:'luna',apiKey:secret});
+ // Never sent through MCP tool calls.
+ for(const body of mcpBodies)expect(body).not.toContain(secret);
+ // Cleared from input and never persisted in browser storage.
+ await expect(keyInput).toHaveValue('');
+ const storage=await app.locator('body').evaluate(()=>({
+  local:Object.keys(localStorage).map(k=>`${k}=${localStorage.getItem(k)}`).join(';'),
+  session:Object.keys(sessionStorage).map(k=>`${k}=${sessionStorage.getItem(k)}`).join(';'),
+ }));
+ expect(storage.local).not.toContain(secret);
+ expect(storage.session).not.toContain(secret);
+
+ const state=await app.locator('body').evaluate(()=>(window as Window&{__raceState?:RaceState}).__raceState);
+ expect(state?.driverMode?.a).toBe('luna');
+ expect(state?.players?.a?.engine).toBe('luna');
+ expect(state?.players?.a?.provider).toBe('openai');
+ expect(state?.players?.a?.mock).toBe(false);
+ expect(JSON.stringify(state)).not.toContain(secret);
+});

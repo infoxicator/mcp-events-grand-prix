@@ -2,16 +2,19 @@ import type {RaceLogEntry,RaceLogKind} from './event-log';
 import type {Connection} from './network';
 import {PERSONAS} from './types';
 
-type VisibleLogKind=Exclude<RaceLogKind,'driver'>;
-type VisibleLogEntry=RaceLogEntry&{data:Extract<RaceLogEntry['data'],{kind:VisibleLogKind}>};
-type FilterKey='all'|VisibleLogKind;
+type FilterKey='all'|RaceLogKind;
 
-const filters:Record<FilterKey,string>={all:'All',strategy:'Strategist',radio:'Radio'};
+const filters:Record<FilterKey,string>={all:'All',strategy:'Strategist',radio:'Radio',driver:'Driver'};
 const strategyStages={requested:'Strategy requested',delivered:'Event delivered','delivery-failed':'Event delivery failed','telemetry-read':'Telemetry read',rejected:'Radio rejected'};
 const chevronSvg='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg>';
 
-function isVisible(entry:RaceLogEntry):entry is VisibleLogEntry{
- return entry.data.kind!=='driver';
+function isVisible(entry:RaceLogEntry){
+ if(entry.data.kind==='driver'){
+  if(entry.data.source!=='jev'&&entry.data.source!=='luna')return false;
+  return entry.data.sequence===1||Boolean(entry.data.changed?.length)||entry.data.sequence%10===0;
+ }
+ if(entry.data.kind==='radio')return entry.data.source!=='mock'&&entry.data.speaker!=='JEV'&&entry.data.speaker!=='LUNA';
+ return entry.data.source!=='mock';
 }
 
 function formatClock(secondsTotal:number){
@@ -19,8 +22,38 @@ function formatClock(secondsTotal:number){
  return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
 }
 
-function describe(entry:VisibleLogEntry){
+function describe(entry:RaceLogEntry){
  const {data}=entry;
+ if(data.kind==='driver'){
+  const pace=data.intent.speedBias>0?'ATTACK':data.intent.speedBias<0?'CAUTIOUS':'NORMAL';
+  const brake=data.intent.brakeAggression>.7?'LATE':data.intent.brakeAggression<.35?'EARLY':'NORMAL';
+  const line=data.intent.side.toUpperCase();
+  const engineName=data.engine==='luna'?'Luna':'Jev System 1';
+  const actor=data.source==='fallback'?`${engineName} · Fallback`:data.model?`${engineName} · ${data.model}`:engineName;
+  const title=data.warning
+   ?data.warning
+   :data.changed?.length
+    ?data.changed.join(' · ')
+    :data.sequence===1
+     ?`Active — Line ${line} · Pace ${pace} · Brake ${brake}`
+     :`Holding — Line ${line} · Pace ${pace} · Brake ${brake}`;
+  const chips=[
+   data.source==='fallback'?'FALLBACK':`LIVE · ${data.responseMs} ms`,
+   `LINE ${line}`,
+   `PACE ${pace}`,
+   `BRAKE ${brake}`,
+   `ERS ${data.intent.ers?'DEPLOY':'HOLD'}`,
+  ];
+  if(data.intent.drs)chips.push('DRS OPEN');
+  chips.push(`#${data.sequence}`);
+  return {
+   kindLabel:'Driver',
+   actor,
+   title,
+   chips,
+   stage:data.source==='fallback'?'driver-fallback':'driver-live',
+  };
+ }
  if(data.kind==='strategy'){
   const actor=data.agent==='chatgpt'?`ChatGPT · ${strategyStages[data.stage]}`:'Pit wall · Telemetry';
   const chips:string[]=[];
@@ -81,7 +114,7 @@ async function copyPayloadText(text:string){
  }
 }
 
-function renderRow(entry:VisibleLogEntry,onHeightChange:()=>void,onCopy:(button:HTMLButtonElement,json:string)=>void){
+function renderRow(entry:RaceLogEntry,onHeightChange:()=>void,onCopy:(button:HTMLButtonElement,json:string)=>void){
  const item=document.createElement('li');
  item.className='event-log-row';
  item.dataset.kind=entry.data.kind;
@@ -183,7 +216,7 @@ export function mountEventLog(panel:HTMLElement,connection:Connection){
    <div class="event-log-controls">
     <button type="button" class="event-log-jump" hidden>↑ Latest</button>
     <div class="event-log-filters" role="group" aria-label="Filter race events">
-     ${(Object.entries(filters) as [FilterKey,string][]).map(([key,label])=>`<button type="button" data-filter="${key}" aria-pressed="${key==='all'}"><span class="event-log-filter-label">${label}</span><span class="event-log-filter-count" aria-hidden="true">0</span></button>`).join('')}
+     ${(Object.entries(filters) as [FilterKey,string][]).map(([key,label])=>`<button type="button" data-filter="${key}" aria-pressed="${key==='all'}"${key==='driver'?' hidden':''}><span class="event-log-filter-label">${label}</span><span class="event-log-filter-count" aria-hidden="true">0</span></button>`).join('')}
     </div>
    </div>
   </header>
@@ -209,12 +242,13 @@ export function mountEventLog(panel:HTMLElement,connection:Connection){
   countEls.set(key,button.querySelector<HTMLElement>('.event-log-filter-count')!);
  }
 
- const entries=new Map<number,VisibleLogEntry>();
+ const driverButton=buttons.find(b=>b.dataset.filter==='driver')!;
+ const entries=new Map<number,RaceLogEntry>();
  const rows=new Map<number,HTMLLIElement>();
  let filter:FilterKey='all';
  let unseen=0;
 
- const matches=(entry:VisibleLogEntry)=>filter==='all'||entry.data.kind===filter;
+ const matches=(entry:RaceLogEntry)=>filter==='all'||entry.data.kind===filter;
  const isAtTop=()=>list.scrollTop<=4;
 
  function syncScrollState(){
@@ -238,15 +272,18 @@ export function mountEventLog(panel:HTMLElement,connection:Connection){
  }
 
  function updateCountsAndEmpty(){
-  let strategyCount=0,radioCount=0;
+  let strategyCount=0,radioCount=0,driverCount=0;
   for(const entry of entries.values()){
    if(entry.data.kind==='strategy')strategyCount++;
+   else if(entry.data.kind==='driver')driverCount++;
    else radioCount++;
   }
-  const allCount=strategyCount+radioCount;
+  const allCount=strategyCount+radioCount+driverCount;
   countEls.get('all')!.textContent=String(allCount);
   countEls.get('strategy')!.textContent=String(strategyCount);
   countEls.get('radio')!.textContent=String(radioCount);
+  countEls.get('driver')!.textContent=String(driverCount);
+  driverButton.hidden=driverCount===0;
   totalEl.textContent=allCount===1?'1 event':`${allCount} events`;
 
   const hasRows=rows.size>0;
@@ -259,6 +296,9 @@ export function mountEventLog(panel:HTMLElement,connection:Connection){
    }else if(filter==='strategy'){
     emptyTitle.textContent='No strategist events yet';
     emptySubtitle.textContent='Switch to All or wait for the next pit wall strategy trigger.';
+   }else if(filter==='driver'){
+    emptyTitle.textContent='No live AI driver decisions yet';
+    emptySubtitle.textContent='Jev System 1 and Luna driving changes will stream here once racing starts.';
    }else{
     emptyTitle.textContent='No radio events yet';
     emptySubtitle.textContent='Switch to All or wait for the next team radio transmission.';
@@ -275,13 +315,17 @@ export function mountEventLog(panel:HTMLElement,connection:Connection){
   clearTimeout(resets.get(button));
   resets.set(button,setTimeout(()=>{resets.delete(button);button.textContent='Copy JSON';},1400));
  }
- function addRow(entry:VisibleLogEntry){
+ function addRow(entry:RaceLogEntry){
   const row=renderRow(entry,syncScrollState,onCopy);
   rows.set(entry.id,row);
   list.prepend(row);
  }
 
  function render(){
+  if(filter==='driver'&&!Array.from(entries.values()).some(entry=>entry.data.kind==='driver')){
+   filter='all';
+   for(const option of buttons)option.setAttribute('aria-pressed',String(option.dataset.filter==='all'));
+  }
   rows.clear();
   list.replaceChildren();
   unseen=0;

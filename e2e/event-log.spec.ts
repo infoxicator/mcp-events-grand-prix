@@ -103,15 +103,38 @@ test('event log opens by default, hides driver events, filters cleanly, and pres
  });
  expect(scrolledBefore).toBeGreaterThan(100);
 
- // Incoming driver event must be ignored and not trigger unread badge.
+ // Incoming mock/fallback events must be ignored and not trigger unread badge.
  pushLog({
   type:'event-log',
-  entries:[{
-   id:100,time:120,lap:6,team:'a',
-   data:{kind:'driver',engine:'jev',source:'mock',responseMs:5,sequence:99,intent:{offset:0,speedBias:1,brakeAggression:.5,side:'left',ers:false,drs:false}},
-  }],
+  entries:[
+   {
+    id:100,time:120,lap:6,team:'a',
+    data:{kind:'driver',engine:'jev',source:'mock',responseMs:5,sequence:99,intent:{offset:0,speedBias:1,brakeAggression:.5,side:'left',ers:false,drs:false}},
+   },
+   {
+    id:1001,time:121,lap:6,team:'a',
+    data:{kind:'driver',engine:'jev',source:'fallback',warning:'Fallback',responseMs:5,sequence:100,intent:{offset:0,speedBias:1,brakeAggression:.5,side:'left',ers:false,drs:false}},
+   },
+   {
+    id:1002,time:122,lap:6,team:'a',
+    data:{kind:'radio',speaker:'ENGINEER',source:'mock',responseMs:1,text:'Mock pit wall radio should stay hidden.'},
+   },
+   {
+    id:1004,time:122.5,lap:6,team:'a',
+    data:{kind:'radio',speaker:'JEV',source:'live',responseMs:140,text:'Copy. Setting up the pass.'},
+   },
+   {
+    id:1005,time:122.8,lap:6,team:'b',
+    data:{kind:'radio',speaker:'LUNA',source:'live',responseMs:140,text:'Fronts are graining.'},
+   },
+   {
+    id:1003,time:123,lap:6,team:'a',
+    data:{kind:'strategy',agent:'pit-wall',stage:'requested',source:'mock',reasons:['Mock pit wall telemetry']},
+   },
+  ],
  });
  await expect(log.locator('li[data-kind="driver"]')).toHaveCount(0);
+ await expect(log.locator('li.event-log-row')).toHaveCount(15);
  await expect(log.locator('.event-log-jump')).toHaveText('↑ Latest');
 
  // Incoming radio event while scrolled down preserves viewport offset and surfaces "↑ 1 new".
@@ -134,4 +157,31 @@ test('event log opens by default, hides driver events, filters cleanly, and pres
  await log.locator('.event-log-jump').click();
  await expect.poll(()=>list.evaluate(el=>el.scrollTop)).toBeLessThanOrEqual(4);
  await expect(log.locator('.event-log-jump')).toBeHidden();
+
+ // Live AI driver decisions (Jev System 1 / Luna) appear with their changes and unlock the Driver filter.
+ pushLog({
+  type:'event-log',
+  entries:[{
+   id:102,time:130,lap:6,team:'a',
+   data:{
+    kind:'driver',engine:'jev',source:'jev',model:'jev-latest',provider:'typesafe',responseMs:142,sequence:2,
+    changed:['Line → LEFT','Pace → ATTACK','ERS → DEPLOY'],
+    intent:{offset:-3,speedBias:2,brakeAggression:.9,side:'left',ers:true,drs:true},
+   },
+  }],
+ });
+ await expect(log.locator('li[data-kind="driver"]')).toHaveCount(1);
+ await expect(log.locator('li[data-kind="driver"]')).toContainText('Line → LEFT · Pace → ATTACK · ERS → DEPLOY');
+ await expect(log.locator('li[data-kind="driver"]')).toContainText('LIVE · 142 ms');
+ const driverFilter=log.getByRole('button',{name:'Driver',exact:true});
+ await expect(driverFilter).toBeVisible();
+ await driverFilter.click();
+ await expect(log.locator('li.event-log-row')).toHaveCount(1);
+ await expect(log.locator('li[data-kind="driver"]')).toHaveCount(1);
+
+ // Resetting back to a session without an active AI driver hides the Driver tab again.
+ pushLog({type:'event-log',reset:true,entries:initialEntries});
+ await expect(log.getByRole('button',{name:'Driver',exact:true})).toHaveCount(0);
+ await expect(log.locator('li[data-kind="driver"]')).toHaveCount(0);
+ await expect(log.locator('li.event-log-row')).toHaveCount(15);
 });

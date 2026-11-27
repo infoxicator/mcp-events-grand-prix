@@ -159,16 +159,16 @@ export function createRaceDriver(config:ProviderConfig,transport?:TypeSafeClient
 }
 export function createRaceEngineer(env:Record<string,string|undefined>,transport:typeof fetch=fetch){
  const provider=engineerProvider(env,transport);
- return async(s:Race,team:Team,history:ReturnType<typeof sectorGaps>[]=[],onTelemetry?:(telemetry:ReturnType<typeof observeStrategy>)=>void)
+ return async(s:Race,team:Team,history:ReturnType<typeof sectorGaps>[]=[],onTelemetry?:(telemetry:ReturnType<typeof observeStrategy>,source:'mock'|'live')=>void)
  :Promise<{instruction:Instruction;source:'mock'|'live'|'fallback';responseMs:number}>=>{
   const start=performance.now(),rule=mockEngineer(s,team,true,history);
   if(!provider){
-   onTelemetry?.(observeStrategy(s,team,history));
+   onTelemetry?.(observeStrategy(s,team,history),'mock');
    return {instruction:rule,source:'mock',responseMs:1};
   }
   try{
    const observation=observeStrategy(s,team,history);
-   onTelemetry?.(observation);
+   onTelemetry?.(observation,'live');
    const {energy,fuelSave,yieldCar,...call}=instructionSchema.parse(await provider.complete(
     'You are the F1 race strategist. Plan from standings, gaps, sector trends, compound life, fuel margin above the 1.0 kg FIA sample, mandatory two-dry-compound rule, pit rejoin traffic, weather sector wetness and laps remaining. The driver controls the car and may leave room or abandon a move. Hold position under safety car or yellow, weigh cheap SC stops and damage repair time, and compare wetness and wet grip across sectors in rain. Output JSON with pace (push, balanced, or manage), ers (deploy, balanced, or harvest), box (boolean), tyre (soft, medium, hard, intermediate, or wet), tactic (attack, defend, or hold), and line (short radio). Optional fields: energy ({priority: attack|defend, zone?: attack|defend|any, budgetKJ, laps: 1..3, releaseAttackIfBehindGtS?}), fuelSave ({sector: 1..3, laps: 1..3}), yieldCar (boolean). Existing unexpired energy orders share their original budget.',
     observation,AbortSignal.timeout(5000),.4,

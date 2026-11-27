@@ -12,7 +12,7 @@ import {RaceRoom,type Peer} from '../server/race-room';
 import {createRaceMcp,type McpRoom,type StrategySeatAccess} from '../server/race-mcp';
 import {isCircuit,type CircuitId} from '../src/race/track';
 import {isMatchup,type Matchup} from '../src/race/matchup';
-import {TEAMS,type Team,type Race,type ClientMessage,type RaceState} from '../src/race/types';
+import {TEAMS,isJevProvider,isStrategyDriver,type Team,type Race,type ClientMessage,type RaceState} from '../src/race/types';
 import {isLiveKey,isRoomId,newLiveKey,LIVE_CALL_LIMIT,LIVE_DRIVER_INTERVAL_MS,LIVE_PAIR_PATH,LIVE_TIME_MS,OWNER_LIVE_PATH,
  CHAT_STRATEGY_LAPS,CHAT_STRATEGY_MAX_LAPS,CHAT_STRATEGY_TIME_MS,strategyTimeBudgetMs,PAIR_TTL_MS,ROOM_EXPIRED_CLOSE_CODE,FINISHED_GRACE_MS,STRATEGY_LOBBY_TTL_MS,STRATEGY_IDLE_STOP_MS,STRATEGY_MAX_CONSECUTIVE_FAILURES,type LivePhase} from '../src/race/live';
 import {handleOwnerLive,handlePairing,roomStub,type LiveControls} from './owner-live';
@@ -253,9 +253,20 @@ export function createWorker(fetchKeys:typeof fetch=fetch): ExportedHandler<Env>
    return roomStub(env,room).fetch(new Request(`${origin}/internal-replay-${action}`,{method:req.method,headers:{Authorization:req.headers.get('Authorization')!}}));
   }
 
-  const match=path.match(/^\/api\/rooms\/([^/]+)\/(info|links|status|ws)$/);
+  const match=path.match(/^\/api\/rooms\/([^/]+)\/(info|links|status|ws|driver-key)$/);
   if(match&&isRoomId(match[1])){
    const [,roomId,endpoint]=match;
+   if(endpoint==='driver-key'){
+    const keyCors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type, Authorization','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'no-store'};
+    if(req.method==='OPTIONS')return new Response(null,{status:204,headers:keyCors});
+    if(req.method!=='POST')return Response.json({error:'Use POST'},{status:405,headers:keyCors});
+    if(isCachedExpired(roomId))return Response.json({error:'Race expired'},{status:404,headers:{...keyCors,...privateHeaders,'X-Race-Expired':'1'}});
+    const response=await roomStub(env,roomId).fetch(req);
+    if(response.headers.get('X-Race-Expired')==='1')markExpired(roomId);
+    const headers=new Headers(response.headers);
+    for(const [k,v] of Object.entries(keyCors))headers.set(k,v);
+    return new Response(response.body,{status:response.status,headers});
+   }
    if(endpoint==='ws'&&req.headers.get('Upgrade')?.toLowerCase()!=='websocket')return json({error:'WebSocket upgrade required'},426);
    if(isCachedExpired(roomId))return expiredResponse();
    const response=await roomStub(env,roomId).fetch(req);
@@ -368,8 +379,10 @@ export class GameRoom extends DurableObject<Env> {
      ...(this.strategySeats.b?{b:this.strategySeats.b.key}:{}),
     };
     room.guestChatStrategy=state.guestChatStrategy;
-    room.players=state.players;
-    room.mode=state.mode;
+    room.players=saved.live.strategyPractice
+     ?{a:{...state.players.a,mock:true,provider:'mock'},b:{...state.players.b,mock:true,provider:'mock'}}
+     :state.players;
+    room.mode=saved.live.strategyPractice?'mock':state.mode;
     room.paidCalls=state.paidCalls;
     room.driverStats=state.driverStats;
     room.decisions=state.decisions;
@@ -451,6 +464,7 @@ export class GameRoom extends DurableObject<Env> {
  private async expireNow(){
   this.stopClock();
   this.liveAbort?.abort();
+  this.room?.clearCustomDrivers();
   this.closeStrategyWebhooks();
   for(const ws of this.peers.keys())ws.close(ROOM_EXPIRED_CLOSE_CODE,'Room expired');
   this.peers.clear();
@@ -466,6 +480,7 @@ export class GameRoom extends DurableObject<Env> {
   if(room.live!=='running')return;
   this.stopClock();
   this.liveAbort?.abort();
+  room.clearCustomDrivers();
   this.closeStrategyWebhooks();
   room.finishLive(phase);
   this.tightenFinishedExpiry();
@@ -606,13 +621,17 @@ export class GameRoom extends DurableObject<Env> {
  private startChatPractice(url:URL){
   const id=url.searchParams.get('room'),circuit=url.searchParams.get('circuit');
   if(this.room||this.paired()||!isRoomId(id)||!isCircuit(circuit))return json({error:'Invalid strategy race'},400);
-  // This path never reads provider bindings or installs paid transports.
+  // This path never reads provider bindings or installs server-billed transports.
   const lapsParam=Number(url.searchParams.get('laps'));
   const laps=Number.isFinite(lapsParam)&&lapsParam>=3&&lapsParam<=CHAT_STRATEGY_MAX_LAPS?Math.round(lapsParam):CHAT_STRATEGY_LAPS;
-  const driver=url.searchParams.get('driver')==='human'?'human':'autopilot';
+  const rawDriver=url.searchParams.get('driver');
+  const driver=isStrategyDriver(rawDriver)?rawDriver:'autopilot';
   const room=this.room=new RaceRoom(id,url.origin,{JEV_MOCK:'1'},1,'jev-vs-jev',{},circuit,true,laps,driver==='human');
   room.strategyPractice=true;
   room.driverMode={a:driver,b:'autopilot'};
+  if(driver==='jev'||driver==='luna'){
+   room.players={...room.players,a:{engine:driver,name:driver==='luna'?'LUNA':'JEV',model:driver==='luna'?'gpt-6-luna':'jev-latest',provider:'mock',mock:true,intervalMs:600}};
+  }
   this.guestInviteKey=newLiveKey();
   this.strategySeats.a=this.newStrategySeat(url.searchParams.get('sep')==='1');
   room.strategyDriverKeys={a:this.strategySeats.a.key};
@@ -626,11 +645,12 @@ export class GameRoom extends DurableObject<Env> {
 
  private strategySeatAccess(team:Team){
   const seat=this.strategySeats[team]!;
+  const mode=this.room!.driverMode[team];
   return {
    strategyKey:seat.key,
    subscriptionKey:seat.sep?undefined:seat.subscriptionKey,
    laps:this.room!.race.laps,
-   driver:this.room!.driverMode[team]==='human'?'human':'autopilot',
+   driver:isStrategyDriver(mode)?mode:'autopilot',
    ...(team==='a'?{guestInviteKey:this.guestInviteKey}:{}),
   };
  }
@@ -949,8 +969,9 @@ export class GameRoom extends DurableObject<Env> {
      if(current.strategyFor('b')||seat?.webhookVerification)return json({error:'Mercedes already uses a different connection'},409);
      this.strategySeats.b=this.newStrategySeat(this.strategySeats.a?.sep);
     }
-    const nextDriver=driver==='human'?'human':'autopilot';
+    const nextDriver=isStrategyDriver(driver)?driver:'autopilot';
     current.driverMode.b=nextDriver;
+    if(nextDriver==='autopilot'||nextDriver==='human')current.clearCustomDriver('b');
     current.strategyDriverKeys={...current.strategyDriverKeys,b:this.strategySeats.b!.key};
     await this.save();
     return json({...this.controls(),...this.strategySeatAccess('b'),circuit:current.race.circuit});
@@ -994,7 +1015,7 @@ export class GameRoom extends DurableObject<Env> {
     if(!isCircuit(circuit))return json({error:'Invalid circuit'},400);
     const lapsParam=Number(lapsRaw);
     const laps=Number.isFinite(lapsParam)&&lapsParam>=3&&lapsParam<=CHAT_STRATEGY_MAX_LAPS?Math.round(lapsParam):CHAT_STRATEGY_LAPS;
-    const driver=driverRaw==='human'?'human':'autopilot';
+    const driver=isStrategyDriver(driverRaw)?driverRaw:'autopilot';
     if(!current.configureStrategyLobby(circuit,laps,driver))return json({error:'Strategy lobby unavailable'},409);
     const now=Date.now();
     this.liveDeadline=Math.max(this.liveDeadline,now+strategyTimeBudgetMs(current.race.laps));
@@ -1046,6 +1067,36 @@ export class GameRoom extends DurableObject<Env> {
    this.attach(pair[1]);
    pair[1].serializeAttachment({team:null,owner:false,joined:false});
    return new Response(null,{status:101,webSocket:pair[0]});
+  }
+  if(url.pathname.endsWith('/driver-key')&&req.method==='POST'){
+   if(!room.strategyPractice||room.live!=='running')return json({error:'Strategy race is not active.'},409);
+   const rawBody=await req.text();
+   if(rawBody.length>2048)return json({error:'Request too large.'},413);
+   let payload:{team?:unknown;engine?:unknown;provider?:unknown;apiKey?:unknown};
+   try{payload=JSON.parse(rawBody);}catch{return json({error:'Invalid JSON body.'},400);}
+   const team=payload.team==='a'||payload.team==='b'?payload.team:null;
+   if(!team)return json({error:'Invalid seat.'},400);
+   const expectedKey=this.strategySeats[team]?.key;
+   if(!expectedKey||req.headers.get('Authorization')!==`Bearer ${expectedKey}`)return json({error:'Seat authorization required.'},403);
+   const engine=payload.engine==='jev'||payload.engine==='luna'?payload.engine:null;
+   if(!engine)return json({error:'Driver engine must be jev or luna.'},400);
+   const provider=payload.provider===undefined?undefined:isJevProvider(payload.provider)?payload.provider:null;
+   if(engine==='jev'&&provider===null)return json({error:'Invalid Jev provider.'},400);
+   const apiKey=typeof payload.apiKey==='string'?payload.apiKey.trim():'';
+   if(!apiKey||apiKey.length>512||/[\x00-\x1f\x7f]/.test(apiKey))return json({error:'Provide a valid API key.'},400);
+   const abort=this.liveAbort??=new AbortController();
+   let calls=0;
+   const guardedFetch:typeof fetch=async(input,init)=>{
+    if(room.live!=='running'||abort.signal.aborted||Date.now()>=this.liveDeadline||++calls>1500){
+     throw new Error('Live race request limit');
+    }
+    const signal=init?.signal??(input instanceof Request?input.signal:null);
+    return this.outbound(input,{...init,redirect:'manual',signal:signal?AbortSignal.any([signal,abort.signal]):abort.signal});
+   };
+   const configured=room.setCustomDriver(team,{engine,provider:engine==='jev'?(provider??'typesafe'):undefined,apiKey,intervalMs:engine==='luna'?600:800},guardedFetch);
+   // Save only non-secret driverMode/players metadata. The API key stays in memory only.
+   await this.save();
+   return json({ok:true,...configured});
   }
   if(room.live)return json({error:'Not found'},404);
   if(url.pathname.endsWith('/info'))return json({room:room.id,expiresAt:room.expiresAt});

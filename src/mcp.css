@@ -230,6 +230,47 @@
 .mcp-choice strong{font-size:13px;line-height:1.25;color:#f6f8fa}
 .mcp-choice small{font-size:11px;line-height:1.38;color:#a8b1c0}
 
+/* In-memory API key panel for Jev System 1 / Luna */
+.mcp-key-panel {
+ display:grid;
+ gap:8px;
+ padding:12px 13px;
+ border:1px solid #49323a;
+ border-left:3px solid #ff3448;
+ border-radius:4px;
+ background:#15141c;
+}
+.mcp-key-panel[hidden]{display:none}
+.mcp-key-head {
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ flex-wrap:wrap;
+ gap:8px;
+}
+.mcp-key-head label {
+ font-size:12px;
+ font-weight:700;
+ color:#f4f7fb;
+}
+.mcp-key-head select {
+ min-height:28px;
+ padding:3px 8px;
+ border:1px solid #3c474a;
+ border-radius:4px;
+ background:#0f1419;
+ color:#e6ecf4;
+ font:600 11px 'Space Grotesk',sans-serif;
+ cursor:pointer;
+}
+.mcp-key-head select[hidden]{display:none}
+.mcp-key-head select:disabled{opacity:.5;cursor:not-allowed}
+.mcp-key-note {
+ font-size:11px;
+ line-height:1.38;
+ color:#9eacb8;
+}
+
 /* Multiplayer add-on toggle */
 .mcp-addon-toggle {
  display:flex;

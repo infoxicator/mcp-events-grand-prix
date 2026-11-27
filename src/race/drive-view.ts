@@ -43,6 +43,7 @@ const EMBEDDED_DRIVER_CYCLE: readonly DriverControlMode[] = ['human', 'autopilot
 const DRIVER_LABELS: Record<DriverControlMode, string> = {
  human: 'YOU',
  jev: 'JEV',
+ luna: 'LUNA',
  autopilot: 'AUTOPILOT',
 };
 const LINE_CYCLE: readonly RacingLineMode[] = ['full', 'corners', 'off'];

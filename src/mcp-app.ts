@@ -4,7 +4,7 @@ import {prepareDriveCircuit,cancelPreparedCircuit} from './race/circuit-model';
 import {prepareEmbeddedRace} from './race/scene';
 import {mountRace} from './race/ui';
 import {connect,type Connection} from './race/network';
-import {PERSONAS,type HostedRoom,type Team} from './race/types';
+import {PERSONAS,isJevProvider,isStrategyDriver,type HostedRoom,type JevProvider,type StrategyDriver,type Team} from './race/types';
 import {CIRCUITS,isCircuit,type CircuitId} from './race/track';
 import {copyInvitation} from './clipboard';
 import {isLiveKey,isRoomId,liveInvitation,raceSessionLabel,liveSpectatorURL,ownerRaceURL,
@@ -12,9 +12,10 @@ import {isLiveKey,isRoomId,liveInvitation,raceSessionLabel,liveSpectatorURL,owne
 import './mcp.css';
 
 type Player=Team|'both'|'spectator';
-type StrategyDriver='autopilot'|'human';
 type MountedView={connection:Connection;suspend3D:()=>void;dispose:()=>void};
 type Result=Parameters<NonNullable<App['ontoolresult']>>[0];
+const isAiDriver=(driver:StrategyDriver):driver is 'jev'|'luna'=>driver==='jev'||driver==='luna';
+const driverLabel=(driver:string|undefined)=>driver==='human'?'Manual':driver==='jev'?'Jev System 1':driver==='luna'?'Luna':'Autopilot';
 
 const app=new App({name:'MCP Grand Prix',version:'1.0.0'});
 const element=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id)! as T;
@@ -23,6 +24,10 @@ const status=element('mcp-status'),menu=element('mcp-menu'),menuToggle=element<H
  menuClose=element<HTMLButtonElement>('mcp-menu-close'),
  crew=element('mcp-crew'),modePill=element('mcp-mode-pill'),
  setup=element<HTMLFormElement>('mcp-setup'),acceptButton=element<HTMLButtonElement>('mcp-accept'),
+ driverKeyPanel=element('mcp-driver-key-panel'),driverKeyLabel=element('mcp-driver-key-label'),
+ jevProviderSelect=element<HTMLSelectElement>('mcp-jev-provider'),
+ driverKeyInput=element<HTMLInputElement>('mcp-driver-key'),
+ driverKeyToggle=element<HTMLButtonElement>('mcp-driver-key-toggle'),
  multiplayerToggle=element<HTMLInputElement>('mcp-multiplayer'),
  multiplayerBar=element('mcp-multiplayer-bar'),multiplayerTitle=element('mcp-multiplayer-title'),
  multiplayerStatus=element('mcp-multiplayer-status'),
@@ -40,7 +45,8 @@ let view:MountedView|null=null,mode:'inline'|'fullscreen'='inline';
 let live:LiveInvitation|null=null,knownLive:LivePhase='running',origin='';
 let strategyPractice=false,practiceKey:string|undefined,strategySeat:Team|undefined;
 let strategyDriver:StrategyDriver='autopilot',multiplayerActive=false,pendingAutoStart=false;
-let expectedLobby:{circuit:CircuitId;laps:number;driver:StrategyDriver}|null=null;
+let expectedLobby:{circuit:CircuitId;laps:number;driver:StrategyDriver;needsLiveDriver?:boolean}|null=null;
+let lastAiDriver:'jev'|'luna'|null=null;
 let telemetry=false,setupBusy=false,stopBusy=false,joinBusy=false,hasActiveRace=false,menuAutoCollapsed=false;
 let mountSequence=0,driveOutput:AudioContext|null=null;
 function prepareDriveOutput(){
@@ -57,7 +63,55 @@ const selectedLaps=()=>{
  const value=Number(setup.querySelector<HTMLInputElement>('[name="laps"]:checked')?.value);
  return value===10?10:CHAT_STRATEGY_LAPS;
 };
-const selectedDriver=():StrategyDriver=>setup.querySelector<HTMLInputElement>('[name="driver"]:checked')?.value==='human'?'human':'autopilot';
+const selectedDriver=():StrategyDriver=>{
+ const value=setup.querySelector<HTMLInputElement>('[name="driver"]:checked')?.value;
+ return isStrategyDriver(value)?value:'autopilot';
+};
+const selectedJevProvider=():JevProvider=>isJevProvider(jevProviderSelect.value)?jevProviderSelect.value:'typesafe';
+const JEV_PROVIDER_COPY:Record<JevProvider,{label:string;placeholder:string}>={
+ typesafe:{label:'TypeSafe API key',placeholder:'Paste TypeSafe API key'},
+ openrouter:{label:'OpenRouter API key',placeholder:'Paste OpenRouter API key (sk-or-...)'},
+ vercel:{label:'Vercel AI Gateway key',placeholder:'Paste Vercel AI Gateway key (vck_...)'},
+};
+function clearDriverKeyInput(){
+ driverKeyInput.value='';
+ driverKeyInput.type='password';
+ driverKeyToggle.textContent='Show';
+ driverKeyToggle.setAttribute('aria-pressed','false');
+}
+function syncDriverKeyPanel(locked=false){
+ const driver=selectedDriver();
+ const show=isAiDriver(driver);
+ driverKeyPanel.hidden=!show;
+ if(show){
+  if(lastAiDriver&&lastAiDriver!==driver)clearDriverKeyInput();
+  lastAiDriver=driver;
+  if(driver==='luna'){
+   jevProviderSelect.hidden=true;
+   driverKeyLabel.textContent='OpenAI API key';
+   driverKeyInput.placeholder='Paste OpenAI API key (sk-...)';
+  }else{
+   jevProviderSelect.hidden=false;
+   const copy=JEV_PROVIDER_COPY[selectedJevProvider()];
+   driverKeyLabel.textContent=copy.label;
+   driverKeyInput.placeholder=copy.placeholder;
+  }
+ }
+ jevProviderSelect.disabled=locked;
+ driverKeyInput.disabled=locked;
+ driverKeyToggle.disabled=locked;
+}
+async function submitDriverKey(roomId:string,seat:Team,key:string,engine:'jev'|'luna',apiKey:string,provider?:JevProvider){
+ const response=await fetch(`${origin}/api/rooms/${roomId}/driver-key`,{
+  method:'POST',
+  headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},
+  body:JSON.stringify({team:seat,engine,...(engine==='jev'?{provider}:{}),apiKey}),
+ });
+ if(!response.ok){
+  const body=await response.json().catch(()=>null) as {error?:unknown}|null;
+  throw new Error(typeof body?.error==='string'?body.error:'Could not configure driver API key.');
+ }
+}
 
 function isRaceStarted(){
  const phase=view?.connection.state?.race.phase;
@@ -90,11 +144,12 @@ function refreshSetup(){
  const showOwnerEnded=Boolean(live&&!strategyPractice&&knownLive!=='running');
  const stopLabel=stopBusy?'Stopping…':canStopOwner?'Stop live race ↗':'Stop race';
 
- const key=[running,locked,setupBusy,joinBusy,stopBusy,showStop,showOwnerEnded,stopLabel,menu.hidden].join('/');
+ const key=[running,locked,setupBusy,joinBusy,stopBusy,showStop,showOwnerEnded,stopLabel,menu.hidden,selectedDriver(),selectedJevProvider()].join('/');
  if(previousSetup===key)return;
  previousSetup=key;
  if(!menu.hidden){
   for(const group of fieldsets)group.disabled=locked;
+  syncDriverKeyPanel(locked);
   multiplayerToggle.disabled=locked;
   acceptButton.disabled=locked;
   const acceptLabel=setupBusy?'Starting…':'Accept';
@@ -116,8 +171,9 @@ function syncFormFromStructuredContent(data:unknown){
  const choices=data as {circuit?:unknown;laps?:unknown;driver?:unknown;multiplayer?:unknown}|undefined;
  if(isCircuit(choices?.circuit))setRadio('circuit',choices.circuit);
  if(choices?.laps===5||choices?.laps===10)setRadio('laps',String(choices.laps));
- if(choices?.driver==='human'||choices?.driver==='autopilot')setRadio('driver',choices.driver);
+ if(isStrategyDriver(choices?.driver))setRadio('driver',choices.driver);
  if(typeof choices?.multiplayer==='boolean')multiplayerToggle.checked=choices.multiplayer;
+ syncDriverKeyPanel();
 }
 
 let suspendTimer:ReturnType<typeof setTimeout>|undefined;
@@ -156,6 +212,7 @@ function updateStatus(){
     race.circuit===expectedLobby.circuit&&
     race.laps===expectedLobby.laps&&
     (snapshot.driverMode?.a??'autopilot')===expectedLobby.driver&&
+    (!expectedLobby.needsLiveDriver||snapshot.players?.a?.mock===false)&&
     (strategyDriver==='human'||document.body.dataset.circuit===expectedLobby.circuit)
    );
    const feedView=document.getElementById('viewport')?.getAttribute('data-feed-view');
@@ -183,7 +240,16 @@ function updateStatus(){
   }
   const circuitName=snapshot?CIRCUITS[snapshot.race.circuit].name:CIRCUITS[selectedCircuit()].name;
   const lapsCount=snapshot?.race.laps??selectedLaps();
-  const activeDriver=snapshot&&strategySeat?(snapshot.driverMode?.[strategySeat]==='human'?'Manual':'Autopilot'):(strategyDriver==='human'?'Manual':'Autopilot');
+  const seatMode=snapshot&&strategySeat?snapshot.driverMode?.[strategySeat]:strategyDriver;
+  let activeDriver=driverLabel(seatMode);
+  if(snapshot&&strategySeat&&(seatMode==='jev'||seatMode==='luna')){
+   const stats=snapshot.driverStats?.[strategySeat];
+   const dec=snapshot.decisions?.[strategySeat];
+   const armed=snapshot.players?.[strategySeat]?.mock===false;
+   if(dec?.source==='fallback')activeDriver+=` · Fallback`;
+   else if((stats?.successes??0)>0)activeDriver+=` · LIVE (${stats!.successes} calls · ${dec?.responseMs??0}ms)`;
+   else if(armed)activeDriver+=` · Armed`;
+  }
   if(strategyPractice&&knownLive==='running'){
    message=`ChatGPT strategy · ${circuitName} · ${lapsCount} laps · ${activeDriver}`;
    if(strategySeat==='b')message+=' · Team B (Mercedes)';
@@ -278,7 +344,7 @@ async function showLive(invite:LiveInvitation,phase:LivePhase='running',strategy
  if(!isRoomId(invite.room)||!isLiveKey(invite.key))throw new Error('Invalid race invitation');
  const nextPractice=settings?.practice===true;
  const nextSeat=settings?.seat;
- const nextDriver:StrategyDriver=settings?.driver==='human'?'human':'autopilot';
+ const nextDriver:StrategyDriver=isStrategyDriver(settings?.driver)?settings.driver:'autopilot';
  const nextKey=nextPractice?strategyKey:undefined;
  const nextDriveView=Boolean(nextPractice&&nextDriver==='human'&&nextSeat&&strategyKey);
  const prevDriveView=Boolean(strategyPractice&&strategyDriver==='human'&&strategySeat&&practiceKey);
@@ -387,7 +453,7 @@ async function applyResult(result:Result,options:{collapseMenu?:boolean;autoStar
   const structured=result.structuredContent as {circuit?:unknown;laps?:unknown;driver?:unknown;multiplayer?:unknown}|undefined;
   const circuit=isCircuit(structured?.circuit)?structured.circuit:undefined;
   const laps=typeof meta.laps==='number'?meta.laps:typeof structured?.laps==='number'?structured.laps:undefined;
-  const driver:StrategyDriver=(meta.driver==='human'||structured?.driver==='human')?'human':'autopilot';
+  const driver:StrategyDriver=isStrategyDriver(meta.driver)?meta.driver:isStrategyDriver(structured?.driver)?structured.driver:'autopilot';
   const multiplayer=Boolean(meta.multiplayer===true||structured?.multiplayer===true);
   await showLive(liveInvite,meta.phase as LivePhase|undefined,isLiveKey(meta.strategyKey)?meta.strategyKey:undefined,{
    practice:meta.strategyPractice===true,
@@ -515,8 +581,9 @@ function teardown(){
  releaseDriveOutput();cancelPreparedCircuit();observer.disconnect();
  clearInterval(statusTimer);clearTimeout(setupNoteTimer);
  app.onhostcontextchanged=undefined;app.ontoolinput=undefined;app.ontoolresult=undefined;app.onerror=undefined;
- for(const node of [copy,guestCopy,play,expand,web,joinWeb,menuToggle,menuClose,backToFeed,ownerControl,headerStopButton])node.onclick=null;
- setup.onsubmit=null;joinForm.onsubmit=null;menu.onclick=null;
+ clearDriverKeyInput();
+ for(const node of [copy,guestCopy,play,expand,web,joinWeb,menuToggle,menuClose,backToFeed,ownerControl,headerStopButton,driverKeyToggle])node.onclick=null;
+ setup.onsubmit=null;setup.onchange=null;jevProviderSelect.onchange=null;driverKeyInput.oninput=null;joinForm.onsubmit=null;menu.onclick=null;
  window.removeEventListener('keydown',onMenuKeyDown);
  window.removeEventListener('pagehide',teardown);
  window.removeEventListener('beforeunload',teardown);
@@ -569,6 +636,25 @@ backToFeed.onclick=()=>{
  setMenuOpen(false);
  menuToggle.focus({preventScroll:true});
 };
+setup.onchange=()=>{refreshSetup();};
+jevProviderSelect.onchange=()=>{refreshSetup();};
+driverKeyInput.oninput=()=>{
+ if(selectedDriver()!=='jev')return;
+ const trimmed=driverKeyInput.value.trim();
+ if(trimmed.startsWith('sk-or-')&&jevProviderSelect.value!=='openrouter'){
+  jevProviderSelect.value='openrouter';
+  refreshSetup();
+ }else if(trimmed.startsWith('vck_')&&jevProviderSelect.value!=='vercel'){
+  jevProviderSelect.value='vercel';
+  refreshSetup();
+ }
+};
+driverKeyToggle.onclick=()=>{
+ const visible=driverKeyInput.type==='text';
+ driverKeyInput.type=visible?'password':'text';
+ driverKeyToggle.textContent=visible?'Show':'Hide';
+ driverKeyToggle.setAttribute('aria-pressed',String(!visible));
+};
 setup.onsubmit=async event=>{
  event.preventDefault();
  if(acceptButton.disabled)return;
@@ -578,12 +664,21 @@ setup.onsubmit=async event=>{
  const laps=selectedLaps();
  const driver=selectedDriver();
  const multiplayer=multiplayerToggle.checked;
+ const needsKey=isAiDriver(driver);
+ const apiKey=needsKey?driverKeyInput.value.trim():'';
+ const jevProvider=driver==='jev'?selectedJevProvider():undefined;
+ if(needsKey&&!apiKey){
+  error.textContent=driver==='luna'?'Paste your OpenAI API key to drive with Luna.':'Paste your API key to drive with Jev System 1.';
+  driverKeyInput.focus();
+  return;
+ }
  if(!telemetry)prepareEmbeddedRace(circuit==='las-vegas');
  setupBusy=true;
  refreshSetup();
  try{
   const snapshot=view?.connection.state;
   const canConfigureLobby=Boolean(live&&strategyPractice&&practiceKey&&strategySeat==='a'&&knownLive==='running'&&(!snapshot||snapshot.race.phase==='lobby'));
+  const immediateAutoStart=!multiplayer&&!needsKey;
   let configured=false;
   if(canConfigureLobby&&live&&practiceKey){
    try{
@@ -594,7 +689,7 @@ setup.onsubmit=async event=>{
     if(driver==='human'&&strategyDriver!=='human')prepareDriveOutput();
     const result=await request;
     if(!result.isError){
-     await applyResult(result,{collapseMenu:true,autoStart:!multiplayer});
+     await applyResult(result,{collapseMenu:true,autoStart:immediateAutoStart});
      const filter=parseEventFilter((result.structuredContent as {event_filter?:unknown}|undefined)?.event_filter);
      if(filter)await shareEventFilter(filter);
      configured=true;
@@ -602,9 +697,22 @@ setup.onsubmit=async event=>{
    }catch{/* Fall back to opening a fresh strategy lobby if the existing room is no longer configurable. */}
   }
   if(!configured){
-   await openFromWidget('open_grand_prix_strategy',{circuit,laps,driver,multiplayer},{collapseMenu:true,autoStart:!multiplayer});
+   await openFromWidget('open_grand_prix_strategy',{circuit,laps,driver,multiplayer},{collapseMenu:true,autoStart:immediateAutoStart});
   }
- }catch(e){error.textContent=e instanceof Error?e.message:'Could not start race.';}
+  if(needsKey){
+   if(!live||!practiceKey||!strategySeat)throw new Error('Could not bind driver API key to this race seat.');
+   await submitDriverKey(live.room,strategySeat,practiceKey,driver,apiKey,jevProvider);
+   clearDriverKeyInput();
+   if(!multiplayer&&strategySeat==='a'){
+    pendingAutoStart=true;
+    expectedLobby={circuit,laps,driver,needsLiveDriver:true};
+    updateStatus();
+   }
+  }
+ }catch(e){
+  if(needsKey)setMenuOpen(true);
+  error.textContent=e instanceof Error?e.message:'Could not start race.';
+ }
  finally{releaseDriveOutput();setupBusy=false;refreshSetup();}
 };
 async function stopActiveRace(){
@@ -639,14 +747,30 @@ joinForm.onsubmit=async event=>{
  if(joinBusy||isRaceStarted())return;
  const error=element('mcp-join-error');
  error.textContent='';
+ const driver=selectedDriver();
+ const needsKey=isAiDriver(driver);
+ const apiKey=needsKey?driverKeyInput.value.trim():'';
+ const jevProvider=driver==='jev'?selectedJevProvider():undefined;
+ if(needsKey&&!apiKey){
+  error.textContent=driver==='luna'?'Paste your OpenAI API key to drive with Luna.':'Paste your API key to drive with Jev System 1.';
+  driverKeyInput.focus();
+  return;
+ }
  joinBusy=true;
  refreshSetup();
  try{
-  const driver=selectedDriver();
   await openFromWidget('open_grand_prix',{invite:joinField.value.trim(),driver},{collapseMenu:true,autoStart:false});
+  if(needsKey){
+   if(!live||!practiceKey||!strategySeat)throw new Error('Could not bind driver API key to Team B.');
+   await submitDriverKey(live.room,strategySeat,practiceKey,driver,apiKey,jevProvider);
+   clearDriverKeyInput();
+  }
   joinField.value='';
   joinPanel.open=false;
- }catch(e){error.textContent=e instanceof Error?e.message:'Unable to join race';}
+ }catch(e){
+  if(needsKey)setMenuOpen(true);
+  error.textContent=e instanceof Error?e.message:'Unable to join race';
+ }
  finally{joinBusy=false;refreshSetup();}
 };
 

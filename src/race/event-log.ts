@@ -6,6 +6,7 @@ import type {Decision,DriverIntent,Instruction,Radio,Team} from './types';
 export type StrategyLogData={
  kind:'strategy';agent:'chatgpt'|'pit-wall';
  stage:'requested'|'delivered'|'delivery-failed'|'telemetry-read'|'rejected';
+ source?:'mock'|'live'|'fallback';
  reasons:string[];
  summary?:StrategyEventNotice['summary'];
  telemetry?:ReturnType<typeof observeStrategy>;
@@ -13,6 +14,7 @@ export type StrategyLogData={
 };
 type DriverLogData={
  kind:'driver';engine:Engine;source:Decision['source'];responseMs:number;sequence:number;
+ model?:string;provider?:string;warning?:string;changed?:string[];
  intent:Omit<DriverIntent,'reply'>;
 };
 type RadioLogData={

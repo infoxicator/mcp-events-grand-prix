@@ -10,7 +10,11 @@ export type Team='a'|'b';
 export const TEAMS:Team[]=['a','b'];
 export type Compound='soft'|'medium'|'hard'|'intermediate'|'wet';
 export type ErsMode='deploy'|'balanced'|'harvest';
-export type DriverControlMode='human'|'jev'|'autopilot';
+export type DriverControlMode='human'|'jev'|'luna'|'autopilot';
+export type StrategyDriver='autopilot'|'human'|'jev'|'luna';
+export type JevProvider='typesafe'|'openrouter'|'vercel';
+export const isStrategyDriver=(value:unknown):value is StrategyDriver=>value==='autopilot'||value==='human'||value==='jev'||value==='luna';
+export const isJevProvider=(value:unknown):value is JevProvider=>value==='typesafe'||value==='openrouter'||value==='vercel';
 export type EngineerControlMode='mock'|'joined';
 export type PeerRole='driver'|'engineer';
 export interface HumanControlInput {throttle:number;brake:number;steer:number;ersOvertake?:boolean;ersMode?:ErsMode;drs?:boolean;brakeBias?:number;gear?:number;tc?:'off'|'medium'|'full';abs?:boolean;pitAssist?:boolean;}

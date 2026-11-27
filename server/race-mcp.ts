@@ -6,15 +6,15 @@ import {acceptedContent,createRequestStateCodec,inputRequired,inputResponse,McpS
 import {registerAppTool,registerAppResource,RESOURCE_MIME_TYPE} from '@modelcontextprotocol/ext-apps/server';
 import {z} from 'zod';
 import type {Matchup} from '../src/race/matchup';
-import type {RaceState,RoomLinks,Team} from '../src/race/types';
+import type {RaceState,RoomLinks,StrategyDriver,Team} from '../src/race/types';
 import {PERSONAS} from '../src/race/types';
 import {parseInvitation,invitationCode} from '../src/race/invitation';
 import {parseLiveInvitation,parseStrategySeatInvitation,strategySeatInvitation,type LiveInvitation,type LivePhase} from '../src/race/live';
 import {DRIVER_RADIO_TEXT_LIMIT,STRATEGY_EVENT} from '../src/race/strategy-events';
 
-export const RACE_RESOURCE='ui://jev-grand-prix/pit-wall-v33.html';
-const LEGACY_RACE_RESOURCES=['ui://jev-grand-prix/pit-wall-v32.html','ui://jev-grand-prix/pit-wall-v31.html','ui://jev-grand-prix/pit-wall-v30.html','ui://jev-grand-prix/pit-wall-v29.html','ui://jev-grand-prix/pit-wall-v28.html','ui://jev-grand-prix/pit-wall-v27.html','ui://jev-grand-prix/pit-wall-v26.html','ui://jev-grand-prix/pit-wall-v25.html','ui://jev-grand-prix/pit-wall-v24.html','ui://jev-grand-prix/pit-wall-v23.html','ui://jev-grand-prix/pit-wall-v22.html','ui://jev-grand-prix/pit-wall-v21.html','ui://jev-grand-prix/pit-wall-v20.html','ui://jev-grand-prix/pit-wall-v19.html','ui://jev-grand-prix/pit-wall-v18.html','ui://jev-grand-prix/pit-wall-v17.html','ui://jev-grand-prix/pit-wall-v16.html','ui://jev-grand-prix/pit-wall-v15.html','ui://jev-grand-prix/pit-wall-v14.html','ui://jev-grand-prix/pit-wall-v13.html','ui://jev-grand-prix/pit-wall-v12.html','ui://jev-grand-prix/pit-wall-v11.html','ui://jev-grand-prix/pit-wall-v10.html','ui://jev-grand-prix/pit-wall-v9.html','ui://jev-grand-prix/pit-wall-v8.html','ui://jev-grand-prix/pit-wall-v7.html','ui://jev-grand-prix/pit-wall-v6.html','ui://jev-grand-prix/pit-wall-v5.html','ui://jev-grand-prix/pit-wall-v4.html','ui://jev-grand-prix/pit-wall-v3.html','ui://jev-grand-prix/pit-wall-v2.html','ui://jev-grand-prix/pit-wall.html'];
-export type StrategyDriver='autopilot'|'human';
+export const RACE_RESOURCE='ui://jev-grand-prix/pit-wall-v34.html';
+const LEGACY_RACE_RESOURCES=['ui://jev-grand-prix/pit-wall-v33.html','ui://jev-grand-prix/pit-wall-v32.html','ui://jev-grand-prix/pit-wall-v31.html','ui://jev-grand-prix/pit-wall-v30.html','ui://jev-grand-prix/pit-wall-v29.html','ui://jev-grand-prix/pit-wall-v28.html','ui://jev-grand-prix/pit-wall-v27.html','ui://jev-grand-prix/pit-wall-v26.html','ui://jev-grand-prix/pit-wall-v25.html','ui://jev-grand-prix/pit-wall-v24.html','ui://jev-grand-prix/pit-wall-v23.html','ui://jev-grand-prix/pit-wall-v22.html','ui://jev-grand-prix/pit-wall-v21.html','ui://jev-grand-prix/pit-wall-v20.html','ui://jev-grand-prix/pit-wall-v19.html','ui://jev-grand-prix/pit-wall-v18.html','ui://jev-grand-prix/pit-wall-v17.html','ui://jev-grand-prix/pit-wall-v16.html','ui://jev-grand-prix/pit-wall-v15.html','ui://jev-grand-prix/pit-wall-v14.html','ui://jev-grand-prix/pit-wall-v13.html','ui://jev-grand-prix/pit-wall-v12.html','ui://jev-grand-prix/pit-wall-v11.html','ui://jev-grand-prix/pit-wall-v10.html','ui://jev-grand-prix/pit-wall-v9.html','ui://jev-grand-prix/pit-wall-v8.html','ui://jev-grand-prix/pit-wall-v7.html','ui://jev-grand-prix/pit-wall-v6.html','ui://jev-grand-prix/pit-wall-v5.html','ui://jev-grand-prix/pit-wall-v4.html','ui://jev-grand-prix/pit-wall-v3.html','ui://jev-grand-prix/pit-wall-v2.html','ui://jev-grand-prix/pit-wall.html'];
+export type {StrategyDriver};
 export interface McpRoom {links:RoomLinks;mcpToken:string;state:RaceState;}
 export type StrategySeatAccess=LiveInvitation&{phase:LivePhase;strategyKey:string;subscriptionKey?:string;guestInviteKey?:string;laps?:number;driver?:StrategyDriver};
 export interface RaceGateway {
@@ -197,11 +197,11 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
  if(gateway.startChatPractice){
   registerAppTool(server,'open_grand_prix_strategy',{
    title:'Start ChatGPT strategy race',
-   description:'Open a ChatGPT strategy seat at Monza or Las Vegas. Choose 5 or 10 laps, autopilot or manual driving, and optionally invite Team B (Mercedes) with their own ChatGPT strategist.',
+   description:'Open a ChatGPT strategy seat at Monza or Las Vegas. Choose 5 or 10 laps, autopilot, manual, Jev System 1, or Luna driving (API keys for Jev System 1 or Luna are entered privately in the widget, never in chat or tool arguments), and optionally invite Team B (Mercedes) with their own ChatGPT strategist.',
    inputSchema:z.object({
     circuit:z.enum(['monza','las-vegas']).default('monza'),
     laps:z.number().int().min(3).max(20).optional().describe('Race distance (default 5, or 10 laps).'),
-    driver:z.enum(['autopilot','human']).default('autopilot').describe('Who drives your car: autopilot or human (manual user controls).'),
+    driver:z.enum(['autopilot','human','jev','luna']).default('autopilot').describe('Who drives your car: autopilot, human (manual controls), jev (Jev System 1 with in-memory API key), or luna (OpenAI gpt-6-luna with in-memory API key).'),
     multiplayer:z.boolean().default(false).describe('Add multiplayer to invite Team B (Mercedes) with their own ChatGPT strategist.'),
     invite:z.string().max(2048).optional(),
    }),
@@ -225,7 +225,7 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
     key:z.string().regex(/^[a-f0-9]{64}$/),
     circuit:z.enum(['monza','las-vegas']).default('monza'),
     laps:z.number().int().min(3).max(20).optional(),
-    driver:z.enum(['autopilot','human']).default('autopilot'),
+    driver:z.enum(['autopilot','human','jev','luna']).default('autopilot'),
     multiplayer:z.boolean().default(false),
    }),
    _meta:{ui:{visibility:['app']}},
@@ -268,11 +268,11 @@ export function createRaceMcp(origin:string,gateway:RaceGateway){
 
  registerAppTool(server,'open_grand_prix',{
   title:'Open MCP Grand Prix',
-  description:'Open MCP Grand Prix in ChatGPT strategy mode at Monza or Las Vegas (5 or 10 laps, autopilot or manual driving). Pass a Team B strategy invitation to join Mercedes with your own ChatGPT strategist, or a live spectator invitation to watch.',
+  description:'Open MCP Grand Prix in ChatGPT strategy mode at Monza or Las Vegas (5 or 10 laps, autopilot, manual, Jev System 1, or Luna driving). Pass a Team B strategy invitation to join Mercedes with your own ChatGPT strategist, or a live spectator invitation to watch.',
   inputSchema:z.object({
    circuit:z.enum(['monza','las-vegas']).default('monza'),
    laps:z.number().int().min(3).max(20).optional(),
-   driver:z.enum(['autopilot','human']).optional(),
+   driver:z.enum(['autopilot','human','jev','luna']).optional(),
    multiplayer:z.boolean().optional(),
    autoplay:z.boolean().optional(),
    solo:z.boolean().optional(),

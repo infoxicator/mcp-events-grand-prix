@@ -18,7 +18,7 @@ import {createMcpHandler,isLegacyRequest} from '@modelcontextprotocol/server';
 import {isMatchup,type Matchup} from '../src/race/matchup';
 import {RaceRoom} from './race-room';
 import {createRaceMcp,type RaceGateway,type StrategyDriver} from './race-mcp';
-import type {ClientMessage} from '../src/race/types';
+import {isJevProvider,type ClientMessage} from '../src/race/types';
 loadEnv({path:'.env.local',quiet:true});
 if(Number(process.versions.node.split('.')[0])<22)throw new Error('Node.js 22+ is required.');
 const port=Number(process.env.PORT??5277),origin=`http://127.0.0.1:${port}`,speed=Math.max(.25,Math.min(24,Number(process.env.RACE_SPEED??4))),production=process.argv.includes('--production');
@@ -26,7 +26,7 @@ const initialMatchup=process.env.RACE_MATCHUP??'jev-vs-jev';if(!isMatchup(initia
 const initialCircuit=process.env.RACE_CIRCUIT??'monza';if(!isCircuit(initialCircuit))throw new Error('RACE_CIRCUIT must be monza or las-vegas');
 const rooms=new Map<string,RaceRoom>();
 type LocalSeat={key:string;subscriptionKey:string;subscription?:StrategyWebhook;disconnect?:()=>void;verification?:symbol};
-type LocalStrategyRoom={room:RaceRoom;guestInviteKey:string;seats:Partial<Record<'a'|'b',LocalSeat>>};
+type LocalStrategyRoom={room:RaceRoom;guestInviteKey:string;seats:Partial<Record<'a'|'b',LocalSeat>>;driverAbort?:AbortController};
 const strategyRooms=new Map<string,LocalStrategyRoom>();
 async function changeLiveSubscription(input:ReturnType<typeof subscribeInput.parse>|ReturnType<typeof unsubscribeInput.parse>){
  const entry=strategyRooms.get(input.arguments.room);
@@ -121,6 +121,9 @@ const gateway:RaceGateway={
   r.live='running';
   r.viewerKey=newLiveKey();
   r.driverMode={a:driver,b:'autopilot'};
+  if(driver==='jev'||driver==='luna'){
+   r.players={...r.players,a:{engine:driver,name:driver==='luna'?'LUNA':'JEV',model:driver==='luna'?'gpt-6-luna':'jev-latest',provider:'mock',mock:true,intervalMs:600}};
+  }
   r.strategyDriverKeys={a:seatA.key};
   r.enableChatStrategy(WEBHOOK_STRATEGY_RESPONSE_MS,'a');
   r.strategyWebhook='connected';
@@ -147,6 +150,7 @@ const gateway:RaceGateway={
   r.enableChatStrategy(WEBHOOK_STRATEGY_RESPONSE_MS,'b');
   r.guestStrategyWebhook='connected';
   r.driverMode.b=driver;
+  if(driver==='autopilot'||driver==='human')r.clearCustomDriver('b');
   r.strategyDriverKeys={...r.strategyDriverKeys,b:entry.seats.b.key};
   r.broadcast();
   return {room:r.id,key:r.viewerKey!,phase:'running',strategyKey:entry.seats.b.key,subscriptionKey:entry.seats.b.subscriptionKey,circuit:r.race.circuit,laps:r.race.laps,driver};
@@ -154,6 +158,8 @@ const gateway:RaceGateway={
  stopChatPractice:async (room,key)=>{
   const entry=strategyRooms.get(room);
   if(!entry||entry.seats.a?.key!==key)return false;
+  entry.driverAbort?.abort();
+  entry.room.clearCustomDrivers();
   for(const seat of Object.values(entry.seats))seat.disconnect?.();
   entry.room.finishLive('stopped');
   return true;
@@ -280,6 +286,43 @@ const server=createServer(async(req,res)=>{
  }
  if(path==='/api/default'){json(defaultRoom.links());return;}
  if(path==='/api/rooms'&&req.method==='POST'){if(req.headers.origin!==`http://${req.headers.host}`){json({error:'Same-origin requests required'},403);return;}if(rooms.size>100){json({error:'Room limit reached'},429);return;}const circuit=url.searchParams.get('circuit')??initialCircuit;if(!isCircuit(circuit)){json({error:'Invalid circuit'},400);return;}const isDrive=url.searchParams.has('drive');const lapsParam=Number(url.searchParams.get('laps'));const laps=Number.isFinite(lapsParam)&&lapsParam>=1&&lapsParam<=20?Math.round(lapsParam):3;const isWatch=url.searchParams.has('watch');json(create(!isDrive,initialMatchup,circuit,isWatch||isDrive?1:speed,url.searchParams.has('solo')||(isDrive&&!url.searchParams.has('multiplayer')),laps,isDrive,isWatch&&!isDrive).links());return;}
+ const keyMatch=path.match(/^\/api\/rooms\/([a-f0-9-]{36})\/driver-key$/);
+ if(keyMatch){
+  const corsHeaders={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type, Authorization','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'no-store'};
+  for(const [k,v] of Object.entries(corsHeaders))res.setHeader(k,v);
+  if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}
+  if(req.method!=='POST'){json({error:'Use POST'},405);return;}
+  const entry=strategyRooms.get(keyMatch[1]);
+  const r=entry?.room;
+  if(!entry||!r||r.expiresAt<Date.now()){json({error:'Race expired'},404);return;}
+  if(!r.strategyPractice||r.live!=='running'){json({error:'Strategy race is not active.'},409);return;}
+  let payload:{team?:unknown;engine?:unknown;provider?:unknown;apiKey?:unknown};
+  try{
+   const chunks:Buffer[]=[];let size=0;
+   for await(const part of req){const buf=Buffer.isBuffer(part)?part:Buffer.from(part);size+=buf.length;if(size>2048){json({error:'Request too large.'},413);return;}chunks.push(buf);}
+   payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  }catch{json({error:'Invalid JSON body.'},400);return;}
+  const team=payload.team==='a'||payload.team==='b'?payload.team:null;
+  if(!team){json({error:'Invalid seat.'},400);return;}
+  const expectedKey=entry.seats[team]?.key;
+  if(!expectedKey||req.headers.authorization!==`Bearer ${expectedKey}`){json({error:'Seat authorization required.'},403);return;}
+  const engine=payload.engine==='jev'||payload.engine==='luna'?payload.engine:null;
+  if(!engine){json({error:'Driver engine must be jev or luna.'},400);return;}
+  const provider=payload.provider===undefined?undefined:isJevProvider(payload.provider)?payload.provider:null;
+  if(engine==='jev'&&provider===null){json({error:'Invalid Jev provider.'},400);return;}
+  const apiKey=typeof payload.apiKey==='string'?payload.apiKey.trim():'';
+  if(!apiKey||apiKey.length>512||/[\x00-\x1f\x7f]/.test(apiKey)){json({error:'Provide a valid API key.'},400);return;}
+  const abort=entry.driverAbort??=new AbortController();
+  let calls=0;
+  const guardedFetch:typeof fetch=async(input,init)=>{
+   if(r.live!=='running'||abort.signal.aborted||Date.now()>=r.expiresAt||++calls>1500)throw new Error('Live race request limit');
+   const signal=init?.signal??(input instanceof Request?input.signal:null);
+   return fetch(input,{...init,redirect:'manual',signal:signal?AbortSignal.any([signal,abort.signal]):abort.signal});
+  };
+  const configured=r.setCustomDriver(team,{engine,provider:engine==='jev'?(provider??'typesafe'):undefined,apiKey,intervalMs:engine==='luna'?600:800},guardedFetch);
+  json({ok:true,...configured});
+  return;
+ }
  const match=path.match(/^\/api\/rooms\/([a-f0-9-]{36})\/(status|info|links)$/);
  if(match){const r=rooms.get(match[1]);if(!r||r.expiresAt<Date.now()){json({error:'Race expired'},404);return;}if(match[2]==='links'){if(req.headers.authorization!==`Bearer ${r.tokens.owner}`){json({error:'Owner credential required'},403);return;}json(r.links());}else json(match[2]==='status'?r.state():{room:r.id,expiresAt:r.expiresAt});return;}
  if(path.startsWith('/api/')){json({error:'Not found'},404);return;}
@@ -299,6 +342,6 @@ server.on('upgrade',(req,socket,head)=>{const u=new URL(req.url??'/',origin),mat
  const heartbeat=setInterval(()=>{if(Date.now()>r.expiresAt){ws.close(ROOM_EXPIRED_CLOSE_CODE,'Room expired');}else if(Date.now()-p.lastSeen>35000){ws.close(1000,'Heartbeat lost');}},2000);ws.on('close',()=>clearInterval(heartbeat));
  });});
 let previous=performance.now(),accumulator=0,realAccumulator=0,lastBroadcast=0;
-const timer=setInterval(()=>{const now=performance.now();const dt=Math.min((now-previous)/1000,.25);accumulator+=dt*speed;realAccumulator+=dt;const realSteps=Math.floor(realAccumulator*120);realAccumulator-=realSteps/120;previous=now;const steps=Math.min(120,Math.floor(accumulator*120));accumulator-=steps/120;for(const [id,r] of rooms){if(Date.now()>r.expiresAt){for(const p of r.peers)p.send({type:'error',message:'Room expired'});rooms.delete(id);strategyRooms.delete(id);continue;}if(!r.live||r.live==='running')r.advance(r.speed===speed?steps:realSteps);}if(now-lastBroadcast>=1000/30){lastBroadcast=now;for(const r of rooms.values())if(r.peers.size)r.broadcast();}},4);
+const timer=setInterval(()=>{const now=performance.now();const dt=Math.min((now-previous)/1000,.25);accumulator+=dt*speed;realAccumulator+=dt;const realSteps=Math.floor(realAccumulator*120);realAccumulator-=realSteps/120;previous=now;const steps=Math.min(120,Math.floor(accumulator*120));accumulator-=steps/120;const wall=Date.now();for(const [id,r] of rooms){if(wall>r.expiresAt){for(const p of r.peers)p.send({type:'error',message:'Room expired'});strategyRooms.get(id)?.driverAbort?.abort();r.clearCustomDrivers();rooms.delete(id);strategyRooms.delete(id);continue;}if(!r.live||r.live==='running'){r.advance(r.speed===speed?steps:realSteps);if(r.live==='running')r.driveLive(wall);}}if(now-lastBroadcast>=1000/30){lastBroadcast=now;for(const r of rooms.values())if(r.peers.size)r.broadcast();}},4);
 server.listen(port,'127.0.0.1',()=>console.log(`MCP GRAND PRIX · ${defaultRoom.race.circuit.toUpperCase()} · ${defaultRoom.matchup.toUpperCase()} · ${defaultRoom.mode.toUpperCase()} · ${speed}× race clock\n${origin}/?team=a\n${origin}/?spectate\n${origin}/?team=b\nMCP: ${origin}/mcp`));
 async function shutdown(){clearInterval(timer);for(const ws of wss.clients)ws.terminate();wss.close();server.close();await vite?.close();process.exit(0);}process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

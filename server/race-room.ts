@@ -4,13 +4,13 @@ import {strategistDue} from '../src/race/strategy-radio';
 import {pitCommitmentPoint} from '../src/race/strategy-calls';
 import {getTrack,isCircuit,type CircuitId} from '../src/race/track';
 import {createRace,dryCompoundRuleSatisfied,DT,FIA_MIN_FUEL_KG,stepRace,event,other,humanInputToControls,type DriverControls} from '../src/race/physics';
-import {TEAMS,type Team,type Race,type RaceState,type Radio,type DriverConsultRadio,type Decision,type RoomLinks,type Instruction,type ClientMessage,type ServerMessage,type DriverControlMode,type EngineerControlMode,type PeerRole,type HumanControlInput} from '../src/race/types';
+import {TEAMS,isStrategyDriver,type Team,type Race,type RaceState,type Radio,type DriverConsultRadio,type Decision,type RoomLinks,type Instruction,type ClientMessage,type ServerMessage,type DriverControlMode,type EngineerControlMode,type PeerRole,type HumanControlInput,type StrategyDriver,type JevProvider} from '../src/race/types';
 import {mockDriver,mockEngineer,autopilotIntent} from '../src/race/brains';
 import {StrategyEvents,radioInstruction,strategySummary,type DriverAnswerInput,type LiveStrategyRead,type RadioInput} from './strategy-events';
 import {createRaceDriver,createRaceEngineer,providerConfig} from './race-brains';
 import {createLunaDriver,lunaConfig} from './luna';
 import {driverRoster} from './race-drivers';
-import {isMatchup,type Matchup,type DriverInfo} from '../src/race/matchup';
+import {engineLabel,isMatchup,type Matchup,type DriverInfo} from '../src/race/matchup';
 import {invitationCode} from '../src/race/invitation';
 import {applyHazard,compounds,parseHazard,wetnessBand} from '../src/race/race-control';
 import type {RaceLogData,RaceLogEntry,RaceLogKind,RaceLogUpdate} from '../src/race/event-log';
@@ -55,7 +55,7 @@ export class RaceRoom {
  private pendingBox:Partial<Record<Team,{lap:number;instruction:Instruction;source:'mock'|'live'|'fallback';responseMs:number;strategist?:'chatgpt'}>>={};
  private awaitingChatReply=new Set<Team>();
  private driverQuestionOffered=new Set<Team>();
- private radioRevision={a:0,b:0};private manualUntil={a:0,b:0};private engineerBusy={a:false,b:false};private generation=0;private sequence=0;private jevDriver;private lunaDriver:ReturnType<typeof createLunaDriver>|null=null;private engineer;mode:'mock'|'mixed'|'live';players:Record<Team,DriverInfo>;
+ private radioRevision={a:0,b:0};private manualUntil={a:0,b:0};private engineerBusy={a:false,b:false};private generation=0;private sequence=0;private jevDriver;private lunaDriver:ReturnType<typeof createLunaDriver>|null=null;private customDrivers:Partial<Record<Team,{engine:'jev'|'luna';decide:(s:Race,team:Team,sequence:number)=>Promise<Decision>}>>={};private engineer;mode:'mock'|'mixed'|'live';players:Record<Team,DriverInfo>;
  driverMode:Record<Team,DriverControlMode>={a:'jev',b:'jev'};
  engineerMode:Record<Team,EngineerControlMode>={a:'mock',b:'mock'};
  private humanInputs:Partial<Record<Team,{input:HumanControlInput;at:number}>>={};
@@ -67,19 +67,78 @@ export class RaceRoom {
   }
   if(drive)this.driverMode.a='human';
  }
- configureStrategyLobby(circuit:CircuitId,laps:number,driver:'autopilot'|'human'):boolean{
+ private recomputeMode(){
+  const relevant=this.solo&&!this.customDrivers.b?[this.players.a]:Object.values(this.players);
+  const mockCount=relevant.filter(p=>p.mock).length;
+  this.mode=mockCount===relevant.length?'mock':mockCount===0?'live':'mixed';
+ }
+ hasCustomDriver(team:Team):boolean{
+  return Boolean(this.customDrivers[team]);
+ }
+ setCustomDriver(team:Team,input:{engine:'jev'|'luna';apiKey:string;provider?:JevProvider;intervalMs?:number},transport?:typeof fetch){
+  const apiKey=input.apiKey.trim();
+  if(!apiKey)throw new Error('API key is required.');
+  if(input.engine==='luna'){
+   const intervalMs=Math.max(200,Math.min(60000,Math.round(input.intervalMs??600)));
+   const config=lunaConfig({OPENAI_API_KEY:apiKey,LUNA_MOCK:'0',LUNA_INTERVAL_MS:String(intervalMs)});
+   this.customDrivers[team]={engine:'luna',decide:createLunaDriver(config,transport)};
+   this.players={...this.players,[team]:{engine:'luna',name:engineLabel('luna'),model:config.model,provider:'openai',mock:false,intervalMs:config.intervalMs}};
+  }else{
+   const provider=input.provider??'typesafe';
+   const envKey=provider==='typesafe'?'TYPESAFE_API_KEY':provider==='vercel'?'AI_GATEWAY_API_KEY':'OPENROUTER_API_KEY';
+   const config=providerConfig({JEV_PROVIDER:provider,[envKey]:apiKey,JEV_MOCK:'0'});
+   const intervalMs=Math.max(200,Math.min(60000,Math.round(input.intervalMs??600)));
+   this.customDrivers[team]={engine:'jev',decide:createRaceDriver(config,transport)};
+   this.players={...this.players,[team]:{engine:'jev',name:engineLabel('jev'),model:config.model,provider:config.provider,mock:false,intervalMs}};
+  }
+  this.driverMode[team]=input.engine;
+  this.drive=this.driverMode.a==='human'||this.driverMode.b==='human';
+  delete this.humanInputs[team];
+  this.decisions[team]=null;
+  this.driverStats[team]={attempts:0,successes:0,fallbacks:0};
+  this.nextDrive[team]=0;
+  this.recomputeMode();
+  this.broadcast();
+  const info=this.players[team];
+  return {engine:info.engine,provider:info.provider,model:info.model};
+ }
+ clearCustomDriver(team:Team){
+  const had=Boolean(this.customDrivers[team]);
+  delete this.customDrivers[team];
+  if(this.strategyPractice){
+   this.players={...this.players,[team]:{engine:'jev',name:'JEV',model:'mock',provider:'mock',mock:true,intervalMs:200}};
+   this.recomputeMode();
+  }else if(had){
+   const roster=driverRoster(this.env,this.matchup);
+   this.players={...this.players,[team]:roster.players[team]};
+   this.recomputeMode();
+  }
+ }
+ clearCustomDrivers(){
+  for(const team of TEAMS)if(this.customDrivers[team])this.clearCustomDriver(team);
+ }
+ configureStrategyLobby(circuit:CircuitId,laps:number,driver:StrategyDriver):boolean{
   if(!this.strategyPractice||this.live!=='running'||this.race.phase!=='lobby')return false;
   const changedRace=this.race.circuit!==circuit||this.race.laps!==laps;
   this.driverMode.a=driver;
   this.drive=this.driverMode.a==='human'||this.driverMode.b==='human';
   if(driver!=='human')delete this.humanInputs.a;
+  if(driver==='autopilot'||driver==='human'||(this.customDrivers.a&&this.customDrivers.a.engine!==driver)){
+   this.clearCustomDriver('a');
+  }
+  if(driver==='jev'||driver==='luna'){
+   if(!this.customDrivers.a){
+    this.players={...this.players,a:{engine:driver,name:engineLabel(driver),model:driver==='luna'?'gpt-6-luna':'jev-latest',provider:'mock',mock:true,intervalMs:600}};
+    this.recomputeMode();
+   }
+  }
   if(changedRace){
    this.race=createRace(laps,circuit);
   }
   this.broadcast();
   return true;
  }
- private reset(){this.generation++;this.race=createRace(this.race.laps,this.race.circuit);this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerWindow={};this.lastRivalPitEventAt={};this.lastStrategyOfferAt={};this.gapHistory={a:[],b:[]};this.observedFieldStops={a:new Map(),b:new Map()};this.lastSector={};this.pendingBox={};this.radioRevision={a:0,b:0};this.awaitingChatReply.clear();this.latestChatRadio=undefined;this.driverQuestionOffered.clear();this.driverConsultRadio=undefined;this.strategyEvents?.clearDriverQuestion();this.guestStrategyEvents?.clearDriverQuestion();this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.humanInputs={};this.captureUntil=0;this.clearEventLog();this.broadcast();}
+ private reset(){this.generation++;this.clearCustomDrivers();this.race=createRace(this.race.laps,this.race.circuit);this.decisions={a:null,b:null};this.intents={a:0,b:0};this.engineerCalls={a:0,b:0};this.engineerWindow={};this.lastRivalPitEventAt={};this.lastStrategyOfferAt={};this.gapHistory={a:[],b:[]};this.observedFieldStops={a:new Map(),b:new Map()};this.lastSector={};this.pendingBox={};this.radioRevision={a:0,b:0};this.awaitingChatReply.clear();this.latestChatRadio=undefined;this.driverQuestionOffered.clear();this.driverConsultRadio=undefined;this.strategyEvents?.clearDriverQuestion();this.guestStrategyEvents?.clearDriverQuestion();this.history=[];this.replay=[];this.bestReplayScore=0;this.manualUntil={a:0,b:0};this.humanInputs={};this.captureUntil=0;this.clearEventLog();this.broadcast();}
 
  connected(){if(this.live||this.watchMode)return {a:true,b:true};let a=false,b=this.solo;for(const p of this.peers){if(p.role==='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;if(a&&b)break;}return {a,b};}
  engineerConnected(){let a=false,b=false;for(const p of this.peers){if(p.role!=='engineer')continue;if(p.team==='a')a=true;else if(p.team==='b')b=true;}return {a,b};}
@@ -177,7 +236,7 @@ export class RaceRoom {
   this.engineerCalls[team]++;
   try{
    const result=await this.engineer(structuredClone(this.race),team,[...this.gapHistory[team]],
-    telemetry=>this.log(team,{kind:'strategy',agent:'pit-wall',stage:'requested',reasons:[reason],telemetry}));
+    (telemetry,source)=>this.log(team,{kind:'strategy',agent:'pit-wall',stage:'requested',source,reasons:[reason],telemetry}));
    if(generation!==this.generation)return;
    if(!this.live&&result.source!=='mock')this.paidCalls++;
    if(revision===this.radioRevision[team]&&window.lap===this.race.cars[team].lap&&window.change===this.strategyChange(team)&&this.race.phase==='racing')this.radio(team,result.instruction,result.source,result.responseMs);
@@ -630,23 +689,33 @@ export class RaceRoom {
   this.live=phase;
   this.strategyEvents?.clear();
   this.guestStrategyEvents?.clear();
+  for(const team of TEAMS)delete this.customDrivers[team];
   this.generation++;
   this.broadcast();
  }
 
  driveLive(now:number){
   if(this.live!=='running'||this.race.phase!=='racing')return;
-  for(const team of TEAMS)if(!(this.solo&&team==='b')&&this.driverMode[team]==='jev'&&!this.driving[team]&&now>=this.nextDrive[team]&&this.race.cars[team].finishTime===null){
-   this.driving[team]=true;
-   this.nextDrive[team]=now+this.players[team].intervalMs;
-   void this.driveLiveTeam(team).finally(()=>{this.driving[team]=false;});
+  for(const team of TEAMS){
+   const aiMode=this.driverMode[team]==='jev'||this.driverMode[team]==='luna';
+   if(!aiMode)continue;
+   if(this.solo&&team==='b'&&!this.customDrivers.b)continue;
+   if(!this.driving[team]&&now>=this.nextDrive[team]&&this.race.cars[team].finishTime===null){
+    this.driving[team]=true;
+    this.nextDrive[team]=now+this.players[team].intervalMs;
+    void this.driveLiveTeam(team).finally(()=>{this.driving[team]=false;});
+   }
   }
  }
 
  private async driveLiveTeam(team:Team){
   const revision=this.radioRevision[team],sequence=++this.driverSequence[team];
-  const engine=this.players[team].engine;
-  const decision=await (engine==='luna'?this.lunaDriver!:this.jevDriver)(structuredClone(this.race),team,sequence);
+  const custom=this.customDrivers[team];
+  const engine=custom?.engine??(this.driverMode[team]==='luna'?'luna':this.players[team].engine);
+  const driverFn=custom?.decide??(this.strategyPractice?null:(engine==='luna'?this.lunaDriver:this.jevDriver));
+  const decision:Decision=driverFn
+   ?await driverFn(structuredClone(this.race),team,sequence)
+   :{engine,source:'fallback',sequence,intent:mockDriver(this.race,team),responseMs:1,attempted:false,retryAfterMs:15000,warning:`${engineLabel(engine)} API key is not loaded in memory · using local fallback.`};
   if(this.live!=='running'||this.race.phase!=='racing')return;
   if(decision.attempted){
    const stats=this.driverStats[team];
@@ -661,10 +730,26 @@ export class RaceRoom {
  }
 
  private applyIntent(team:Team,decision:Decision){
+  const prev=this.race.cars[team].intent;
   this.race.cars[team].intent=structuredClone(decision.intent);
   this.intents[team]++;
   const {reply:spoken,...intent}=decision.intent;
-  this.log(team,{kind:'driver',engine:this.players[team].engine,source:decision.source,responseMs:decision.responseMs,sequence:decision.sequence,intent});
+  const changed:string[]=[];
+  if(prev){
+   const paceOf=(bias:number)=>bias>0?'ATTACK':bias<0?'CAUTIOUS':'NORMAL';
+   const brakeOf=(agg:number)=>agg>.7?'LATE':agg<.35?'EARLY':'NORMAL';
+   if(prev.side!==intent.side)changed.push(`Line → ${intent.side.toUpperCase()}`);
+   if(paceOf(prev.speedBias)!==paceOf(intent.speedBias))changed.push(`Pace → ${paceOf(intent.speedBias)}`);
+   if(brakeOf(prev.brakeAggression)!==brakeOf(intent.brakeAggression))changed.push(`Brake → ${brakeOf(intent.brakeAggression)}`);
+   if(prev.ers!==intent.ers)changed.push(`ERS → ${intent.ers?'DEPLOY':'HOLD'}`);
+   if(prev.drs!==intent.drs)changed.push(`DRS → ${intent.drs?'OPEN':'CLOSED'}`);
+  }
+  const player=this.players[team];
+  this.log(team,{kind:'driver',engine:player.engine,source:decision.source,responseMs:decision.responseMs,sequence:decision.sequence,
+   model:decision.api?.model??player.model,provider:decision.api?.provider??player.provider,
+   ...(decision.warning?{warning:decision.warning}:{}),
+   ...(changed.length?{changed}:{}),
+   intent});
   const text=spoken.trim();
   if(text)this.race.cars[team].lastDriverReport=text;
   const chatCall=text&&this.awaitingChatReply.has(team)?this.latestChatRadio?.[team]:undefined;
@@ -709,7 +794,7 @@ export class RaceRoom {
        const decision:Decision={sequence:this.race.tick,responseMs:0,source:'mock',intent:autopilotIntent(this.race,team)};
        this.decisions[team]=decision;
        this.applyIntent(team,decision);
-      }else if((this.solo&&team==='b')||this.watchMode){
+      }else if(((this.solo&&team==='b')||this.watchMode)&&!this.customDrivers[team]){
        const decision:Decision={sequence:this.race.tick,responseMs:0,source:'mock',intent:mockDriver(this.race,team)};
        this.decisions[team]=decision;
        this.applyIntent(team,decision);
@@ -764,6 +849,7 @@ export class RaceRoom {
     if(msg.type==='driver-mode'&&p.team&&p.role==='driver'&&(msg.mode==='human'||msg.mode==='autopilot')&&this.driverMode[p.team]!==msg.mode){
      this.driverMode[p.team]=msg.mode;
      if(msg.mode!=='human')delete this.humanInputs[p.team];
+     this.clearCustomDriver(p.team);
      if(this.race.phase==='racing'){
       event(this.race,'radio',p.team,msg.mode==='human'?'MANUAL CONTROL · YOU ARE DRIVING':'AUTOPILOT ENGAGED');
      }
