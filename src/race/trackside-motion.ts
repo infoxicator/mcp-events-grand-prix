@@ -62,6 +62,10 @@ export function tracksideMotion(){
     if(uv.x>.86){vColor.rgb=mix(vColor.rgb,vec3(.98,.71,.035),yellowFlag);}
     #endif`).replace('float swing=mix','signal=max(signal,yellowFlag);float swing=mix');
    }
+   if(name==='GarageUniform')shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+    #if defined(USE_INSTANCING_COLOR) && defined(USE_COLOR)
+     if(uv.y<.5)vColor.rgb=color.rgb;
+    #endif`);
    if(seated)shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
     #if defined(USE_INSTANCING) && defined(USE_COLOR)
      vec2 seat=(modelMatrix*instanceMatrix[3]).xz;

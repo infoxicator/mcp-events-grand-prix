@@ -233,7 +233,7 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
  const heroSheet=team==='b'?liveryAtlas([playerEntry(team)],1.5):null;
  const helmetMap=helmetLivery(team),discHeat={value:0};
  let wheelBrand:T.CanvasTexture|undefined;
- const flagRows:T.MeshBasicMaterial[][]=[],rams:T.Mesh[]=[];
+ const lampColor=new T.Color(),rams:T.Mesh[]=[];
  let brakeHeat=0,lastHeatTime=0;
  // Keep the map shader variant stable when the rear camera supplies its first image.
  const mirrorFallback=import.meta.env.MCP_APP==='true'?new T.DataTexture(new Uint8Array([255,255,255,255]),1,1):null;
@@ -241,7 +241,7 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
  const mirrorFaces=new Set<T.Mesh>(),mirrors:T.MeshPhysicalMaterial[]=[];
  type RigNodes={model:T.Group;hubs:(T.Object3D|undefined)[];knuckles:(T.Object3D|undefined)[];hands:T.Object3D|undefined;suit:T.Object3D|undefined;helmet:T.Object3D|undefined;steering:T.Object3D|undefined;drs:T.Object3D|undefined};
  const rigidUpdates:ReturnType<typeof rigidCarParts>[]=[];
- const rigs:T.Group[]=[],rigNodes:RigNodes[]=[],dashTextures:T.CanvasTexture[]=[],dashContexts:CanvasRenderingContext2D[]=[],lights:T.MeshBasicMaterial[][]=[];
+ const rigs:T.Group[]=[],rigNodes:RigNodes[]=[],dashTextures:T.CanvasTexture[]=[],dashContexts:CanvasRenderingContext2D[]=[],lights:T.InstancedMesh[]=[];
  const deformations:((panels:PanelDamage)=>void)[]=[];
  const intact:PanelDamage=[0,0,0,0];let previousPanels:PanelDamage=intact;
  function attachWireShell(){
@@ -343,11 +343,11 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
     p.roughness=.65;p.metalness=.45;finishRotor(p,discHeat);
    }
    if(p.name==='Sleeve'){p.bumpMap=fabricMap;p.bumpScale=.00024;p.color.set(team==='a'?'#851d2a':'#293337');p.roughness=.95;p.sheen=.4;}
-   if(p.name==='AeroLaminate'||p.name==='Upper flap laminate'){p.color.set(team==='a'?'#15191d':'#343a40');p.bumpMap=carbonMap;p.bumpScale=.00009;p.roughness=.55;p.metalness=.08;p.clearcoat=.07;p.clearcoatRoughness=.42;p.specularIntensity=.29;p.envMapIntensity=.64;}
+   if(p.name==='AeroLaminate'||p.name==='Upper flap laminate'){p.color.set(team==='a'?'#15191d':'#343a40');p.roughness=.55;p.metalness=.08;p.clearcoat=.07;p.clearcoatRoughness=.42;p.specularIntensity=.29;p.envMapIntensity=.64;}
    if(p.name==='AeroLaminate')p.color.multiplyScalar(1.505);
    if(p.name==='Upper flap laminate'){p.color.multiplyScalar(1.248);p.specularIntensity=.21;}
    if(p.name==='Nose lower laminate'){p.color.multiplyScalar(1.778);p.specularIntensity=.22;p.envMapIntensity=.49;}
-   if(p.name==='Carbon'||p.name==='FloorFence'){p.color.set('#3d4145');p.bumpMap=carbonMap;p.bumpScale=.00022;p.roughness=.55;p.metalness=.085;p.clearcoat=.055;p.specularIntensity=.46;p.envMapIntensity=.78;}
+   if(p.name==='Carbon'||p.name==='FloorFence'){p.color.set('#3d4145');p.roughness=.55;p.metalness=.085;p.clearcoat=.055;p.specularIntensity=.46;p.envMapIntensity=.78;}
    if(p.name==='VisorInk'&&team==='b'){
     if(!wheelBrand){const plate=document.createElement('canvas');plate.width=1024;plate.height=240;const ink=plate.getContext('2d')!;
      ink.font='italic bold 130px Arial';ink.textAlign='center';ink.fillStyle='#dce4e5';ink.fillText('AMG PETRONAS',512,169,965);
@@ -655,9 +655,17 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
    const glass=new T.Mesh(display.geometry,new T.MeshPhysicalMaterial({color:'#10161a',roughness:.12,metalness:.42,transparent:true,opacity:.095,depthWrite:false,clearcoat:1,clearcoatRoughness:.09}));
    glass.position.copy(display.position);glass.position.z-=.0009;glass.rotation.copy(display.rotation);steering.add(glass);instruments.push(glass);originals.set(glass,glass.material);
    const ledGeo=new T.SphereGeometry(.0037,10,6);
-   const row:T.MeshBasicMaterial[]=[];for(let i=0;i<12;i++){const lm=new T.MeshBasicMaterial({color:'#14211a',toneMapped:false});const led=new T.Mesh(ledGeo,lm);led.position.set(-.012+(5.5-i)*.010,.060,-.039);steering.add(led);instruments.push(led);originals.set(led,lm);row.push(lm);}lights.push(row);
-   const flags:T.MeshBasicMaterial[]=[];for(const side of [-1,1])for(let i=0;i<3;i++){const lm=new T.MeshBasicMaterial({color:'#15191a',toneMapped:false}),led=new T.Mesh(ledGeo,lm);
-    led.position.set(-.012+side*.089,.021+i*.011,-.041);steering.add(led);instruments.push(led);originals.set(led,lm);flags.push(lm);}flagRows.push(flags);
+   const materialLED=new T.MeshBasicMaterial({toneMapped:false});
+   const lamps=new T.InstancedMesh(ledGeo,materialLED,18);
+   const placement=new T.Matrix4();
+   for(let i=0;i<18;i++){
+    if(i<12)placement.makeTranslation(-.012+(5.5-i)*.010,.060,-.039);
+    else placement.makeTranslation(-.012+(i<15?-1:1)*.089,.021+(i%3)*.011,-.041);
+    lamps.setMatrixAt(i,placement);
+    lamps.setColorAt(i,lampColor.set(i<12?'#112019':'#172021'));
+   }
+   lamps.instanceColor!.setUsage(T.DynamicDrawUsage);
+   steering.add(lamps);instruments.push(lamps);originals.set(lamps,materialLED);lights.push(lamps);
   }
  });ready=true;setFinish(finish);}).catch(e=>{error=String(e);console.error('Car asset failed',e);});
  let dashKey='',lastDash=-1,lastLodLevel=-1,lastCockpitDetail:boolean|undefined;
@@ -767,8 +775,14 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
     }
     dashKey=key;
     const rpm=studio?0:c.rpm??(c.speed?10500:0),n=Math.round(T.MathUtils.clamp((rpm-7500)/4500,0,1)*12);
-    for(const row of flagRows)for(const lamp of row)lamp.color.set(!studio&&now%560<360?(flag==='yellow'?'#ffcb1a':flag==='blue'?'#3681ff':flag==='red'?'#ff3530':'#172021'):'#172021');
-    for(let i=0;i<lights.length;i++)lights[i].forEach((m,j)=>m.color.set(j<n?(j<4?'#63ff87':j<8?'#ff4549':'#709aff'):'#112019'));
+    const flagColor=!studio&&now%560<360?(flag==='yellow'?'#ffcb1a':flag==='blue'?'#3681ff':flag==='red'?'#ff3530':'#172021'):'#172021';
+    for(const lamps of lights){
+     for(let j=0;j<lamps.count;j++){
+      const color=j>=12?flagColor:j>=n?'#112019':j<4?'#63ff87':j<8?'#ff4549':'#709aff';
+      lamps.setColorAt(j,lampColor.set(color));
+     }
+     lamps.instanceColor!.needsUpdate=true;
+    }
    }
   }
  },dispose(){

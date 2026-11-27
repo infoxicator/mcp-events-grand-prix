@@ -1,6 +1,6 @@
 {
   "source": "scripts/blender/build_car.py",
-  "highTriangles": 243569,
+  "highTriangles": 224681,
   "dimensions": {
     "length": 5.62,
     "width": 2.0,

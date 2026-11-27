@@ -16,7 +16,7 @@ im.putalpha(mask.resize(im.size,Image.Resampling.LANCZOS));save(im,'fence')
 im=Image.new('RGB',(256,256),(134,124,108));d=ImageDraw.Draw(im)
 for i in range(20000):
  x=random.randrange(256);y=random.randrange(256);v=random.randrange(85,180);r=random.randrange(1,3);d.ellipse((x,y,x+r,y+r),fill=(v,int(v*.94),int(v*.82)))
-save(im,'gravel')
+
 im=Image.new('RGB',(1024,128),(24,31,35));d=ImageDraw.Draw(im);f=ImageFont.truetype(font,62);d.text((30,25),'NEXUS  /  MCP GRAND PRIX',font=f,fill=(240,234,210));save(im,'sign')
 im=Image.new('RGB',(1024,96),(21,32,38));d=ImageDraw.Draw(im)
 d.rectangle((0,87,1024,91),fill=(175,145,89))
@@ -88,7 +88,7 @@ texture([79,98,55],blades*12+macro*3+3*np.cos(xx*phase*2)).save(out.parent/'gras
 ridge=np.cos(phase*(yy*24+xx*2)+.17*np.sin(xx*phase*3))
 grit=rng.normal(0,1,(size,size))
 pebbles=texture([137,119,97],grit*16+11*ridge+3*macro)
-pebbles.save(out/'gravel.png',optimize=True)
+pebbles.save(out/'gravel.jpg',quality=89)
 normal_map(ridge*12+grit*.59,.39).save(out/'raked-normal.jpg',quality=91)
 margin=pebbles.convert('RGBA')
 coverage=np.clip((.82-xx/size+.10*macro+grit*.12)*2.2,0,1)

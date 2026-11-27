@@ -108,7 +108,7 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
     bpy.ops.object.modifier_apply(modifier=fuse.name)
     smooth=skin.modifiers.new('Blend finger webs','SMOOTH');smooth.factor=.82;smooth.iterations=6
     bpy.ops.object.modifier_apply(modifier=smooth.name)
-    reduce=skin.modifiers.new('Preserve knuckle profile','DECIMATE');reduce.ratio=.147
+    reduce=skin.modifiers.new('Preserve knuckle profile','DECIMATE');reduce.ratio=.021
     bpy.ops.object.modifier_apply(modifier=reduce.name)
     side=-1 if suffix=='L' else 1
     colors=skin.data.color_attributes.new(name='Racewear',type='BYTE_COLOR',domain='POINT')

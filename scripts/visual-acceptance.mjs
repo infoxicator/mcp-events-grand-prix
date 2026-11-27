@@ -285,7 +285,8 @@ try{
    window.studio=async()=>{
     scene.dispose();v.replaceChildren();const renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(1920,1080);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;renderer.shadowMap.enabled=true;v.appendChild(renderer.domElement);
     const [{createShowroom},{createCar},{liveryAtlas}]=await Promise.all(['showroom','car-model','liveries'].map(mod));
-    const room=createShowroom(renderer),atlas=liveryAtlas(),cars={a:createCar('a',track,atlas),b:createCar('b',track,atlas)};
+    const studioMorph=source=>{const geometry=source.clone();geometry.userData.shared=false;return geometry;};
+    const room=createShowroom(renderer),atlas=liveryAtlas(),cars={a:createCar('a',track,atlas,studioMorph),b:createCar('b',track,atlas,studioMorph)};
     await Promise.all(Object.values(cars).map(c=>c.loaded));
     if(!await room.contactReady)throw Error('Could not load the studio floor contact map');
     const camera=new T.PerspectiveCamera(36,16/9,.06,100);

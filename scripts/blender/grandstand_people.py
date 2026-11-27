@@ -14,13 +14,13 @@ def spectator_mesh(material,pose,distant=False,engineer_colour=None):
         for a,b in zip(rings,rings[1:]):
             for k in range(len(a)):faces.append((a[k],a[(k+1)%len(a)],b[(k+1)%len(a)],b[k]))
         faces.append(tuple(reversed(rings[0])));faces.append(tuple(rings[-1]))
-    sides=5 if distant else 10
+    sides=5 if distant else 6
     def tube(a,b,ra,rb,group,col):
         a,b=Vector(a),Vector(b);axis=(b-a).normalized();u=axis.cross(Vector((0,0,1)))
         if u.length<.01:u=axis.cross(Vector((1,0,0)))
         u.normalize();v=axis.cross(u)
-        n=4 if distant else 7
-        profile=[(0,ra),(1,rb)] if distant else [(0,ra),(.55,(ra+rb)*.55),(1,rb)]
+        n=4
+        profile=[(0,ra),(1,rb)]
         link([[vert(a+(b-a)*t+(u*math.cos(k*math.tau/n)+v*math.sin(k*math.tau/n))*r,col,group) for k in range(n)] for t,r in profile])
     def shape(rows,group,col,upper=False,head=False):
         rings=[]
@@ -60,7 +60,7 @@ def spectator_mesh(material,pose,distant=False,engineer_colour=None):
             tube(torso((side*.16,.34,0)),torso((side*.20,.10,.12)),.072,.05,0,shirt)
     else:
         shape([(0,0,0,.15,.105),(0,.13,0,.171,.12),(0,.31,.01,.197,.121),(0,.378,0,.175,.103),(0,.423,.005,.072,.068)],0,shirt,True)
-        shape([(0,.40,.01,.063,.062),(0,.463,.020,.052,.069),(0,.482,.024,.073,.082),(0,.515,.027,.087,.089),(0,.55,.025,.091,.094),(0,.581,.017,.087,.096),(0,.603,.008,.088,.089),(0,.638,0,.061,.065)],1,skin,True,True)
+        shape([(0,.40,.01,.063,.062),(0,.482,.024,.073,.082),(0,.55,.025,.091,.094),(0,.603,.008,.088,.089),(0,.638,0,.061,.065)],1,skin,True,True)
         shape([(0,.513,.112,.018,.014),(0,.54,.111,.014,.016)],1,skin,True,True)
         shape([(0,.58,-.002,.09,.091),(0,.628,-.005,.081,.083),(0,.652,-.005,.045,.047)],2,hair,True,True)
         if pose in (0,4,7,9):

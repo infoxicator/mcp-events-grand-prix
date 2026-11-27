@@ -53,6 +53,14 @@ try{
   await new Promise((ok,fail)=>{function warm(){scene.render(frames[0],performance.now());if(scene.info.modelError)fail(Error(scene.info.modelError));else if(scene.info.modelsReady)ok();else requestAnimationFrame(warm);}warm();});
   const output=document.createElement('canvas');output.width=innerWidth;output.height=innerHeight;
   const ctx=output.getContext('2d'),raceCanvas=document.querySelector('canvas');
+  window.repairFrame=()=>{
+   const frame=structuredClone(frames[35]),box=track.PIT_STOP-200+28*7;
+   Object.assign(frame.cars.a,{finishTime:null,pit:'stopped',distance:box,offset:-23,pitTime:2.04,totalStop:5.1,speed:0,damage:[.95,.95,0,0]});
+   for(const c of frame.field){c.pit='none';c.distance=box+100;}
+   frames.push(frame);
+   camera(box+5.1,-18.4,2.3,box,-23,1.10,47);
+   return window.draw(frames.length-1,'image/png');
+  };
   window.draw=(i,type)=>{
    scene.render(frames[i],50000+i*1000/30);
    ctx.drawImage(raceCanvas,0,0,output.width,output.height);
@@ -64,12 +72,15 @@ try{
  for(let i=0;i<frames.length;i++){
   const img=await page.evaluate(i=>window.draw(i,'image/jpeg'),i);
   if(!encoder.stdin.write(Buffer.from(img,'base64')))await once(encoder.stdin,'drain');
-  if(i===35)await writeFile(out+'/parallel.png',Buffer.from(await page.evaluate(i=>window.draw(i,'image/png'),i),'base64'));
+  const still=i===5?'entry':i===35?'parallel':i===75?'exit':null;
+  if(still)await writeFile(out+'/'+still+'.png',Buffer.from(await page.evaluate(i=>window.draw(i,'image/png'),i),'base64'));
  }
  encoder.stdin.end();if((await done)[0])throw Error('Video encoding failed');
  for(const name of ['timing-stand','idle-gantries','crew']){
   const png=await page.evaluate(name=>{window.inspectPit(name);return window.draw(35,'image/png');},name);
   await writeFile(out+'/'+name+'.png',Buffer.from(png,'base64'));
  }
+ const repair=await page.evaluate(()=>window.repairFrame());
+ await writeFile(out+'/wing-repair.png',Buffer.from(repair,'base64'));
  if(errors.length)throw Error('Capture failed '+errors.join('\n'));
 }finally{await browser.close();}

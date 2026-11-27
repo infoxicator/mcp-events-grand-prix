@@ -38,7 +38,7 @@ def build(cid):
   m=bpy.data.materials.new(name);m.use_nodes=True;bs=m.node_tree.nodes.get('Principled BSDF');bs.inputs['Base Color'].default_value=(*color,1);bs.inputs['Roughness'].default_value=rough;bs.inputs['Metallic'].default_value=metal
   if emission:bs.inputs['Emission Color'].default_value=(*color,1);bs.inputs['Emission Strength'].default_value=emission
   if tex:
-   p=OUT/(tex+'.png') if tex not in ('asphalt-color','grass-color') else ROOT/'src/race/assets'/(tex+'.jpg')
+   p=OUT/(tex+('.jpg' if tex=='gravel' else '.png')) if tex not in ('asphalt-color','grass-color') else ROOT/'src/race/assets'/(tex+'.jpg')
    if tex.endswith(('-timing','-garage')) or tex.startswith('upper-') or tex in ('formed-concrete','garage-backplate','resort-facade','hospitality-glass','desert-district'):p=OUT/(tex+'.jpg')
    node=m.node_tree.nodes.new('ShaderNodeTexImage');node.image=bpy.data.images.load(str(p),check_existing=True);m.node_tree.links.new(node.outputs['Color'],bs.inputs['Base Color'])
    if emission:m.node_tree.links.new(node.outputs['Color'],bs.inputs['Emission Color'])
@@ -164,13 +164,13 @@ def build(cid):
 
  def rod(a,b,r,m,sides=5):
   nonlocal instance_triangles
-  if m=='Trunk':
+  if m=='Trunk' or (night and m=='Steel' and abs(b[1]-a[1])>=10 and a[0]==b[0] and a[2]==b[2]):
    key=(m,sides,0,0);mesh=prototypes.get(key)
    if mesh is None:
-    vv=[(math.cos(i*math.tau/sides),math.sin(i*math.tau/sides),z) for z in [-.5,.5] for i in range(sides)];ff=[(i,(i+1)%sides,(i+1)%sides+sides,i+sides) for i in range(sides)];mesh=bpy.data.meshes.new('Shared branch');mesh.from_pydata(vv,[],ff);mesh.materials.append(mats[m]);mesh.update()
+    vv=[(math.cos(i*math.tau/sides),math.sin(i*math.tau/sides),z) for z in [-.5,.5] for i in range(sides)];ff=[(i,(i+1)%sides,(i+1)%sides+sides,i+sides) for i in range(sides)];mesh=bpy.data.meshes.new('Shared '+m+' rod');mesh.from_pydata(vv,[],ff);mesh.materials.append(mats[m]);mesh.update()
     for poly in mesh.polygons:poly.use_smooth=True
     prototypes[key]=mesh
-   aa=Vector((a[0],-a[2],a[1]));bb=Vector((b[0],-b[2],b[1]));o=bpy.data.objects.new('Instance_Trunk',mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(aa+bb)/2;o.rotation_euler=(bb-aa).to_track_quat('Z','Y').to_euler();o.scale=(r,r,(bb-aa).length);instance_triangles+=sides*2;return
+   aa=Vector((a[0],-a[2],a[1]));bb=Vector((b[0],-b[2],b[1]));o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(aa+bb)/2;o.rotation_euler=(bb-aa).to_track_quat('Z','Y').to_euler();o.scale=(r,r,(bb-aa).length);instance_triangles+=sides*2;return
   av=Vector(a);bv=Vector(b);axis=(bv-av).normalized();u=axis.cross(Vector((0,1,0)))
   if u.length<.001:u=axis.cross(Vector((1,0,0)))
   u.normalize();v=axis.cross(u);rings=[[tuple(p+r*(u*math.cos(i*math.tau/sides)+v*math.sin(i*math.tau/sides))) for i in range(sides)] for p in [av,bv]]
@@ -509,9 +509,8 @@ def build(cid):
   value=stall['colour'].lstrip('#')
   srgb=[int(value[k:k+2],16)/255 for k in (0,2,4)]
   linear=tuple(c/12.92 if c<=.04045 else ((c+.055)/1.055)**2.4 for c in srgb)
-  name=f"Garage{stall['bay']}Uniform"
-  mats[name]=mats['PitCrewUniform'].copy();mats[name].name=name
-  uniforms[stall['bay']]=(linear,name)
+  uniforms[stall['bay']]=linear
+ mats['GarageUniform']=mats['PitCrewUniform'].copy();mats['GarageUniform'].name='GarageUniform'
  def lounge(d,front,h):
   # Place seating, cafe tables and continuous lighting behind the glazing.
   atbox(d,front-3.7,h+1.16,(.16,2.32,27.7),'LoungeWall')
@@ -571,7 +570,7 @@ def build(cid):
     atbox(station,-12.87,1.36,(.52,.12,.50),'Cabinet')
     atbox(station,-12.64,1.49,(.08,.24,.46),'Dark')
     v=sample(station);yaw=math.atan2(v['tx'],v['tz'])+math.pi/2
-    spectator(pt(station,-12.89,1.40),1.05,yaw,'PitWallEngineer',1,uniforms[i][0])
+    spectator(pt(station,-12.89,1.40),1.05,yaw,'PitWallEngineer',1,uniforms[i])
     atbox(station,-13.65,1.94,(.11,.50,1.26),'Dark')
     atbox(station,-13.58,1.94,(.025,.43,1.18),'TimingScreen')
    for j in [-3.32,3.32]:
@@ -611,7 +610,7 @@ def build(cid):
    atbox(d+j,-24.65,.12,(.5,.16,7.2),'Concrete')
    for k in [-4.2,4.2]:atbox(d+j+k,-24.9,2.2,(.25,4.4,.22),'White')
   heading=sample(d);yaw=math.atan2(heading['tx'],heading['tz'])-math.pi/2
-  kit,uniform=uniforms.get(i,((.031,.09,.14),'PitCrewUniform'))
+  kit,uniform=((1,1,1),'GarageUniform') if i in uniforms else ((.031,.09,.14),'PitCrewUniform')
   staff('crew',pt(d,-26.3,.104),yaw+.24,kit,uniform)
   staff('crew',pt(d+1.25,-27.1,.104),yaw-.59,kit,uniform,alternate=True)
   lounge(d,-24.9,4.72)
@@ -843,16 +842,28 @@ def build(cid):
    for side in [-1,1]:
     off=side*(25+4*math.sin(d));x,g,z=pt(d,off);h=7.8+2.7*math.sin(d*1.37)
     tip=(x+.65,g+h,z+.38);rod((x,g,z),tip,.19,'Trunk',7)
-    for j in range(8):
-     a=j*math.tau/8+d;width=.37;reach=3.1+.55*math.sin(d+j)
-     def blade(t,w):
-      return (tip[0]+reach*t*math.cos(a)-w*math.sin(a),tip[1]+1.1*math.sin(t*math.pi)-1.05*t*t,tip[2]+reach*t*math.sin(a)+w*math.cos(a))
-     for k in range(9):
-      t=k/9;u=(k+1)/9
-      face([blade(t,-.036),blade(u,-.024),blade(u,.024),blade(t,.036)],'PalmFrond')
-      for wing in [-1,1]:
-       width=.57*math.sin(math.pi*(t+.09))**.7
-       face([blade(t,0),blade(min(1,u+.13),width*wing),blade(u,.03*wing)],'PalmFrond')
+    key=('PalmFrond',)
+    if key not in prototypes:
+     verts=[];polys=[]
+     for j in range(8):
+      angle=j*math.tau/8;reach=3.1+.55*math.sin(j)
+      def blade(t,w):
+       dx=reach*t*math.cos(angle)-w*math.sin(angle)
+       dz=reach*t*math.sin(angle)+w*math.cos(angle)
+       verts.append((dx,-dz,1.1*math.sin(t*math.pi)-1.05*t*t))
+       return len(verts)-1
+      for k in range(9):
+       t=k/9;u=(k+1)/9
+       polys.append((blade(t,-.036),blade(u,-.024),blade(u,.024),blade(t,.036)))
+       for wing in (-1,1):
+        width=.57*math.sin(math.pi*(t+.09))**.7
+        polys.append((blade(t,0),blade(min(1,u+.13),width*wing),blade(u,.03*wing)))
+     crown=bpy.data.meshes.new('Date palm crown');crown.from_pydata(verts,[],polys)
+     crown.materials.append(mats['PalmFrond']);crown.update();prototypes[key]=crown
+    crown=prototypes[key];palm=bpy.data.objects.new('Instance_PalmFrond',crown)
+    bpy.context.collection.objects.link(palm);palm.parent=instanceRoot
+    palm.location=(tip[0],-tip[2],tip[1]);palm.rotation_euler.z=-d
+    instance_triangles+=sum(len(poly.vertices)-2 for poly in crown.polygons)
   # A distant basin rim frames the low-rise city. Use broad folds, with
   # independent lower foothills and upper ridges to preserve depth at night.
   for layer in range(2):
@@ -1227,11 +1238,11 @@ def build(cid):
   bpy.context.collection.objects.link(obj)
  # Garage staff and track officials keep their uniforms and flag at distance.
  # The close meshes retain their complete equipment and faces.
- for material in ['PitCrewUniform','MarshalUniform','FinishUniform',*[name for _,name in uniforms.values()]]:
+ for material in ['PitCrewUniform','MarshalUniform','FinishUniform','GarageUniform']:
   mesh=next(mesh for key,mesh in prototypes.items() if key[0] in ('crew','marshal','finish') and mesh.materials[0].name==material)
   obj=bpy.data.objects.new('LOD_Staff'+material,mesh.copy());bpy.context.collection.objects.link(obj)
   bpy.context.view_layer.objects.active=obj
-  mod=obj.modifiers.new('Distant staff silhouette','DECIMATE');mod.ratio=.035
+  mod=obj.modifiers.new('Distant staff silhouette','DECIMATE');mod.ratio=min(1,330/max(1,sum(len(f.vertices)-2 for f in obj.data.polygons)))
   bpy.ops.object.modifier_apply(modifier=mod.name)
  # Authored distant crown LODs; runtime uses these meshes, never generated substitutes.
  if not night:

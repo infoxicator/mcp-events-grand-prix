@@ -25,26 +25,29 @@ def staff_mesh(role, material, kit, alternate=False):
 
     def vertex(p,colour,group,span=0,art=(.96,.327)):
         x,y,z=p
-        positions.append((x,-z,y));colours.append((*colour,1));controls.append((group,1-span))
+        positions.append((x,-z,y));colours.append((*colour,1))
+        # The garage shirt uses this spare articulation channel for its team tint.
+        uniform_panel=material.name=='GarageUniform' and art[1]<.32 and art[0]>=.613
+        controls.append((group,0 if uniform_panel else 1-span))
         artwork.append(((art[0]+int(alternate))*.5,art[1]))
         return len(positions)-1
 
     def loft(rows,colour,group=0):
         rings=[]
         for x,y,z,rx,rz in rows:
-            rings.append([vertex((x+rx*math.cos(k*math.tau/12),y,z+rz*math.sin(k*math.tau/12)),colour,group) for k in range(12)])
+            rings.append([vertex((x+rx*math.cos(k*math.tau/8),y,z+rz*math.sin(k*math.tau/8)),colour,group) for k in range(8)])
         for a,b in zip(rings,rings[1:]):
-            for k in range(12):faces.append((a[k],b[k],b[(k+1)%12],a[(k+1)%12]))
+            for k in range(8):faces.append((a[k],b[k],b[(k+1)%8],a[(k+1)%8]))
         faces.extend([tuple(rings[0]),tuple(reversed(rings[-1]))])
 
     def limb(a,b,r1,r2,colour,group=0):
         a,b=Vector(a),Vector(b);axis=(b-a).normalized()
         u=axis.cross(Vector((0,0,1))).normalized();v=axis.cross(u)
         rings=[]
-        for t,r in ([(0,r1*.82),(.12,r1),(.40,.62*r1+.40*r2),(.52,.48*r1+.45*r2),(.60,.41*r1+.68*r2),(.68,.29*r1+.66*r2),(.76,r2*1.09),(.86,r2*.93),(1,r2)] if colour==suit else [(0,r1*.82),(.13,r1),(.73,r2*1.06),(1,r2)]):
-            rings.append([vertex(a+(b-a)*t+r*(u*math.cos(k*math.tau/10)+v*math.sin(k*math.tau/10)),colour,group,art=(.613+.352*k/10,1-(533+209*t)/768) if colour==suit else (.96,.327)) for k in range(10)])
+        for t,r in ([(0,r1),(.55,(r1+r2)*.52),(1,r2)] if colour==suit else [(0,r1),(1,r2)]):
+            rings.append([vertex(a+(b-a)*t+r*(u*math.cos(k*math.tau/6)+v*math.sin(k*math.tau/6)),colour,group,art=(.613+.352*k/6,1-(533+209*t)/768) if colour==suit else (.96,.327)) for k in range(6)])
         for a,b in zip(rings,rings[1:]):
-            for k in range(10):faces.append((a[k],a[(k+1)%10],b[(k+1)%10],b[k]))
+            for k in range(6):faces.append((a[k],a[(k+1)%6],b[(k+1)%6],b[k]))
         faces.extend([tuple(reversed(rings[0])),tuple(rings[-1])])
 
     def panel(cx,y,width,height,row):
@@ -64,30 +67,30 @@ def staff_mesh(role, material, kit, alternate=False):
         # Uneven bias creases gather at the waistband. Padding smooths out at the shoulders.
         profile=[(.83,.17,.12),(.97,.20,.135),(1.10,.18,.12),(1.25,.209,.147),(1.32,.224,.153),(1.405,.218,.13),(1.475,.075,.072)]
         prev=None
-        for j in range(35):
-            y=.83+j*(1.475-.83)/34
+        for j in range(10):
+            y=.83+j*(1.475-.83)/9
             k=next((k for k in range(len(profile)-1) if y<=profile[k+1][0]),len(profile)-2)
             ay,ax,az=profile[k];by,bx,bz=profile[k+1];f=(y-ay)/(by-ay)
             rx=ax+(bx-ax)*f;rz=az+(bz-az)*f;ring=[]
-            for n in range(32):
-                a=n*math.tau/32
+            for n in range(12):
+                a=n*math.tau/12
                 fold=.0075*math.exp(-((y-1.13)/.115)**2)*math.sin(y*105+2.2*math.sin(2*a))+.0034*math.sin(a*9+y*18)
                 tint=1+.11*fold/.01;cloth=navy if y>=1.425 else suit
-                ring.append(vertex(((rx+fold)*math.cos(a),y,(rz+fold)*math.sin(a)),tuple(v*tint for v in cloth),0,art=(.613+.352*n/32,1-(533+209*j/34)/768)))
+                ring.append(vertex(((rx+fold)*math.cos(a),y,(rz+fold)*math.sin(a)),tuple(v*tint for v in cloth),0,art=(.613+.352*n/12,1-(533+209*j/9)/768)))
             if prev:
-                for n in range(32):faces.append((prev[n],ring[n],ring[(n+1)%32],prev[(n+1)%32]))
+                for n in range(12):faces.append((prev[n],ring[n],ring[(n+1)%12],prev[(n+1)%12]))
             prev=ring
     def face_projection():
         # Jaw, zygomatic arches, brow ridge, eye sockets, nasal bridge, lips and chin.
         profile=[(1.501,.044,.057),(1.518,.064,.079),(1.547,.081,.090),(1.586,.091,.098),(1.624,.099,.103),(1.672,.097,.105),(1.721,.088,.101),(1.754,.072,.084)]
         prev=None
-        for j in range(31):
-            y=1.501+.253*j/30
+        for j in range(10):
+            y=1.501+.253*j/9
             k=next((k for k in range(len(profile)-1) if y<=profile[k+1][0]),len(profile)-2)
             ay,ax,az=profile[k];by,bx,bz=profile[k+1];f=(y-ay)/(by-ay)
             rx=ax+(bx-ax)*f;rz=az+(bz-az)*f;ring=[]
-            for n in range(44):
-                a=math.tau*n/44;c=math.cos(a);x=rx*math.sin(a)
+            for n in range(14):
+                a=math.tau*n/14;c=math.cos(a);x=rx*math.sin(a)
                 def bump(cx,cy,w,h):return math.exp(-((abs(x)-cx)/w)**2-((y-cy)/h)**2)
                 shape=.032*bump(0,1.597,.017,.031)+.016*bump(0,1.632,.011,.042)+.009*bump(.021,1.594,.010,.009)-.009*bump(.042,1.649,.022,.012)+.008*bump(.050,1.671,.033,.010)+.01*bump(.057,1.612,.032,.015)+.007*bump(0,1.557,.040,.013)+.008*bump(0,1.522,.026,.014)
                 z=.014+rz*c+max(c,0)**1.3*shape
@@ -96,7 +99,7 @@ def staff_mesh(role, material, kit, alternate=False):
                 if c<0:u=.78 if x>0 else .22;v=.14
                 ring.append(vertex((x,y,z),(.97,.94,.94),1/3,art=(u,1-v*512/768)))
             if prev:
-                for n in range(44):faces.append((prev[n],prev[(n+1)%44],ring[(n+1)%44],ring[n]))
+                for n in range(14):faces.append((prev[n],prev[(n+1)%14],ring[(n+1)%14],ring[n]))
             prev=ring
     for side in [-1,1]:
         x=side*.133;z=.072 if side<0 else -.07

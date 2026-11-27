@@ -263,6 +263,9 @@ faces.append(tuple(reversed(prev)));make('ServiceNose')
 # Each mesh can be inspected individually in the native file.
 for i,o in enumerate(parts):o.location.x=i*.65
 bpy.ops.wm.save_as_mainfile(filepath=str(root/'scripts/blender/pit-equipment.blend'))
+# Keep the suit bind meshes in the native file for build_service_suit.py.
+for part in parts:
+    part.select_set(part.name not in {'Torso','Arm','Leg','AirHose','HoseBoom'})
 raw=Path('/tmp/jgp-service-kit.glb')
-bpy.ops.export_scene.gltf(filepath=str(raw),export_format='GLB',export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_yup=True,export_cameras=False,export_lights=False)
+bpy.ops.export_scene.gltf(filepath=str(raw),export_format='GLB',use_selection=True,export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_yup=True,export_cameras=False,export_lights=False)
 pack(raw,out/'pit-equipment.glb.gz')

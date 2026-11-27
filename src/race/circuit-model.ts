@@ -1,5 +1,7 @@
 import {batchCircuit,batchDistantInstances} from './embedded-batches';
 import {MeshResources} from './mesh-resources';
+import {constructors} from './grid';
+import {pitBox,type Constructor} from './pit-service';
 import {wetRoad} from './wet-road';
 import {circuitSignals} from './circuit-signals';
 import vegasSurvey from './assets/circuits/las-vegas-manifest.json';
@@ -132,6 +134,9 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
    for(let i=0;i<count;i++){const matrix=new T.Matrix4();if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);matrix.premultiply(o.matrixWorld);const p=new T.Vector3().setFromMatrixPosition(matrix),key=`${o.geometry.uuid}:${(o.material as T.Material).uuid}:${Math.floor(p.x/180)}:${Math.floor(p.z/180)}`;const group=buckets.get(key)??[];group.push({mesh:o,matrix});buckets.set(key,group);}
   }});
   for(const o of sources){let parent=o.parent;o.removeFromParent();while(parent&&parent!==gltf.scene&&parent.children.length===0){const next=parent.parent;parent.removeFromParent();parent=next;}}
+  const garages=(Object.keys(constructors) as Constructor[]).map(team=>({
+   position:track.pointAt(pitBox(track,team),-26.3),color:new T.Color(constructors[team][0]),
+  }));
   for(const objects of buckets.values()){
    const first=objects[0].mesh,materialName=(first.material as T.Material).name,spectator=materialName==='Spectator0';
    if(spectator&&!first.geometry.boundingBox)first.geometry.computeBoundingBox();
@@ -146,6 +151,15 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     const horizon=horizonGeometry?new T.InstancedMesh(horizonGeometry,first.material,objects.length):null;
     far.name=first.name+'_far';
     objects.forEach((o,i)=>{
+     if(materialName==='GarageUniform'){
+      const x=o.matrix.elements[12],z=o.matrix.elements[14];
+      let nearest=garages[0],best=Infinity;
+      for(const garage of garages){
+       const distance=(garage.position.x-x)**2+(garage.position.z-z)**2;
+       if(distance<best){nearest=garage;best=distance;}
+      }
+      batch.setColorAt(i,nearest.color);far.setColorAt(i,nearest.color);
+     }
      const matrix=o.matrix.premultiply(offset);
      batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);horizon?.setMatrixAt(i,matrix);
     });
