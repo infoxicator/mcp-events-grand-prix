@@ -1423,51 +1423,65 @@ body.drive-active {
 .drive-team-radio {
  box-sizing: border-box;
  width: 100%;
- padding: 8px 10px;
- border: 1px solid var(--border);
- border-radius: 8px;
- background: var(--glass-strong);
+ padding: 9px 11px 10px;
+ border: 1px solid rgba(255, 255, 255, 0.14);
+ border-top: 2px solid var(--accent);
+ border-radius: 9px;
+ background: rgba(10, 13, 20, 0.94);
  color: #f1f5f9;
+ box-shadow: 0 10px 28px rgba(0, 0, 0, 0.52);
  pointer-events: auto;
 }
 .drive-team-radio h2 {
- margin: 0 0 5px;
- color: #f1f5f9;
- font: 700 11px Oxanium, sans-serif;
- letter-spacing: .08em;
+ margin: 0 0 6px;
+ color: #f4f7fb;
+ font: 700 10.5px Oxanium, sans-serif;
+ letter-spacing: .1em;
  text-transform: uppercase;
 }
 .drive-team-radio-log {
  max-height: 112px;
- margin-bottom: 7px;
+ margin-bottom: 8px;
  overflow: auto;
  overscroll-behavior: contain;
  scrollbar-width: thin;
+ scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
 }
 .drive-team-radio-log:empty { margin-bottom: 0; }
 .drive-team-radio-message {
- padding: 6px 7px;
- border-left: 2px solid #4ade80;
- background: #ffffff0a;
+ padding: 6px 8px;
+ border-left: 2.5px solid #4ade80;
+ border-radius: 0 4px 4px 0;
+ background: rgba(255, 255, 255, 0.045);
 }
-.drive-team-radio-message + .drive-team-radio-message { margin-top: 3px; }
+.drive-team-radio-message + .drive-team-radio-message { margin-top: 4px; }
 .drive-team-radio-message[data-speaker="DRIVER"] { border-left-color: var(--accent); }
-.drive-team-radio-message b { font-size: 11px; }
-.drive-team-radio-message p { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
-.drive-team-radio label { display: block; margin-bottom: 3px; color: #cbd5e1; font-size: 12px; }
-.drive-team-radio-row { display: flex; gap: 5px; }
+.drive-team-radio-message b { font: 700 10px Oxanium, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #b7c3d3; }
+.drive-team-radio-message p { margin: 2px 0 0; font-size: 12.5px; line-height: 1.3; overflow-wrap: anywhere; }
+.drive-team-radio label { display: block; margin-bottom: 4px; color: #9aa6b7; font: 700 9.5px Oxanium, sans-serif; letter-spacing: .09em; text-transform: uppercase; }
+.drive-team-radio-row { display: flex; gap: 6px; }
 .drive-team-radio-row input, .drive-team-radio-row button {
- padding: 6px 7px;
- border: 1px solid #566475;
- border-radius: 5px;
- color: #f1f5f9;
+ padding: 7px 9px;
+ border: 1px solid rgba(255, 255, 255, 0.16);
+ border-radius: 6px;
+ color: #f8fafc;
  font-family: inherit;
- font-size: 13px;
+ font-size: 12.5px;
  font-weight: 600;
 }
-.drive-team-radio-row input { flex: 1; min-width: 0; background: #0a1018; user-select: text; }
-.drive-team-radio-row button { background: #283747; }
-.drive-team-radio-row button:disabled { opacity: .55; cursor: default; }
+.drive-team-radio-row input { flex: 1; min-width: 0; background: rgba(255, 255, 255, 0.05); user-select: text; }
+.drive-team-radio-row input:focus { outline: none; border-color: var(--accent); background: rgba(255, 255, 255, 0.08); }
+.drive-team-radio-row button {
+ padding: 7px 12px;
+ background: var(--accent);
+ border-color: var(--accent);
+ color: #ffffff;
+ font: 700 11px Oxanium, sans-serif;
+ letter-spacing: .07em;
+ text-transform: uppercase;
+}
+.drive-team-radio-row button:hover:not(:disabled) { filter: brightness(1.12); }
+.drive-team-radio-row button:disabled { opacity: .42; cursor: default; }
 .drive-team-radio-status { margin: 4px 0 0; color: #cbd5e1; font-size: 12px; }
 @media (max-width: 575px) {
  .drive-mode[data-live="true"] .drive-radio-stack {
