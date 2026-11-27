@@ -145,7 +145,7 @@ def text(label,pos,size,m=silver,rotation=(0,0,0),parent=body):
  cu=bpy.data.curves.new('Mark '+label,'FONT');cu.body=reference_lettering.get(label,label);cu.font=brandfont;cu.align_x='CENTER';cu.align_y='CENTER';cu.size=size;cu.shear=.14 if label in ['44','63','NEXUS'] else 0;cu.extrude=0;cu.fill_mode='FRONT';cu.offset=.0006 if len(label)==1 else 0;cu.resolution_u=2
  o=bpy.data.objects.new('Mark '+label,cu);bpy.context.collection.objects.link(o);o.location=pos;o.rotation_euler=rotation;o.data.materials.append(m);o.parent=parent;return o
 dish=mat('WheelDish','1a1e20',.185,.43);brake=mat('BrakeDisc','565859',.63,.45);sleeve=mat('Sleeve','60212b',.9)
-secondary=mat('DeepLivery','56091f',.33,.17);tyreink=mat('CompoundInk','b6b2a4',.78)
+secondary=mat('DeepLivery','56091f',.33,.17)
 mirror=mat('Mirror','b8c4cc',.08,.9)
 # Thin floor and sculpted venturi channels, curled edge rails, rear diffuser.
 floor=group('Floor');floor.parent=body
@@ -1325,28 +1325,6 @@ for front in [True,False]:
    box('Brake caliper',(xx-side*.092,.155,0),(.045,.09,.13),metal,knuckle,r=.012)
    for j in range(12):
     a=j*math.tau/12;rod('Rotor cooling vein',(xx-side*.087,.09*math.cos(a),.09*math.sin(a)),(xx-side*.087,.20*math.cos(a+.05),.20*math.sin(a+.05)),.003,brake,pivot,5)
-   # The mould lettering remains white. Two partial ink arcs identify the
-   # fitted compound, with a gap at each of the two main sidewall wordmarks.
-   for arc in (0,math.pi):
-    # Twin printed rails enclose rectangular voids. Alternating half-width
-    # checks terminate each end, as on the outer wall in frame 010.
-    vv=[];ff=[]
-    def patch(start,end,inside,outside):
-     k=len(vv)
-     for ang,r in [(start,inside),(start,outside),(end,outside),(end,inside)]:
-      # The sidewall projection below seats each printed patch on the shoulder.
-      vv.append((side*w*.5,r*math.cos(ang+arc),r*math.sin(ang+arc)))
-     ff.append((k,k+1,k+2,k+3))
-    for j in range(20):
-     start=.85+j*.076;end=start+.076
-     if j<3 or j>=17:
-      r=.305+.015*(j%2)
-      patch(start,end,r,r+.015)
-     else:
-      patch(start,end,.305,.312)
-      patch(start,end,.328,.335)
-      patch(start,start+.027,.312,.328)
-    mesh('Compound sidewall ink',vv,ff,tyreink,pivot)
    for j in range(8):
     a=j*math.tau/8;rod('Cover fastener',(xx,.216*math.cos(a),.216*math.sin(a)),(xx+side*.003,.216*math.cos(a),.216*math.sin(a)),.002,metal,pivot,6)
 # Nose and front wing marks are projected on the final target meshes below.
@@ -1819,13 +1797,13 @@ for pivot in wheelgroups:
  profile=[(.242,.5),(.266,.521),(.290,.525),(.321,.49),(.335,.487),(.349,.400),(.357,.34),(.361,.20)]
  bpy.context.view_layer.update()
  for o in pivot.children:
-  if o.type!='MESH' or not o.name.startswith(('Mark ','Sidewall segment','Compound sidewall ink')):continue
+  if o.type!='MESH' or not o.name.startswith(('Mark ','Sidewall segment')):continue
   transform=pivot.matrix_world.inverted()@o.matrix_world;inverse=transform.inverted()
   for vertex in o.data.vertices:
    pt=transform@vertex.co;r=math.hypot(pt.y,pt.z)
    for (r0,w0),(r1,w1) in zip(profile,profile[1:]):
     if r0<=r<=r1:
-     pt.x=math.copysign(width*(w0+(w1-w0)*(r-r0)/(r1-r0))+(.0019 if o.name.startswith('Compound sidewall ink') else .00065),pt.x)
+     pt.x=math.copysign(width*(w0+(w1-w0)*(r-r0)/(r1-r0))+.00065,pt.x)
      vertex.co=inverse@pt;break
   o.data.update()
 # Store assembly membership on the editable master so the inspection poses
@@ -1851,7 +1829,7 @@ inspection_roles={
  'impact':('Rear carbon impact casing','Rear casing fastener'),
  'suspension':('Carbon wishbone','Upright','Pickup clevis','Pickup bolt','Suspension pushrod',
                'Steering trackrod','Brake duct scoop','Brake duct opening'),
- 'wheel-cover':('Recessed black dish','Centre boss','Anodized bead seat','Swept rim vane','Rim lip','Centrelock','Locking collar','Axle inspection cap','Cover fastener','Compound sidewall ink','Slick tyre'),
+ 'wheel-cover':('Recessed black dish','Centre boss','Anodized bead seat','Swept rim vane','Rim lip','Centrelock','Locking collar','Axle inspection cap','Cover fastener','Slick tyre'),
  'front-main':('Front mainplane','Front signature'),
  'front-lower':('Front lower flap',),
  'front-upper':('Front upper flap','Front foil','Mark Marking on flap'),
@@ -1873,6 +1851,8 @@ for parent in list(groups.values()):
   if o.name=='DRS ram':batch='ActuatorRam'
   if o.name.startswith('Shift paddle'):batch='ShiftPaddle'+('Left' if sum(v.co.x for v in o.data.vertices)<0 else 'Right')
   if o.name.startswith('Front upper flap') and material=='Upper flap laminate':batch='MovingFlap'+('Left' if sum(v.co.x for v in o.data.vertices)<0 else 'Right')
+  if o.name.startswith('Front foil blue badge'):
+   batch='MovingFlapPrint'+('Left' if sum(v.co.x for v in o.data.vertices)<0 else 'Right')
   buckets.setdefault(batch,[]).append(o)
  for name,objects in buckets.items():
   bpy.ops.object.select_all(action='DESELECT')
@@ -1881,7 +1861,7 @@ for parent in list(groups.values()):
   bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
   bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.mesh.normals_make_consistent(inside=False);bpy.ops.object.mode_set(mode='OBJECT')
   # Generate metric UVs for a subtle carbon twill applied by the runtime.
-  if 'Carbon' in name or 'laminate' in name.lower() or name.startswith('MovingFlap') or name in ('RearAero','FloorFence','HaloComposite'):
+  if 'Carbon' in name or 'laminate' in name.lower() or name.startswith('MovingFlap') or name in ('RearAero','FloorFence','HaloComposite','TwoToneCover'):
    # Project each face on its dominant plane in car metres. Adjacent panels
    # retain the same physical weave scale regardless of their island size.
    uv=o.data.uv_layers.active or o.data.uv_layers.new(name='UVMap')

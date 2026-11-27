@@ -97,11 +97,11 @@ export function pitCrew(scene:T.Scene,track:Track){
     material.roughness=o.name==='Helmet'?.24:.85;
     if(/Jack|SocketGun|HoseBoom/.test(o.name)){material.metalness=.72;material.roughness=.35;}
     if(o.name==='SpareWheel'){material.roughness=.60;material.metalness=.13;}
-    if(o.name==='PitVisor'){material.vertexColors=false;material.color.set('#304956');material.metalness=.61;material.roughness=.08;}
+    if(o.name==='PitVisor'){material.vertexColors=true;material.color.set('#ffffff');material.metalness=.61;material.roughness=.08;}
     const batch=new T.InstancedMesh(o.geometry,o.name==='ReleaseLens'?new T.MeshBasicMaterial({toneMapped:false}):material,48);batch.name=team+' pit '+o.name;
     batch.count=0;batch.boundingSphere=new T.Sphere(V(2,1,0),10);
     batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
-    batch.castShadow=['Helmet','Boot','JackFoot','JackHandle','SpareWheel','SpareNose'].includes(o.name);
+    batch.castShadow=['Helmet','Boot','JackFoot','JackHandle','SpareWheel','ServiceNose'].includes(o.name);
     batch.receiveShadow=true;
     if(o.name==='ReleaseLens')material.dispose();
     if(o.name==='SoleContact'){
@@ -294,9 +294,9 @@ export function pitCrew(scene:T.Scene,track:Track){
    const hold=ramp(seconds,-.06,.22)*(1-ramp(seconds,2.08,2.38));
    const t=car.pitTime??0;
    const repair=stopped&&(car.totalStop??2.6)>2.6?ramp(t,.4,1.6)*(1-ramp(t,(car.totalStop??2.6)-.9,(car.totalStop??2.6)-.55)):0;
-   const home=scratch(side*(1.16+(1-progress)*1.9),0,-.46+2.64*repair);
+   const home=scratch(offset(side,progress,side*1.16),0,-.46+2.64*repair);
    const hips=scratch().copy(home).add(scratch(-side*.10*hold,.80-.085*hold,0));
-   const x=side*(1.01-.55*hold+(1-progress)*1.9),y=.87+.025*hold-.48*repair+.035*repair*Math.sin(t*7+side);
+   const x=offset(side,progress,side*(1.01-.55*hold)),y=.87+.025*hold-.48*repair+.035*repair*Math.sin(t*7+side);
    const hands=handsAt(scratch(x,y,home.z-.20),scratch(x,y,home.z+.12));
    person(people[personIndex++],kit,hips,-side*Math.PI/2,.34+.72*hold,hands,'steady',side+7,0,0,home);
   }
@@ -326,14 +326,14 @@ export function pitCrew(scene:T.Scene,track:Track){
   const noseX=carrying?3.4*(1-ramp(exchange,.05,.73)):0,noseZ=3.40-.47*ramp(exchange,.65,.96);
   if(carrying)put(kit,'ServiceNose',scratch(noseX,.23*(1-ramp(exchange,.65,.96)),noseZ),identity,unit,constructors[team][0]);
   for(const side of sides){
-   const home=scratch(side*(1.61+(1-progress)*2),0,2.51);
+   const home=scratch(offset(side,progress,side*1.61),0,2.51);
    if(carrying){home.x=noseX+side*1.24;home.z=noseZ-.12;}
    const hip=scratch().copy(home).add(scratch(0,.68-.13*reach,0));
    person(people[personIndex++],kit,hip,-side*Math.PI/2,.54+.28*reach,handsAt(scratch(home.x-side*(.38+.22*reach),.53-.19*reach,home.z-.14),scratch(home.x-side*(.38+.22*reach),.53-.19*reach,home.z+.14)),'steady',side+21,0,0,home);
   }
   for(let j=0;j<reserveStations.length;j++){
    const z=reserveStations[j];
-   const home=scratch(2.8+.55*j,0,z),hip=scratch().copy(home).add(scratch(0,.84,0));
+   const home=scratch(offset(1,progress,2.8+.55*j),0,z),hip=scratch().copy(home).add(scratch(0,.84,0));
    person(people[personIndex++],kit,hip,-Math.PI/2,.17,handsAt(scratch(home.x-.25,.95,z-.17),scratch(home.x-.25,.95+(j===0&&canRelease(car)?.42:0),z+.17)),'steady',j+25,0,0,home);
   }
   for(const batch of kit.values()){if(!batch.count)continue;batch.instanceMatrix.needsUpdate=true;if(batch.instanceColor)batch.instanceColor.needsUpdate=true;}

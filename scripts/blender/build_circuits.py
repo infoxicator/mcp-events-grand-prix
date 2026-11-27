@@ -237,6 +237,7 @@ def build(cid):
  def spectator(p,h,yaw,kit,pose,engineer_colour=None):
   nonlocal instance_triangles
   kit='Spectator0' if engineer_colour is None else kit
+  if engineer_colour is not None:engineer_colour=(1,1,1)
   key=(kit,pose,engineer_colour)
   if key not in prototypes:prototypes[key]=spectator_mesh(mats[kit],pose,engineer_colour=engineer_colour)
   mesh=prototypes[key];o=bpy.data.objects.new('Instance_PitWallEngineer' if engineer_colour is not None else 'Instance_Spectator',mesh)
@@ -480,7 +481,11 @@ def build(cid):
   atbox(st,off+side,1.04,(.09,1.6,3.7),'Cabinet')
   atbox(st-1.25,off-side*.20,.78,(.45,1.08,.66),'ServiceRed')
   heading=sample(st);yaw=math.atan2(heading['tx'],heading['tz'])+side*math.pi/2
-  atbox(st-2.5,off,3.48,(.20,1.08,1.68),'MarshalLED')
+  atbox(st-2.50,off,3.05,(.11,1.46,.11),'Steel')
+  atbox(st-2.50,off,3.76,(1.70,1.08,.16),'Dark')
+  atbox(st-2.65,off,4.32,(1.81,.07,.46),'RoofSheet')
+  face([pt(st-2.60,off+x,3.76+y) for x,y in [(.79,-.46),(.79,.46),(-.79,.46),(-.79,-.46)]],
+       'MarshalLED',[(0,0),(0,1),(1,1),(1,0)])
   staff('marshal',pt(st-.54,off,.24),yaw)
   staff('observer',pt(st+.78,off+.28*side,.24),yaw+.36,(.55,.12,.015))
  # Finish official stands behind the pit wall, level with the timing line.
@@ -565,12 +570,12 @@ def build(cid):
   if i in uniforms:
    atbox(d,-13.02,.58,(1.76,1.08,7.6),'Concrete')
    atbox(d,-13.57,1.62,(.72,.12,7.15),'Cabinet')
-   for jj in [-2.7,-.9,.9,2.7]:
+   for monitor,jj in enumerate([-2.7,-.9,.9,2.7]):
     station=d+jj
     atbox(station,-12.87,1.36,(.52,.12,.50),'Cabinet')
     atbox(station,-12.64,1.49,(.08,.24,.46),'Dark')
     v=sample(station);yaw=math.atan2(v['tx'],v['tz'])+math.pi/2
-    spectator(pt(station,-12.89,1.40),1.05,yaw,'PitWallEngineer',1,uniforms[i])
+    spectator(pt(station,-12.89,1.40),1.05,yaw,'PitWallEngineer',(i+monitor)%4,uniforms[i])
     atbox(station,-13.65,1.94,(.11,.50,1.26),'Dark')
     atbox(station,-13.58,1.94,(.025,.43,1.18),'TimingScreen')
    for j in [-3.32,3.32]:
@@ -611,8 +616,8 @@ def build(cid):
    for k in [-4.2,4.2]:atbox(d+j+k,-24.9,2.2,(.25,4.4,.22),'White')
   heading=sample(d);yaw=math.atan2(heading['tx'],heading['tz'])-math.pi/2
   kit,uniform=((1,1,1),'GarageUniform') if i in uniforms else ((.031,.09,.14),'PitCrewUniform')
-  staff('crew',pt(d,-26.3,.104),yaw+.24,kit,uniform)
-  staff('crew',pt(d+1.25,-27.1,.104),yaw-.59,kit,uniform,alternate=True)
+  staff('crew',pt(d,-28.4,.104),yaw+.24,kit,uniform)
+  staff('crew',pt(d+1.25,-28.9,.104),yaw-.59,kit,uniform,alternate=True)
   lounge(d,-24.9,4.72)
   atbox(d,-24.9,5.8,(.1,2.1,27),'Hospitality')
   for j in range(-13,14,3):atbox(d+j,-24.75,5.8,(.17,2.2,.1),'Steel')
@@ -675,13 +680,15 @@ def build(cid):
    rod(pt(station,-25,10.2),pt(station,-5.65,10.2),.054,'Steel')
   for j,mat_name in enumerate(['Green','White','Red']):atbox(-45+j*5,-5.66,9.13,(.10,.91,4.93),mat_name)
   # Wind bends consecutive cloth strips into a changing three-dimensional silhouette.
+  for colour in ('Green','White','Red'):
+   name='ItalianFlag'+colour;mats[name]=mats[colour].copy();mats[name].name=name
   for flag in range(19):
    d=L-282+flag*13.4;off=49.1
    rod(pt(d,off,8.7),pt(d,off,16.3),.061,'Steel')
    for seg in range(12):
     def flagpoint(k,v):
      t=k/12;return pt(d+3.65*t,off+.53*math.sin(t*8+flag*.9)*t,16.15-1.92*v-.35*t+.31*math.sin(t*7+flag)*t)
-    face([flagpoint(seg,0),flagpoint(seg+1,0),flagpoint(seg+1,1),flagpoint(seg,1)],['Green','White','Red'][seg//4])
+    face([flagpoint(seg,0),flagpoint(seg+1,0),flagpoint(seg+1,1),flagpoint(seg,1)],['ItalianFlagGreen','ItalianFlagWhite','ItalianFlagRed'][seg//4])
  # Grandstands: rake, seat rows, people cards, roof trusses and exposed frame.
  stations=[L-270,L-160,L-50] if not night else [L-230,L-110,1500,1620,2120,4370]
  for station in stations:
@@ -734,7 +741,7 @@ def build(cid):
     atbox(station,off+row*.8,.8+row*.48,(.84,.28,28),'Concrete')
     for seat in range(-13,14,2):
      bearing=sample(station+seat)
-     spectator(pt(station+seat,off+row*.8,.94+row*.48),1.,math.atan2(bearing['tx'],bearing['tz'])-math.pi/2,'Spectator0',row%3)
+     spectator(pt(station+seat,off+row*.8,.94+row*.48),1.,math.atan2(bearing['tx'],bearing['tz'])+math.pi/2,'Spectator0',row%3)
    atbox(station,off+2.0,1.32,(4.1,2.55,28),'Dark')
    for j in range(-14,15,7):rod(pt(station+j,off+3.6),pt(station+j,off+3.6,4.5),.09,'Steel')
    atbox(station,off+3.6,4.48,(.08,.08,28),'Steel')
@@ -1069,9 +1076,9 @@ def build(cid):
    for level in range(random.randint(1,3)):
     box((p[0],p[1]+h+level*4+2,p[2]),(w*(.8-level*.16),4,dep*(.8-level*.16)),'Glass',angle)
    accent=['Gold','Ice','Pink'][i%3]
-   if i%3==0:box((p[0],p[1]+h*.83,p[2]+dep/2+.2),(w*.8,2,.4),accent)
+   if i%3==0:box((p[0]+math.sin(angle)*(dep/2+.2),p[1]+h*.83,p[2]+math.cos(angle)*(dep/2+.2)),(w*.8,2,.4),accent,angle)
    if i%5==0:
-    box((p[0]+w/2+.25,p[1]+h*.6,p[2]),(.5,h*.6,1),accent)
+    box((p[0]+math.cos(angle)*(w/2+.25),p[1]+h*.6,p[2]-math.sin(angle)*(w/2+.25)),(.5,h*.6,1),accent,angle)
     width=min(w*.70,64);panel_h=width/8
     sn,cs=math.sin(angle),math.cos(angle)
     cx=p[0]+sn*(dep/2+.30);cz=p[2]+cs*(dep/2+.30);cy=p[1]+h*.65

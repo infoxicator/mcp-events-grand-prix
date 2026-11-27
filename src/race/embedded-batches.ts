@@ -35,7 +35,7 @@ export function batchCircuit(root:T.Group){
   }
   const batch=new T.BatchedMesh(instances,vertices,indices,m),shapeIDs=new Map<T.BufferGeometry,number>();
   batch.name='Circuit '+m.name;batch.sortObjects=false;batch.renderOrder=sources[0].renderOrder;
-  const ranges:{mesh:T.Mesh;first:number;end:number}[]=[];
+  const ranges:{mesh:T.Mesh;first:number;end:number;bounds:T.Box3|null}[]=[];
   const clusters:{bounds:T.Box3[];blocks:T.Box3[];step:number}[]=[],boxes:T.Box3[]=[],frustum=new T.Frustum(),projection=new T.Matrix4();
   const masks=new Int8Array(instances),positiveX=new Uint8Array(6),positiveY=new Uint8Array(6),positiveZ=new Uint8Array(6);
   // A child box only needs the planes that actually intersect its parent.
@@ -73,7 +73,9 @@ export function batchCircuit(root:T.Group){
     clusters.push({bounds,blocks,step:o.geometry.userData.clusterStep??0});
     batch.setMatrixAt(batch.addInstance(id),matrix.premultiply(inverse));slot++;
    }
-   ranges.push({mesh:o,first,end:slot});o.removeFromParent();
+   const bounds=count>1?boxes[first].clone():null;
+   if(bounds)for(let i=first+1;i<slot;i++)bounds.union(boxes[i]);
+   ranges.push({mesh:o,first,end:slot,bounds});o.removeFromParent();
   }
   // Source nodes still carry the venue's distance/receiver decisions. Set the
   // batch's instance visibility independently for the shadow and beauty passes.
@@ -84,11 +86,13 @@ export function batchCircuit(root:T.Group){
    for(let j=0;j<6;j++){
     const n=frustum.planes[j].normal;positiveX[j]=Number(n.x>=0);positiveY[j]=Number(n.y>=0);positiveZ[j]=Number(n.z>=0);
    }
-   for(const {mesh,first,end} of ranges){
+   for(const {mesh,first,end,bounds} of ranges){
     const visible=mesh.visible&&(!depth||mesh.castShadow);
+    const parentMask=visible?(bounds?planeMask(bounds,63):63):-1;
     for(let i=first;i<end;i++){
-     masks[i]=visible?planeMask(boxes[i],63):-1;
-     const draw=masks[i]>=0;if(batch.getVisibleAt(i)!==draw)batch.setVisibleAt(i,draw);
+     const mask=parentMask>0?planeMask(boxes[i],parentMask):parentMask;
+     if((masks[i]>=0)!==(mask>=0))batch.setVisibleAt(i,mask>=0);
+     masks[i]=mask;
     }
    }
   }

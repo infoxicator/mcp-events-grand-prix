@@ -28,8 +28,6 @@ omit = {
     'SeatFoam', 'Seat pan laminate', 'Seat edge satin', 'Knee bolster', 'Cockpit liner',
 }
 groups.update(corner+'Knuckle' for corner in ('FrontL','FrontR','RearL','RearR'))
-if near:
-    omit.remove('CompoundInk');layers['CompoundInk']=([],[],[]);normals['CompoundInk']=[]
 for obj in list(bpy.context.scene.objects):
     if obj.type != 'MESH' or not obj.parent or obj.parent.name not in groups:
         continue
@@ -55,7 +53,6 @@ for obj in list(bpy.context.scene.objects):
         elif mat.name == 'Ivory': layer = 'Accent'
         elif mat.name == 'HelmetPaint': layer = 'HelmetTint'
         elif mat.name=='HelmetVisor': layer='Visor'
-        elif near and mat.name=='CompoundInk': layer='CompoundInk'
         elif near and mat.name=='SlickRubber': layer='Tyre'
         elif near and mat.name=='BrakeDisc': layer='BrakeRotor'
         elif near and mat.name in ('WheelDish','Titanium','OxidisedTitanium'): layer='WheelMetal'

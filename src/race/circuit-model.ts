@@ -103,6 +103,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
  let distantInstances:ReturnType<typeof batchDistantInstances>|undefined;
  const lakeBounds=new T.Box3();let reflection:Reflector|undefined;
  const distant:T.Mesh[]=[],casters:T.Mesh[]=[],receivers:T.Mesh[]=[];
+ const spectatorLods:T.LOD[]=[];let crowdRange=0;
  const circuitLods:T.LOD[]=[],detailCamera=new T.PerspectiveCamera();
  let manualDetail=false;
  const draco=import.meta.env.MCP_APP==='true'?null:new DRACOLoader().setDecoderPath({js:decoderJS,wasm:decoderWasm}).setWorkerLimit(2);
@@ -131,12 +132,22 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   lodSources.forEach(o=>{o.removeFromParent();});
   const buckets=new Map<string,{mesh:T.Mesh;matrix:T.Matrix4}[]>(),sources:T.Mesh[]=[];
   gltf.scene.traverse(o=>{if(o instanceof T.Mesh&&(o instanceof T.InstancedMesh||o.name.startsWith('Instance_'))){sources.push(o);const count=o instanceof T.InstancedMesh?o.count:1;
-   for(let i=0;i<count;i++){const matrix=new T.Matrix4();if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);matrix.premultiply(o.matrixWorld);const p=new T.Vector3().setFromMatrixPosition(matrix),key=`${o.geometry.uuid}:${(o.material as T.Material).uuid}:${Math.floor(p.x/180)}:${Math.floor(p.z/180)}`;const group=buckets.get(key)??[];group.push({mesh:o,matrix});buckets.set(key,group);}
+   const tile=(o.material as T.Material).name==='Spectator0'?60:180;
+   for(let i=0;i<count;i++){const matrix=new T.Matrix4();if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);matrix.premultiply(o.matrixWorld);const p=new T.Vector3().setFromMatrixPosition(matrix),key=`${o.geometry.uuid}:${(o.material as T.Material).uuid}:${Math.floor(p.x/tile)}:${Math.floor(p.z/tile)}`;const group=buckets.get(key)??[];group.push({mesh:o,matrix});buckets.set(key,group);}
   }});
   for(const o of sources){let parent=o.parent;o.removeFromParent();while(parent&&parent!==gltf.scene&&parent.children.length===0){const next=parent.parent;parent.removeFromParent();parent=next;}}
   const garages=(Object.keys(constructors) as Constructor[]).map(team=>({
    position:track.pointAt(pitBox(track,team),-26.3),color:new T.Color(constructors[team][0]),
   }));
+  function garageColor(matrix:T.Matrix4){
+   const x=matrix.elements[12],z=matrix.elements[14];
+   let nearest=garages[0],best=Infinity;
+   for(const garage of garages){
+    const distance=(garage.position.x-x)**2+(garage.position.z-z)**2;
+    if(distance<best){nearest=garage;best=distance;}
+   }
+   return nearest.color;
+  }
   for(const objects of buckets.values()){
    const first=objects[0].mesh,materialName=(first.material as T.Material).name,spectator=materialName==='Spectator0';
    if(spectator&&!first.geometry.boundingBox)first.geometry.computeBoundingBox();
@@ -152,22 +163,23 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     far.name=first.name+'_far';
     objects.forEach((o,i)=>{
      if(materialName==='GarageUniform'){
-      const x=o.matrix.elements[12],z=o.matrix.elements[14];
-      let nearest=garages[0],best=Infinity;
-      for(const garage of garages){
-       const distance=(garage.position.x-x)**2+(garage.position.z-z)**2;
-       if(distance<best){nearest=garage;best=distance;}
-      }
-      batch.setColorAt(i,nearest.color);far.setColorAt(i,nearest.color);
+      const color=garageColor(o.matrix);batch.setColorAt(i,color);far.setColorAt(i,color);
      }
      const matrix=o.matrix.premultiply(offset);
      batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);horizon?.setMatrixAt(i,matrix);
     });
     batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);
-    lod.addLevel(batch,0);lod.addLevel(far,staff?40:spectator?34:100,.15);
+    lod.addLevel(batch,0);lod.addLevel(far,staff?40:spectator?45:100,.15);
+    if(spectator){lod.userData.spectator=true;spectatorLods.push(lod);}
     if(horizon){horizon.name=first.name+'_horizon';horizon.computeBoundingSphere();lod.addLevel(horizon,290,.12);}
     lod.addLevel(new T.Group(),staff?360:spectator?550:950,.1);gltf.scene.add(lod);circuitLods.push(lod);
-   }else{objects.forEach((o,i)=>batch.setMatrixAt(i,o.matrix));batch.computeBoundingSphere();gltf.scene.add(batch);}
+   }else{
+    objects.forEach((o,i)=>{
+     batch.setMatrixAt(i,o.matrix);
+     if(materialName==='PitWallEngineer')batch.setColorAt(i,garageColor(o.matrix));
+    });
+    batch.computeBoundingSphere();gltf.scene.add(batch);
+   }
   }
   gltf.scene.updateMatrixWorld(true);
   // The authored circuit has fixed world transforms. Crowd, flags and LEDs
@@ -190,7 +202,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     configured.add(m);
     m.side=/^(Canopy|Fence|Sign$|Brake[0-9]|ParkHorizon|Marquee|GarageFascia|WorkshopBack|DistantRidge|Impact|Balustrade|Armco$)/.test(m.name)?T.DoubleSide:T.FrontSide;
     people.bind(m);signals.bind(m);
-    if(m.name==='PaddockBanner')m.side=T.DoubleSide;
+    if(m.name==='PaddockBanner'||m.name.startsWith('ItalianFlag'))m.side=T.DoubleSide;
     if(m.name==='Trunk'){
      m.onBeforeCompile=shader=>{
       shader.vertexShader='varying vec3 bark;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nbark=position;');
@@ -529,11 +541,16 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
    if(camera){
     // Lower silhouette detail while preserving the venue's draw distance.
     const end=lod.levels[lod.levels.length-1],range=end.distance;
-    end.distance=range*drawDistance/detail;lod.update(detailCamera);end.distance=range;
+    end.distance=range*drawDistance/detail;
+    const near=lod.levels[1],switchDistance=near.distance;
+    if(lod.userData.spectator&&camera.name==='Race camera')near.distance=switchDistance/detail;
+    lod.update(detailCamera);near.distance=switchDistance;end.distance=range;
    }
   }
   distantInstances?.(camera);
  },update(time:number,focus:T.Vector3,camera:T.Vector3,shadowExtent:number,balanced:boolean){
+  const range=balanced||import.meta.env.MCP_APP==='true'?45:75;
+  if(range!==crowdRange){for(const lod of spectatorLods)lod.levels[1].distance=range;crowdRange=range;}
   animation.value=time;shadowPatch.value.set(focus.x,focus.z,balanced?0:shadowExtent);
   if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;
   function near(mesh:T.Mesh,range:number){

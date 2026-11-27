@@ -10,6 +10,7 @@ export function circuitSignals(scene:T.Scene,track:Track,heightAt:(station:numbe
   const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=4;return {ctx:canvas.getContext('2d')!,map};
  };
  const tower=make(192,384),board=make(192,96),station=track.LENGTH-40,point=track.pointAt(station,16.6),t=track.tangentAt(station);
+ board.map.flipY=false;
  const screen=new T.Mesh(new T.PlaneGeometry(1.55,5.4),new T.MeshBasicMaterial({map:tower.map,side:T.DoubleSide}));
  screen.position.set(point.x,heightAt(station)+8,point.z);screen.rotation.y=Math.atan2(t.x,t.z)+Math.PI/2;scene.add(screen);
  const live=make(512,224),screens:T.Mesh[]=[],support=new T.MeshStandardMaterial({color:'#30383a',roughness:.65});
@@ -30,12 +31,16 @@ export function circuitSignals(scene:T.Scene,track:Track,heightAt:(station:numbe
  },update(r:RenderRace){
   const lit=r.phase==='lights'?Math.max(0,Math.min(5,Math.ceil(5-(r.countdown??0)))):0;
   lenses.forEach((m,i)=>{m.emissive.setHex(i<lit?0xff1810:0x170100);m.emissiveIntensity=i<lit?3:.18;});
-  const state=r.phase==='finished'?'FINISH':r.control?.safetyCar?'SC':(r.control?.yellowUntil??0)>r.time?'YELLOW':'GREEN';
+  const state=r.phase==='finished'?'FINISH':r.control?.marshalSignal??(r.control?.safetyCar?'SC':(r.control?.yellowUntil??0)>r.time?'YELLOW':'GREEN');
   if(state!==last){
    last=state;const ctx=board.ctx;ctx.fillStyle='#111817';ctx.fillRect(0,0,192,96);
-   ctx.fillStyle=state==='GREEN'?'#26874b':state==='FINISH'?'#e4e7e3':'#ffce2a';
+   ctx.fillStyle=state==='GREEN'?'#26874b':state==='FINISH'?'#e4e7e3':state==='BLUE'?'#458bff':state==='RED'?'#ff5143':'#ffce2a';
    if(state==='FINISH'){for(let i=0;i<8;i++)for(let j=0;j<4;j++)if((i+j)%2===0)ctx.fillRect(i*24,j*24,24,24);}
-   else{ctx.fillRect(0,0,192,96);ctx.fillStyle='#14241c';ctx.font='bold 42px Arial';ctx.textAlign='center';ctx.fillText(state,96,63);}
+   else{ctx.fillRect(0,0,192,96);ctx.fillStyle='#14241c';ctx.font='bold 42px Arial';ctx.textAlign='center';if(state==='DOUBLE YELLOW'){ctx.font='bold 34px Arial';ctx.fillText('DOUBLE',96,41);ctx.fillText('YELLOW',96,79);}
+    else ctx.fillText(state,96,63);}
+   ctx.fillStyle='rgba(0,0,0,.26)';
+   for(let y=0;y<96;y+=4)ctx.fillRect(0,y,192,1);
+   for(let x=0;x<192;x+=4)ctx.fillRect(x,0,1,96);
    board.map.needsUpdate=true;
   }
   if(Math.floor(r.time)===lastSecond)return;lastSecond=Math.floor(r.time);

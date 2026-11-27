@@ -695,10 +695,11 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   const seedMirror=embedded&&mirrorReady&&mirrorSeed<2&&selectedMode==='broadcast'&&!onboard&&!cameraCut;
   if(seedMirror||(onboard&&(!embedded||mirrorReady&&!cameraCut)&&(warmMode||mirrorFrame++%(embedded?6:balanced?3:1)===0))){
    const mirrorStart=cameraDebug?performance.now():0;
-   const id=seedMirror?focus:mode.endsWith('-a')?'a':'b',v=race.cars[id],q=carPosition(v,rearPos),t=tangentAt(v.distance);
+   const id=seedMirror?focus:mode.endsWith('-a')?'a':'b',chassis=cars[id].chassis;
    const side=mirrorSide===0?-1:1;
-   rearCamera.position.set(q.x-t.z*side*.78,q.y+.73,q.z+t.x*side*.78);
-   rearCamera.lookAt(q.x-t.x*25-t.z*side*4,q.y+.65,q.z-t.z*25+t.x*side*4);
+   chassis.localToWorld(rearCamera.position.set(-side*.78,.73,0));
+   chassis.getWorldQuaternion(rearCamera.quaternion);rearCamera.up.copy(upAxis).applyQuaternion(rearCamera.quaternion);
+   rearCamera.lookAt(chassis.localToWorld(rearPos.set(-side*4,.65,-25)));
    const rearTarget=mirrorTarget();
    rearTarget.viewport.set(mirrorSide*256,0,256,128);rearTarget.scissor.copy(rearTarget.viewport);rearTarget.scissorTest=true;
    if(seedMirror)mirrorSeed++;

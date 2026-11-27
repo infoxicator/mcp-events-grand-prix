@@ -6,7 +6,7 @@ export function tracksideMotion(){
  const clock={value:0},carA={value:new T.Vector2()},carB={value:new T.Vector2()};
  const green={value:new T.Vector2()},finish={value:0},yellow={value:0};
  function bind(material:T.MeshStandardMaterial){
-  const name=material.name,seated=name.startsWith('Spectator')||name.startsWith('Seated');
+  const name=material.name,seated=name==='PitWallEngineer'||name.startsWith('Spectator')||name.startsWith('Seated');
   const marshal=name==='MarshalUniform'||name==='FinishUniform';
   if(!seated&&!name.endsWith('Uniform'))return;
   if(material.userData.articulated)return;
@@ -62,11 +62,11 @@ export function tracksideMotion(){
     if(uv.x>.86){vColor.rgb=mix(vColor.rgb,vec3(.98,.71,.035),yellowFlag);}
     #endif`).replace('float swing=mix','signal=max(signal,yellowFlag);float swing=mix');
    }
-   if(name==='GarageUniform')shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+   if(name==='GarageUniform'||name==='PitWallEngineer')shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
     #if defined(USE_INSTANCING_COLOR) && defined(USE_COLOR)
-     if(uv.y<.5)vColor.rgb=color.rgb;
+     if(${name==='PitWallEngineer'?'uv.x>.1':'uv.y<.5'})vColor.rgb=color.rgb;
     #endif`);
-   if(seated)shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+   if(seated&&name!=='PitWallEngineer')shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
     #if defined(USE_INSTANCING) && defined(USE_COLOR)
      vec2 seat=(modelMatrix*instanceMatrix[3]).xz;
      float hue=fract(sin(dot(seat,vec2(.861,1.97)))*4375.8);
@@ -84,7 +84,7 @@ export function tracksideMotion(){
      }
      else if(region<2.5)vColor.rgb*=mix(vec3(.22,.18,.16),vec3(2.7,2.3,1.85),hue);
      else if(region>3.5)vColor.rgb*=mix(vec3(.18,.22,.3),vec3(.66,.84,1.),hue);
-     if(region<.5&&tone>.95){float flash=smoothstep(.996,.999,sin(actorTime*1.71+tone*85.));vColor.rgb+=vec3(2.8)*flash;}
+     if(region>2.5&&region<3.5&&tone>.95){float flash=smoothstep(.996,.999,sin(actorTime*1.71+tone*85.));vColor.rgb+=vec3(2.8)*flash;}
     #endif`);
   };
   material.customProgramCacheKey=()=>'trackside-'+(marshal?name:seated?'spectator':'crew');

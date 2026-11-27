@@ -175,7 +175,7 @@ export function advanceField(race:Race,track:Track,dt:number,queue?:ReturnType<t
    car.pit='stopped';car.distance=box;car.service=track.PIT_STOP_SECONDS;car.speed=0;
    const nextPlanned=car.plannedCompounds?.[stops]??(current==='hard'?'medium':'hard');
    const nextCompound=desiredTyre!==current?desiredTyre:nextPlanned;
-   car.compound=nextCompound;
+   car.previousCompound=current;car.compound=nextCompound;
    if(nextCompound==='intermediate'||nextCompound==='wet')race.wetRace=true;
    car.wear=0;car.tyreAge=0;car.stops=stops+1;
   }
