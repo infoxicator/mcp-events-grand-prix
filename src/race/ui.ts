@@ -1,3 +1,4 @@
+import {moveMapDot} from './hud-dom';
 import {raceSessionLabel} from './live';
 import {damageLevel} from './crashes';
 import {mountTcamTelemetry} from './tcam-telemetry';
@@ -256,6 +257,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
  el('join-form').onsubmit=e=>{e.preventDefault();try{location.assign(playerURL(room.origin??location.origin,parseInvitation((el('join-input') as HTMLInputElement).value,room.origin??location.origin)));}catch(error){el('join-error').textContent=error instanceof Error?error.message:'Invalid invitation';}};
  function text(id:string,value:string){if(el(id).textContent!==value)el(id).textContent=value;}
  // Live telemetry is authoritative between renders, including an occluded or reconnecting seat.
+ Object.defineProperty(window,'__renderStats',{configurable:true,get:()=>scene?{...scene.info,fps}:undefined});
  Object.defineProperty(window,'__raceState',{configurable:true,get:()=>c.state});
  let displayedMatchup:Matchup|undefined,displayedCircuit:CircuitId|undefined;
  const radio=radioOverlay(el('chatgpt-radio'),el('radio-announcement'),presentation.audio.speakRadio);
@@ -309,8 +311,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
   marker.setAttribute('visibility',safety?'visible':'hidden');
   if(safety){
    const position=pointAt(safety.distance,safety.offset);
-   marker.setAttribute('cx',String(position.x));
-   marker.setAttribute('cy',String(position.z));
+   moveMapDot(marker,position);
   }
   if(raceControlButtons){
    const live=s.race.control;
@@ -385,7 +386,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
    return `<div class="${rowClass}" style="--team:${stripe(entry)}"><span class="position">${i+1}</span><i class="team-colour"></i><span class="driver-cell"><b class="driver-name">${presentation.clean&&!fullGrid?entry.code:entry.name}</b><small class="row-detail${isAlert?' is-alert':''}">${detail}</small></span><span class="interval"><span class="gap-val">${presentation.clean&&damage&&x.finishTime===null?detail:status}</span><small>${roleTag}</small></span>${tyre}</div>`;
   }).join('');
   if(timingHtml!==lastTimingHtml){lastTimingHtml=timingHtml;el('timing-rows').innerHTML=timingHtml;}
-  markers.forEach((dot,i)=>{const x=r.field?.[i];dot.style.display=x?'':'none';if(x){const p=pointAt(x.distance);dot.setAttribute('cx',String(p.x));dot.setAttribute('cy',String(p.z));}});
+  markers.forEach((dot,i)=>{const x=r.field?.[i];dot.style.display=x?'':'none';if(x){const p=pointAt(x.distance);moveMapDot(dot,p);}});
   const seatsReady=s.connected.a&&s.connected.b;
   const inLobby=s.race.phase==='lobby'&&(!s.live||s.live==='running');
   const canStart=options.canStart?.()??(c.canReset||c.team!==null);
@@ -415,7 +416,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
    if(waitingMessage.textContent!==message)waitingMessage.textContent=message;
   }
   el('lights').hidden=r.phase!=='lights';for(let i=0;i<lightBulbs.length;i++)lightBulbs[i].classList.toggle('lit',5-r.countdown>=i);el('battle').hidden=gap>=1||r.phase!=='racing'||car.pit!=='none'||rival.pit!=='none';text('battle-gap',`${gap.toFixed(3)}s`);
-  text('corner',cornerName(car.distance));text('map-lap',`${String(Math.min(r.laps,car.lap+1)).padStart(2,'0')}/${String(r.laps).padStart(2,'0')}`);for(const t of ['a','b'] as const){const p=pointAt(r.cars[t].distance);el(`map-${t}`).setAttribute('cx',String(p.x));el(`map-${t}`).setAttribute('cy',String(p.z));}
+  text('corner',cornerName(car.distance));text('map-lap',`${String(Math.min(r.laps,car.lap+1)).padStart(2,'0')}/${String(r.laps).padStart(2,'0')}`);for(const t of ['a','b'] as const){const p=pointAt(r.cars[t].distance);moveMapDot(el(`map-${t}`),p);}
   text('camera-name',replayActive?'REPLAY / 0.65×':feedView==='3d'?scene?.label??'LOADING':'CIRCUIT OVERVIEW');text('diagnostics',`${Math.round(fps)} FPS · ${c.latency} MS · 120 HZ`);
   text('speed-value',`${Math.round(car.speed*3.6).toString().padStart(3,'0')}`);text('speed-trap',`TRAP ${Math.round(speedTrap)}`);text('gear',String(car.gear));text('inputs',`THR ${Math.round(car.throttle*100)}% / BRK ${Math.round(car.brake*100)}%`);text('ers',`${Math.round(car.ers)}%`);text('ers-mode',car.instruction.ers.toUpperCase());gauge(4,car.ers/100);text('wear',`${Math.round((1-car.wear)*100)}%`);text('compound',car.compound.toUpperCase());text('tyre-temp',`${Math.round(car.temperature)}°C / ${car.tyreAge.toFixed(1)} L / ${car.fuel.toFixed(1)}KG`);text('last-lap',timing(car.lastLap));text('sector-label',`S${car.sector+1}`);for(let i=0;i<sectorBars.length;i++)sectorBars[i].style.borderColor=({purple:'#bd7bff',green:'#b8f56b',yellow:'#f6cb68'}[car.splitColours[i]]);
   gauge(0,car.rpm/12800);gauge(1,car.throttle);gauge(2,car.brake);gauge(3,1-car.wear);
@@ -446,7 +447,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
   }else{board.open=false;lastProvisionalHtml='';}
   el('results').hidden=r.phase!=='finished'||replayActive;if(r.phase==='finished'){text('winner',order[0].entry.name+' wins.');const resHtml=order.map(({entry,car:x},i)=>`<div class="result-row" style="--team:${stripe(entry)}"><strong>${String(i+1).padStart(2,'0')}</strong><div><b>${entry.name}</b><span>${entry.team} · #${entry.number}${strategySeat===entry.seat&&strategySeat?' · YOUR CAR':solo&&entry.seat?(entry.seat==='a'?' · YOUR CAR':' · AI'):entry.seat?' · PLAYER '+entry.seat.toUpperCase():''}</span></div><div><b>${timing(x.finishTime??0)}</b></div></div>`).join('');if(resHtml!==lastResultsHtml){lastResultsHtml=resHtml;el('result-rows').innerHTML=resHtml;}}else if(lastResultsHtml)lastResultsHtml='';
  }
- const isPaused=()=>document.documentElement.dataset.mcpHidden==='true';
+ const isPaused=()=>document.documentElement.dataset.mcpHidden==='true'||(embeddedFeed&&document.hidden);
  function scheduleFrame(){if(!disposed&&!frameId&&!isPaused())frameId=requestAnimationFrame(frame);}
  function stopFrame(){if(frameId){cancelAnimationFrame(frameId);frameId=0;}}
  function suspend3D(){
@@ -501,7 +502,6 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
   presentation.audio.update(race,focus,c.status==='CONNECTED'&&state.connected.a&&state.connected.b&&now-c.received<500);
   if(scene)try{
    scene.render(race,now);
-   (window as unknown as {__renderStats:unknown}).__renderStats={...scene.info,fps};
   }catch(error){
    if(!embeddedFeed)throw error;
    renderFailed=true;
@@ -524,5 +524,12 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
   scheduleFrame();
  }
  scheduleFrame();
- return {connection:c,suspend3D,dispose:()=>{disposed=true;document.removeEventListener('visibilitychange',onVisibility);document.removeEventListener('mcp-visibility',onVisibility);eventLog.dispose();radio.dispose();presentation.dispose();stopFrame();c.close();scene?.dispose();}};
+ return {connection:c,suspend3D,dispose:()=>{
+  if(disposed)return;
+  disposed=true;
+  document.removeEventListener('visibilitychange',onVisibility);document.removeEventListener('mcp-visibility',onVisibility);
+  eventLog.dispose();radio.dispose();driverRadio?.dispose();tcam.dispose();replay.length=0;
+  Reflect.deleteProperty(window,'__raceState');Reflect.deleteProperty(window,'__renderStats');
+  presentation.dispose();stopFrame();c.close();scene?.dispose();scene=undefined;el('app').replaceChildren();
+ }};
 }

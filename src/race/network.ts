@@ -178,7 +178,10 @@ export function connect(team:Team|null,room:HostedRoom,options?:ConnectOptions):
    document.removeEventListener('visibilitychange',onVisibility);
    document.removeEventListener('mcp-visibility',onVisibility);
   }
-  ws?.close(1000);
+  audioReply?.(false);c.onAudioLost?.();
+  if(ws){ws.onopen=ws.onmessage=ws.onerror=ws.onclose=null;ws.close(1000);ws=null;}
+  c.team=null;c.role=undefined;c.canReset=false;c.status='DISCONNECTED';
+  c.onSnapshot=c.onEventLog=c.onQuestionError=c.onAudioLost=undefined;c.onReplay=()=>{};
  }};
  function open(){
   if(closed||terminal||pausedHidden||pausedFinished)return;

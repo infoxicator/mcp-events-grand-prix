@@ -19,7 +19,17 @@ const profiles:Record<GridEntry['team'],Profile>={
  'Aston Martin':{base:'#00715d',side:'aramco',ink:white,cover:'Ma’aden',wing:'coinbase'},
  Cadillac:{base:'#292a2d',side:'TWG ◇',ink:white,cover:'CADILLAC',wing:'IFS'}
 };
+// Reuse the immutable artwork across WebGL contexts. Each scene owns its GPU texture.
+let gridArt:HTMLCanvasElement|undefined,mercedesArt:HTMLCanvasElement|undefined;
 export function liveryAtlas(entries:readonly GridEntry[]=grid,resolution=1){
+ const cacheable=entries===grid&&resolution===1;
+ const hero=resolution===1.5&&entries.length===1&&entries[0]===grid.find(e=>e.seat==='b');
+ const canvas=(cacheable?gridArt:hero?mercedesArt:undefined)??drawAtlas(entries,resolution);
+ if(cacheable)gridArt=canvas;
+ if(hero)mercedesArt=canvas;
+ const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=import.meta.env.MCP_APP==='true'?4:8;map.userData.rows=entries.length;return map;
+}
+function drawAtlas(entries:readonly GridEntry[],resolution:number){
  const canvas=document.createElement('canvas');canvas.width=tileW*4*resolution;canvas.height=tileH*entries.length*resolution;
  const c=canvas.getContext('2d')!;
  c.scale(resolution,resolution);
@@ -164,7 +174,7 @@ export function liveryAtlas(entries:readonly GridEntry[]=grid,resolution=1){
    c.restore();
   }
  });
- const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=8;map.userData.rows=entries.length;return map;
+ return canvas;
 }
 
 // Use the body-space rest coordinate. A bent panel carries its printed artwork with it.

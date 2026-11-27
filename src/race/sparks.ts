@@ -38,15 +38,17 @@ export function createSparks(scene:T.Scene,track:Track,heightAt:(d:number)=>numb
   batch.instanceMatrix.setUsage(T.DynamicDrawUsage);batch.count=0;scene.add(batch);
  }
  const pose=new T.Object3D(),colour=new T.Color(),rand=(n:number)=>T.MathUtils.euclideanModulo(Math.sin(n*12.9898)*43758.5453,1);
+ function edgeContact(offset:number,d:number){const edge=Math.abs(offset)-track.trackHalfWidth(d);return edge>-.48&&edge<.87?.36:0;}
  return {get active(){return mesh.count;},update(race:RenderRace,focus?:T.Vector3){
   mesh.count=0;glow.count=0;
   if(race.phase!=='racing')return;
-  for(const [i,car] of [race.cars.a,race.cars.b,...race.field??[]].entries()){
+  for(let i=0;i<2+(race.field?.length??0);i++){
+   const car=i===0?race.cars.a:i===1?race.cars.b:race.field![i-2];
    if(car.speed<64||car.pit&&car.pit!=='none')continue;
    const at=track.pointAt(car.distance,car.offset);
    if(focus&&Math.hypot(at.x-focus.x,at.z-focus.z)>170)continue;
-   const edgeContact=(d:number)=>{const edge=Math.abs(car.offset)-track.trackHalfWidth(d);return edge>-.48&&edge<.87?.36:0;};
-   const heat=sparkContact(car.speed,car.distance)+edgeContact(car.distance);
+
+   const heat=sparkContact(car.speed,car.distance)+edgeContact(car.offset,car.distance);
    if(heat>.06){
     const d=car.distance-1.95,p=track.pointAt(d,car.offset),t=track.tangentAt(d);
     pose.position.set(p.x,heightAt(d)+.076,p.z);pose.rotation.set(-Math.PI/2,Math.atan2(t.x,t.z),0,'YXZ');
@@ -56,7 +58,7 @@ export function createSparks(scene:T.Scene,track:Track,heightAt:(d:number)=>numb
    for(let n=0;n<(i<2?46:18)&&mesh.count<limit;n++){
     const cycle=race.time*1.7+n*.618033,age=(cycle%1)*.55,seed=Math.floor(cycle)*97+n*17+i*29;
     const emission=car.distance-car.speed*age;
-    const contact=sparkContact(car.speed,emission)+edgeContact(emission);
+    const contact=sparkContact(car.speed,emission)+edgeContact(car.offset,emission);
     if(contact<=rand(seed)*.8)continue;
     const d=car.distance-car.speed*age*.75-2.2,p=track.pointAt(d,car.offset+(rand(seed+1)-.5)*(.7+age*7)),t=track.tangentAt(d);
     pose.position.set(p.x,heightAt(d)+Math.max(.04,.14+rand(seed+2)*2.2*age-4.9*age*age),p.z);

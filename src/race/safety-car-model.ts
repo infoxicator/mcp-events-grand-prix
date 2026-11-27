@@ -1,3 +1,4 @@
+import {MeshResources} from './mesh-resources';
 import * as T from 'three';
 import gtURL from './assets/safety-gt.glb.gz?url';
 import {embeddedGLB} from './embedded-glb';
@@ -20,7 +21,7 @@ export function createSafetyCar(){
   return mesh;
  }
  void embeddedGLB(gtURL,true).then(g=>{
-  if(disposed){g.scene.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.material.dispose();}});return;}
+  if(disposed){new MeshResources().collect(g.scene).dispose();return;}
   g.scene.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;}});
   car.add(g.scene);
  });

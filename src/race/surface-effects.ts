@@ -41,7 +41,8 @@ export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>nu
  return {update(r:RenderRace,height:number){
   if(before>r.time||r.time-before>2){puffs.length=0;index=0;last.fill(-100);previous.length=0;trail.fill(NaN);marks.count=0;markIndex=0;}
   before=r.time;material.uniforms.pixelHeight.value=height;
-  [r.cars.a,r.cars.b,...(r.field??[])].forEach((car,i)=>{
+  for(let i=0;i<2+(r.field?.length??0);i++){
+   const car=i===0?r.cars.a:i===1?r.cars.b:r.field![i-2];
    const pit=car.pit??'none',exit=pit==='exit'&&previous[i]==='stopped';previous[i]=pit;
    const velocity=car.speed,lateral='lateralVelocity' in car?car.lateralVelocity??0:0;
    const slip=pit==='none'&&(('lockup' in car&&(car.lockup??0)>.12)||Math.abs(lateral)>3.3||('throttle' in car&&(car.throttle??0)>.85&&velocity>3&&velocity<14));
@@ -67,7 +68,7 @@ export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>nu
     }else if(!Number.isFinite(travel)||travel<0||travel>=10)trail[i]=car.distance;
    }else trail[i]=NaN;
    if(exit)for(let n=0;n<8;n++)emit(car.distance-2,car.offset+(n%2?-.83:.83),r.time,Math.sin(n)*.6,-1.6-n*.1,.27,0);
-   if(r.time-last[i]<.09||pit!=='stopped')return;
+   if(r.time-last[i]<.09||pit!=='stopped')continue;
    const seconds='pitTime' in car?(car.pitTime??0):2.6-('service' in car?car.service??0:0);
    const clock=serviceClock({distance:car.distance,pitTime:seconds,totalStop:'totalStop' in car?car.totalStop:2.6});
    for(const [j,w] of wheelStations.entries()){
@@ -76,7 +77,7 @@ export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>nu
      emit(car.distance+w.z,car.offset-w.x,r.time,-Math.sign(w.x)*.78,.2,.18,.23);last[i]=r.time;
     }
    }
-  });
+  }
   let n=0;
   for(const puff of puffs){const age=r.time-puff.time;if(age<0||age>1.25)continue;
    const d=puff.d+puff.vz*(-Math.expm1(-age*2.4)/2.4),p=track.pointAt(d,puff.x+puff.vx*age);

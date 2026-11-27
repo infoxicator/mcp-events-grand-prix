@@ -132,5 +132,9 @@ export function mountDriverRadio(panel: HTMLElement, seat: Team, connection: () 
   sync();
  };
 
- return {sync, onError};
+ return {sync,onError,dispose(){
+  if(toggle)toggle.onclick=null;
+  panel.onkeydown=null;input.oninput=null;form.onsubmit=null;
+  rows.clear();panel.replaceChildren();
+ }};
 }

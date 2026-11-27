@@ -12,7 +12,8 @@ export function impactEffects(scene:T.Scene,track:Track,heightAt:(distance:numbe
  const pose=new T.Object3D();
  return {update(race:RenderRace,camera:T.Camera){
   chip.count=hot.count=0;
-  for(const car of [race.cars.a,race.cars.b,...(race.field??[])]){
+  for(let i=0;i<2+(race.field?.length??0);i++){
+   const car=i===0?race.cars.a:i===1?race.cars.b:race.field![i-2];
    if(!car.lastImpact)continue;
    const age=race.time-car.lastImpact.time;if(age<0||age>1.1)continue;
    for(let j=0;j<6;j++){

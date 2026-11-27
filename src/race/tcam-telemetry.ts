@@ -1,3 +1,4 @@
+import {setAttributeIfChanged} from './hud-dom';
 import type {Car, Team} from './types';
 import type {GridEntry} from './grid';
 import './tcam-telemetry.css';
@@ -54,22 +55,22 @@ export function mountTcamTelemetry(viewport:HTMLElement){
   const lit=Math.round(amount*bank.length);bank.forEach((bar,i)=>bar.classList.toggle('lit',i<lit));
  }
  function update(seat:Team,car:Car,entry:GridEntry,place:number,corner:string,lap:number,lapTime:string,bestTime:string){
-  root.hidden=false;root.dataset.seat=seat;
+  if(root.hidden)root.hidden=false;setAttributeIfChanged(root,'data-seat',seat);
   set('kph',Math.round(car.speed*3.6));set('mph',Math.round(car.speed*2.2369363));
   set('energy',`ERS ${Math.round(car.ers)}%`);set('aero',car.drs?'DRS OPEN':'CLOSED');
   const power=car.ersPowerKw??0;
-  flow.setAttribute('visibility',power?'visible':'hidden');
+  setAttributeIfChanged(flow,'visibility',power?'visible':'hidden');
   flow.classList.toggle('deploy',power>0);set('flow',power>0?'BOOST':'RECHARGE');
   set('rpm',`${Math.round(car.rpm).toLocaleString('en-US')} RPM`);
-  revs.setAttribute('stroke-dasharray',`${Math.min(1,Math.max(0,car.rpm/13000))} 1`);
+  setAttributeIfChanged(revs,'stroke-dasharray',`${Math.min(1,Math.max(0,car.rpm/13000))} 1`);
   gears.forEach((digit,i)=>digit.classList.toggle('engaged',i+1===car.gear));
   pedals(brakes,car.brake);pedals(throttle,car.throttle);
   set('driver',`${entry.number}  ${entry.code}`);set('corner',corner.split(' / ')[0]);
   set('position','P'+place);set('surname',entry.name.split(' ').at(-1)!.toUpperCase());
-  set('tyre',car.compound[0].toUpperCase());values.get('tyre')!.setAttribute('data-compound',car.compound);
+  set('tyre',car.compound[0].toUpperCase());setAttributeIfChanged(values.get('tyre')!,'data-compound',car.compound);
   set('lap',car.finishTime!==null?'FINAL LAP':`LAP ${lap}`);set('time',lapTime);
   best.hidden=!car.bestLap;if(car.bestLap)set('best',bestTime);
-  sectors.forEach((sector,i)=>{sector.dataset.state=car.finishTime!==null||i<car.sector?car.splitColours[i]:i===car.sector?'active':'pending';});
+  sectors.forEach((sector,i)=>{setAttributeIfChanged(sector,'data-state',car.finishTime!==null||i<car.sector?car.splitColours[i]:i===car.sector?'active':'pending');});
  }
- return {update,hide(){root.hidden=true;}};
+ return {update,hide(){if(!root.hidden)root.hidden=true;},dispose(){root.remove();}};
 }

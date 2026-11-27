@@ -75,19 +75,23 @@ export function jackLift(car:PitTelemetry){
  if(car.pit!=='stopped')return 0;
  const t=serviceClock(car);return .086*ramp(t,.08,.34)*(1-ramp(t,2.13,2.40));
 }
-export function cornerService(seconds:number,index:number){
- const t=seconds-[.015,.05,.085,0][index];
- return {off:t>=.49&&t<1.66,remove:ramp(t,.49,.99),fit:ramp(t,1.00,1.66),
-  gun:ramp(t,-.15,.17)*(1-ramp(t,.44,.69))+ramp(t,1.50,1.71)*(1-ramp(t,1.99,2.23))};
+const cornerOffsets=[.015,.05,.085,0];
+export function cornerService(seconds:number,index:number,out={off:false,remove:0,fit:0,gun:0}){
+ const t=seconds-cornerOffsets[index];
+ out.off=t>=.49&&t<1.66;out.remove=ramp(t,.49,.99);out.fit=ramp(t,1.00,1.66);
+ out.gun=ramp(t,-.15,.17)*(1-ramp(t,.44,.69))+ramp(t,1.50,1.71)*(1-ramp(t,1.99,2.23));
+ return out;
 }
 
-export function frontJackPose(t:number){
+export function frontJackPose(t:number,out={pivot:0,withdraw:0,handleYaw:0,x:0,z:0}){
  // Swing the handle around the loaded head before the operator opens the drop valve.
  const pivot=ramp(t,.74,1.64),withdraw=ramp(t,2.23,2.56);
- return {pivot,withdraw,handleYaw:.94*pivot-.62*withdraw,x:1.38*withdraw,z:.30*withdraw};
+ out.pivot=pivot;out.withdraw=withdraw;out.handleYaw=.94*pivot-.62*withdraw;out.x=1.38*withdraw;out.z=.30*withdraw;
+ return out;
 }
 export function releaseGreen(t:number){
- return t>=2.56 && [0,1,2,3].every(i=>{const c=cornerService(t,i);return !c.off&&c.fit===1&&c.gun===0;});
+ // The last torque pulse ends at 2.23 + 0.085 seconds, before the release lamp.
+ return t>=2.56;
 }
 
 export function canRelease(car:PitTelemetry){

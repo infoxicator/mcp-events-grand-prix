@@ -54,9 +54,10 @@ const lineBase=Array.from({length:lineCount},(_,i)=>sample(i*lineStep));
 // Projected gradient of squared second differences (curvature), at several
 // spatial scales. Minimising path length instead would hug the inside and
 // tighten each apex, the opposite of a useful racing line.
+const curvatureWeights=[1,-4,6,-4,1];
 for(const stride of [8,4,2,1])for(let pass=0;pass<250;pass++)for(let i=0;i<lineCount;i++){
  const p=lineBase[i];let gx=0,gz=0;
- for(const [shift,weight] of [[-2,1],[-1,-4],[0,6],[1,-4],[2,1]]){const j=(i+shift*stride+lineCount)%lineCount,q=lineBase[j];gx+=(q.x-q.tz*lineOffsets[j])*weight;gz+=(q.z+q.tx*lineOffsets[j])*weight;}
+ for(let k=0;k<curvatureWeights.length;k++){const weight=curvatureWeights[k],j=(i+(k-2)*stride+lineCount)%lineCount,q=lineBase[j];gx+=(q.x-q.tz*lineOffsets[j])*weight;gz+=(q.z+q.tx*lineOffsets[j])*weight;}
  const normal=-gx*p.tz+gz*p.tx;lineOffsets[i]=Math.max(-3.8,Math.min(3.8,lineOffsets[i]-.06*normal));
 }
 // Fair the constrained path to avoid steering discontinuities at the lateral bounds.

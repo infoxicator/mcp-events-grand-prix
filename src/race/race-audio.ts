@@ -9,6 +9,7 @@ export interface RadioSpeech {start:()=>void;word:(charIndex:number)=>void;end:(
 export function raceAudio(button:HTMLButtonElement,level:HTMLInputElement,connection:Connection){
  let context:AudioContext|undefined,output:GainNode|undefined,engine:OscillatorNode|undefined,
      engineGain:GainNode|undefined,engineFilter:BiquadFilterNode|undefined,noise:AudioBuffer|undefined;
+ let opening:AudioContext|undefined;
  let release:(()=>void)|undefined,active=false,pending=false,disposed=false,gear=0,service=-1,lastFx=0,lastDistance=NaN;
  let radio:{utterance:SpeechSynthesisUtterance;end:()=>void}|undefined;
  const heard:Record<Team,number>={a:-1,b:-1};
@@ -25,7 +26,7 @@ export function raceAudio(button:HTMLButtonElement,level:HTMLInputElement,connec
   speechSynthesis.cancel();
   end();
  }
- function stop(){if(active)connection.releaseAudio();active=false;stopRadio();release?.();release=undefined;quiet();if(context){void context.close();context=undefined;}label();}
+ function stop(){if(opening){void opening.close().catch(()=>{});opening=undefined;}if(active)connection.releaseAudio();active=false;stopRadio();release?.();release=undefined;quiet();if(context){void context.close().catch(()=>{});context=undefined;}engine=undefined;output=engineGain=undefined;engineFilter=undefined;noise=undefined;label();}
  function speakRadio(line:string,speech:RadioSpeech){
   if(!active||volume===0||document.hidden||!window.speechSynthesis||!window.SpeechSynthesisUtterance)return;
   const voice=speechSynthesis.getVoices().find(v=>v.localService&&v.lang.startsWith('en'));
@@ -46,18 +47,19 @@ export function raceAudio(button:HTMLButtonElement,level:HTMLInputElement,connec
   if(!navigator.locks){button.textContent='Audio unavailable';return;}
   pending=true;
   window.speechSynthesis?.getVoices();
-  const a=new AudioContext();const resumed=a.resume().catch(()=>{}); // inside trusted click
+  const a=opening=new AudioContext();const resumed=a.resume().catch(()=>{}); // inside trusted click
   try{await navigator.locks.request('jev-broadcast-audio',{ifAvailable:true},async lock=>{
-   if(!lock||disposed){await a.close();if(!disposed)button.textContent='Sound in another tab';return;}
-   if(!await connection.claimAudio()){await a.close();button.textContent='Sound in another window';return;}
-   if(disposed){connection.releaseAudio();await a.close();return;}
-   await resumed;context=a;output=a.createGain();output.gain.value=volume*.52;output.connect(a.destination);
+   if(!lock||disposed){if(a.state!=='closed')await a.close();if(!disposed)button.textContent='Sound in another tab';return;}
+   if(!await connection.claimAudio()){if(a.state!=='closed')await a.close();if(!disposed)button.textContent='Sound in another window';return;}
+   await resumed;
+   if(disposed||opening!==a){connection.releaseAudio();if(a.state!=='closed')await a.close();return;}
+   opening=undefined;context=a;output=a.createGain();output.gain.value=volume*.52;output.connect(a.destination);
    engine=a.createOscillator();engine.type='sawtooth';engineFilter=a.createBiquadFilter();engineFilter.type='lowpass';
    engineGain=a.createGain();engineGain.gain.value=0;engine.connect(engineFilter).connect(engineGain).connect(output);engine.start();
    noise=a.createBuffer(1,a.sampleRate*.32,a.sampleRate);const data=noise.getChannelData(0);
    for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;
    active=true;save('jev-muted','0');label();await new Promise<void>(resolve=>{release=resolve;});
-  });}finally{pending=false;}
+  });}finally{if(opening===a){opening=undefined;if(a.state!=='closed')void a.close().catch(()=>{});}pending=false;}
  };
  level.oninput=()=>{volume=Number(level.value);save('jev-volume',String(volume));if(context&&output)output.gain.setTargetAtTime(volume*.52,context.currentTime,.025);};
  function cue(hz:number,end:number,duration:number,loudness:number,rough:boolean,delay=0,pan=0){
@@ -88,13 +90,15 @@ export function raceAudio(button:HTMLButtonElement,level:HTMLInputElement,connec
    if(kerbHeight(track,car.distance,car.offset+.81)+kerbHeight(track,car.distance,car.offset-.81)>.019||Math.abs(car.lateralG)>3.9){
     cue(1300,740,.13,.085,true);lastFx=t;
    }else{
-    const nearest=[...r.field,r.cars[team==='a'?'b':'a']].reduce((n,x)=>Math.min(n,Math.abs(x.distance-car.distance)),Infinity);
+    let nearest=Math.abs(r.cars[team==='a'?'b':'a'].distance-car.distance);
+    for(const other of r.field)nearest=Math.min(nearest,Math.abs(other.distance-car.distance));
     if(nearest<5&&lastDistance>=5){cue(405,153,.48,.14,false);lastFx=t;}lastDistance=nearest;
    }
   }
   heard[team]=impact;service=phase;
  }
  connection.onAudioLost=stop;
- const visibility=()=>{if(document.hidden){quiet();stopRadio();}};document.addEventListener('visibilitychange',visibility);
- label();return {update,speakRadio,dispose(){disposed=true;document.removeEventListener('visibilitychange',visibility);stop();}};
+ const visibility=()=>{if(document.hidden||document.documentElement.dataset.mcpHidden==='true'){quiet();stopRadio();}};
+ document.addEventListener('visibilitychange',visibility);document.addEventListener('mcp-visibility',visibility);
+ label();return {update,speakRadio,dispose(){disposed=true;document.removeEventListener('visibilitychange',visibility);document.removeEventListener('mcp-visibility',visibility);button.onclick=level.oninput=null;connection.onAudioLost=undefined;stop();}};
 }

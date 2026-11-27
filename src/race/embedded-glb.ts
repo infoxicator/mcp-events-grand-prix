@@ -1,13 +1,15 @@
+import {MeshResources} from './mesh-resources';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {Texture,TextureLoader} from 'three';
 /** Decode data URIs without fetch(data:), which may be blocked by the host CSP. */
-export async function assetBytes(url:string):Promise<ArrayBuffer>{
- if(!url.startsWith('data:'))return fetch(url).then(r=>{if(!r.ok)throw new Error(`Asset ${r.status}`);return r.arrayBuffer();});
+export async function assetBytes(url:string,signal?:AbortSignal):Promise<ArrayBuffer>{
+ signal?.throwIfAborted();
+ if(!url.startsWith('data:'))return fetch(url,{signal}).then(r=>{if(!r.ok)throw new Error(`Asset ${r.status}`);return r.arrayBuffer();});
  const raw=atob(url.slice(url.indexOf(',')+1)),bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return bytes.buffer;
 }
 // Normal web servers may serve a precompressed asset with Content-Encoding.
-export async function gzipBytes(url:string){
- const bytes=await assetBytes(url);
+export async function gzipBytes(url:string,signal?:AbortSignal){
+ const bytes=await assetBytes(url,signal);
  const signature=new Uint8Array(bytes,0,2);
  if(signature[0]!==0x1f||signature[1]!==0x8b)return bytes;
  return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
@@ -27,9 +29,12 @@ async function decodeBufferImage(bufferView:ArrayBuffer,mime:string,fallbackLoad
  const uri=`data:${mime};base64,${base64(new Uint8Array(bufferView))}`;
  return new Promise<Texture>((resolve,reject)=>fallbackLoader.load(uri,resolve,undefined,reject));
 }
-export async function embeddedGLB(url:string,gzip=false){
- const bytes=await (gzip?gzipBytes(url):assetBytes(url));
+export async function embeddedGLB(url:string,gzip=false,signal?:AbortSignal){
+ const bytes=await (gzip?gzipBytes(url,signal):assetBytes(url,signal));
+ signal?.throwIfAborted();
  if(import.meta.env.MCP_APP!=='true')return new GLTFLoader().parseAsync(bytes,'');
+ const decoded=new MeshResources();
+ let failed=false;
  const loader=new GLTFLoader().register(parser=>{
   const fallbackLoader=new TextureLoader(parser.options.manager);
   const p=parser as unknown as {
@@ -47,6 +52,8 @@ export async function embeddedGLB(url:string,gzip=false){
    const mime=sourceDef.mimeType||'image/png';
    const promise=p.getDependency('bufferView',sourceDef.bufferView).then(async bufferView=>{
     const texture=await decodeBufferImage(bufferView,mime,fallbackLoader);
+    decoded.textures.add(texture);
+    if(failed){decoded.dispose();throw Error('GLB parse failed');}
     if(sourceDef.extras)Object.assign(texture.userData,sourceDef.extras);
     texture.userData.mimeType=mime;
     return texture;
@@ -56,5 +63,12 @@ export async function embeddedGLB(url:string,gzip=false){
   };
   return {name:'EmbeddedImages'};
  });
- return loader.parseAsync(bytes,'');
+ try{
+  const gltf=await loader.parseAsync(bytes,'');
+  // Texture clones can share one bitmap. Keep every source used by any scene.
+  const retained=new MeshResources();
+  for(const scene of gltf.scenes)retained.collect(scene);
+  decoded.dispose(retained);
+  return gltf;
+ }catch(error){failed=true;decoded.dispose();throw error;}
 }

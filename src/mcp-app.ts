@@ -1,5 +1,7 @@
 import {STRATEGY_EVENT} from './race/strategy-events';
 import {App,applyDocumentTheme,applyHostStyleVariables,applyHostFonts,type McpUiHostContext} from '@modelcontextprotocol/ext-apps';
+import {prepareDriveCircuit,cancelPreparedCircuit} from './race/circuit-model';
+import {prepareEmbeddedRace} from './race/scene';
 import {mountRace} from './race/ui';
 import {connect,type Connection} from './race/network';
 import {PERSONAS,type HostedRoom,type Team} from './race/types';
@@ -40,7 +42,14 @@ let strategyPractice=false,practiceKey:string|undefined,strategySeat:Team|undefi
 let strategyDriver:StrategyDriver='autopilot',multiplayerActive=false,pendingAutoStart=false;
 let expectedLobby:{circuit:CircuitId;laps:number;driver:StrategyDriver}|null=null;
 let telemetry=false,setupBusy=false,stopBusy=false,joinBusy=false,hasActiveRace=false,menuAutoCollapsed=false;
-let mountSequence=0;
+let mountSequence=0,driveOutput:AudioContext|null=null;
+function prepareDriveOutput(){
+ if(driveOutput||telemetry||document.hidden)return;
+ try{driveOutput=new AudioContext();}catch{/* Playback can retry on the next user gesture. */}
+}
+function releaseDriveOutput(){
+ if(driveOutput){void driveOutput.close().catch(()=>{});driveOutput=null;}
+}
 document.documentElement.dataset.mcpApp='true';
 
 const selectedCircuit=()=>setup.querySelector<HTMLInputElement>('[name="circuit"]:checked')?.value as CircuitId??'monza';
@@ -69,17 +78,11 @@ function setMenuOpen(open:boolean){
  refreshSetup();
 }
 
+const fieldsets=setup.querySelectorAll<HTMLFieldSetElement>('fieldset');
+let previousSetup='';
 function refreshSetup(){
  const running=isRaceStarted();
  const locked=!origin||setupBusy||running;
- for(const group of setup.querySelectorAll<HTMLFieldSetElement>('fieldset'))group.disabled=locked;
- multiplayerToggle.disabled=locked;
- acceptButton.disabled=locked;
- const acceptLabel=setupBusy?'Starting…':'Accept';
- if(acceptButton.textContent!==acceptLabel)acceptButton.textContent=acceptLabel;
- joinField.disabled=running||joinBusy;
- joinSubmit.disabled=running||joinBusy;
-
  const canStopStrategy=Boolean(live&&strategyPractice&&practiceKey&&strategySeat!=='b'&&knownLive==='running');
  const canStopOwner=Boolean(live&&!strategyPractice&&knownLive==='running');
  const canResetLegacy=Boolean(!live&&hosted&&(controllers.some(c=>c.canReset)||view?.connection.canReset));
@@ -87,6 +90,18 @@ function refreshSetup(){
  const showOwnerEnded=Boolean(live&&!strategyPractice&&knownLive!=='running');
  const stopLabel=stopBusy?'Stopping…':canStopOwner?'Stop live race ↗':'Stop race';
 
+ const key=[running,locked,setupBusy,joinBusy,stopBusy,showStop,showOwnerEnded,stopLabel,menu.hidden].join('/');
+ if(previousSetup===key)return;
+ previousSetup=key;
+ if(!menu.hidden){
+  for(const group of fieldsets)group.disabled=locked;
+  multiplayerToggle.disabled=locked;
+  acceptButton.disabled=locked;
+  const acceptLabel=setupBusy?'Starting…':'Accept';
+  if(acceptButton.textContent!==acceptLabel)acceptButton.textContent=acceptLabel;
+  joinField.disabled=running||joinBusy;
+  joinSubmit.disabled=running||joinBusy;
+ }
  ownerControl.hidden=!showStop&&!showOwnerEnded;
  ownerControl.disabled=stopBusy;
  const modalStopLabel=showStop?stopLabel:'Owner page ↗';
@@ -124,6 +139,8 @@ function updateMultiplayerBar(snapshot:Connection['state']|undefined){
   :'Share so Team B can race Mercedes #63 with their own ChatGPT strategist.';
 }
 
+function setText(node:HTMLElement,text:string){if(node.textContent!==text)node.textContent=text;}
+let setupPhase:string|undefined,setupLivePhase:LivePhase|undefined,setupCanReset=false;
 function updateStatus(){
  if(document.documentElement.dataset.mcpHidden==='true')return;
  const connection=view?.connection,snapshot=connection?.state;
@@ -156,13 +173,13 @@ function updateStatus(){
   const webhook=strategySeat==='b'?snapshot?.guestStrategyWebhook:snapshot?.strategyWebhook;
   const strategyDriverName=PERSONAS[strategySeat??strategy?.team??'a'].name;
   if(strategySeat){
-   if(knownLive!=='running')crew.textContent='Strategy session ended.';
-   else if(strategy?.state==='applied')crew.textContent=`ChatGPT radio delivered to ${strategyDriverName}`;
-   else if(strategy?.state==='fallback')crew.textContent=`Pit wall covered ${strategyDriverName}’s strategy window`;
-   else if(webhook==='failed')crew.textContent='ChatGPT did not acknowledge the event. The pit wall can cover it.';
-   else if(webhook==='delivered')crew.textContent='ChatGPT acknowledged telemetry · Waiting for radio';
-   else if(webhook==='connected')crew.textContent='ChatGPT strategy connected';
-   else crew.textContent='In this Work chat, ask ChatGPT to subscribe to this race’s strategy events.';
+   if(knownLive!=='running')setText(crew,'Strategy session ended.');
+   else if(strategy?.state==='applied')setText(crew,`ChatGPT radio delivered to ${strategyDriverName}`);
+   else if(strategy?.state==='fallback')setText(crew,`Pit wall covered ${strategyDriverName}’s strategy window`);
+   else if(webhook==='failed')setText(crew,'ChatGPT did not acknowledge the event. The pit wall can cover it.');
+   else if(webhook==='delivered')setText(crew,'ChatGPT acknowledged telemetry · Waiting for radio');
+   else if(webhook==='connected')setText(crew,'ChatGPT strategy connected');
+   else setText(crew,'In this Work chat, ask ChatGPT to subscribe to this race’s strategy events.');
   }
   const circuitName=snapshot?CIRCUITS[snapshot.race.circuit].name:CIRCUITS[selectedCircuit()].name;
   const lapsCount=snapshot?.race.laps??selectedLaps();
@@ -195,7 +212,11 @@ function updateStatus(){
   multiplayerBar.hidden=true;
  }
  if((view||hosted)&&status.textContent!==message)status.textContent=message;
- refreshSetup();
+ const phase=snapshot?.race.phase,canReset=Boolean(connection?.canReset||controllers.some(c=>c.canReset));
+ if(phase!==setupPhase||knownLive!==setupLivePhase||canReset!==setupCanReset){
+  setupPhase=phase;setupLivePhase=knownLive;setupCanReset=canReset;
+  refreshSetup();
+ }
 }
 
 function stopControllers(){
@@ -297,10 +318,15 @@ async function showLive(invite:LiveInvitation,phase:LivePhase='running',strategy
   const onStart=()=>view?.connection.send({type:'start',startKey:strategyKey});
 
   if(nextDriveView&&strategySeat&&strategyKey){
-   const {mountDrive}=await import('./race/drive-view');
-   if(disposed||seq!==mountSequence)return;
-   const driverRoom:HostedRoom={room:invite.room,token:strategyKey,links:null,origin,live:true};
-   view=mountDrive(driverRoom,{team:strategySeat,embedded:true,canStart,startReady,onStart,autostart:pendingAutoStart});
+   const driverView=import('./race/drive-view');
+   prepareDriveOutput();
+   const output=driveOutput;driveOutput=null;
+   try{
+    const {mountDrive}=await driverView;
+    if(disposed||seq!==mountSequence){void output?.close().catch(()=>{});return;}
+    const driverRoom:HostedRoom={room:invite.room,token:strategyKey,links:null,origin,live:true};
+    view=mountDrive(driverRoom,{team:strategySeat,circuit:settings?.circuit,audioOutput:output,embedded:true,canStart,startReady,onStart,autostart:pendingAutoStart});
+   }catch(error){void output?.close().catch(()=>{});throw error;}
   }else{
    if(disposed||seq!==mountSequence)return;
    const radioSeat=nextKey?strategySeat:undefined;
@@ -328,7 +354,9 @@ async function shareEventFilter(filter:NonNullable<ReturnType<typeof parseEventF
 }
 
 async function openFromWidget(name:string,args:Record<string,unknown>,options:{collapseMenu?:boolean;autoStart?:boolean}={}){
- const result=await app.callServerTool({name,arguments:args});
+ const request=app.callServerTool({name,arguments:args});
+ if(args.driver==='human'&&name==='open_grand_prix_strategy')prepareDriveOutput();
+ const result=await request;
  await applyResult(result,options);
  const filter=parseEventFilter((result.structuredContent as {event_filter?:unknown}|undefined)?.event_filter);
  if(filter)await shareEventFilter(filter);
@@ -438,7 +466,12 @@ async function openLink(url:string){
 }
 
 app.onhostcontextchanged=context;
-app.ontoolinput=()=>{if(!hosted)status.textContent='MCP connected · Preparing race setup…';};
+app.ontoolinput=input=>{
+ if(!hosted)status.textContent='MCP connected · Preparing race setup…';
+ if(!hosted&&input.arguments?.driver==='human'&&!document.hidden){
+  const night=input.arguments.circuit==='las-vegas';prepareEmbeddedRace(night);prepareDriveCircuit(night);
+ }
+};
 // Which parts of a tool result reached the view (key names only), shown when setup can't unlock.
 const resultShape=(result:Result)=>`content: ${(result.content??[]).map(c=>c.type).join(',')||'none'} · structuredContent: ${result.structuredContent?Object.keys(result.structuredContent).length+' keys':'none'} · _meta: ${result._meta?Object.keys(result._meta).join(',')||'empty':'none'}`;
 function showSetupNote(text:string){
@@ -447,7 +480,7 @@ function showSetupNote(text:string){
  note.hidden=!text;
 }
 // No result at all within a few seconds means the host never delivered one.
-setTimeout(()=>{if(!origin&&element('mcp-setup-note').hidden)showSetupNote('No tool result reached the widget yet.');},6000);
+const setupNoteTimer=setTimeout(()=>{if(!origin&&element('mcp-setup-note').hidden)showSetupNote('No tool result reached the widget yet.');},6000);
 app.ontoolresult=result=>{
  if(hosted&&!result._meta?.connection&&!result._meta?.liveInvitation)return;
  void applyResult(result).then(()=>showSetupNote('')).catch(error=>{
@@ -479,8 +512,11 @@ function teardown(){
  clearSuspend();
  stopControllers();
  clearRaceView();
- observer.disconnect();
- clearInterval(statusTimer);
+ releaseDriveOutput();cancelPreparedCircuit();observer.disconnect();
+ clearInterval(statusTimer);clearTimeout(setupNoteTimer);
+ app.onhostcontextchanged=undefined;app.ontoolinput=undefined;app.ontoolresult=undefined;app.onerror=undefined;
+ for(const node of [copy,guestCopy,play,expand,web,joinWeb,menuToggle,menuClose,backToFeed,ownerControl,headerStopButton])node.onclick=null;
+ setup.onsubmit=null;joinForm.onsubmit=null;menu.onclick=null;
  window.removeEventListener('keydown',onMenuKeyDown);
  window.removeEventListener('pagehide',teardown);
  window.removeEventListener('beforeunload',teardown);
@@ -523,12 +559,12 @@ menuClose.onclick=()=>{
  setMenuOpen(false);
  menuToggle.focus({preventScroll:true});
 };
-menu.addEventListener('click',event=>{
+menu.onclick=event=>{
  if(event.target===menu&&hasActiveRace){
   setMenuOpen(false);
   menuToggle.focus({preventScroll:true});
  }
-});
+};
 backToFeed.onclick=()=>{
  setMenuOpen(false);
  menuToggle.focus({preventScroll:true});
@@ -542,6 +578,7 @@ setup.onsubmit=async event=>{
  const laps=selectedLaps();
  const driver=selectedDriver();
  const multiplayer=multiplayerToggle.checked;
+ if(!telemetry)prepareEmbeddedRace(circuit==='las-vegas');
  setupBusy=true;
  refreshSetup();
  try{
@@ -550,10 +587,12 @@ setup.onsubmit=async event=>{
   let configured=false;
   if(canConfigureLobby&&live&&practiceKey){
    try{
-    const result=await app.callServerTool({
+    const request=app.callServerTool({
      name:'configure_grand_prix_strategy',
      arguments:{room:live.room,key:practiceKey,circuit,laps,driver,multiplayer},
     });
+    if(driver==='human'&&strategyDriver!=='human')prepareDriveOutput();
+    const result=await request;
     if(!result.isError){
      await applyResult(result,{collapseMenu:true,autoStart:!multiplayer});
      const filter=parseEventFilter((result.structuredContent as {event_filter?:unknown}|undefined)?.event_filter);
@@ -566,7 +605,7 @@ setup.onsubmit=async event=>{
    await openFromWidget('open_grand_prix_strategy',{circuit,laps,driver,multiplayer},{collapseMenu:true,autoStart:!multiplayer});
   }
  }catch(e){error.textContent=e instanceof Error?e.message:'Could not start race.';}
- finally{setupBusy=false;refreshSetup();}
+ finally{releaseDriveOutput();setupBusy=false;refreshSetup();}
 };
 async function stopActiveRace(){
  if(stopBusy)return;

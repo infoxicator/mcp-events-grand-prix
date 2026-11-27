@@ -36,5 +36,5 @@ export function helmetLivery(team:Team){
  const number=team==='a'?'44':'63';crown.strokeText(number,0,0);
  crown.fillStyle='#202c39';crown.fillText(number,0,0);
  const tex=new T.CanvasTexture(atlas);tex.flipY=false;tex.wrapS=T.RepeatWrapping;
- tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=8;return tex;
+ tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=import.meta.env.MCP_APP==='true'?4:8;return tex;
 }

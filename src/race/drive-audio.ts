@@ -28,7 +28,7 @@ export interface DriveAudio {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-export function createDriveAudio(): DriveAudio {
+export function createDriveAudio(prepared:AudioContext|null=null): DriveAudio {
  let ctx: AudioContext | null = null;
  let master: GainNode | null = null;
  let oscMain: OscillatorNode | null = null;
@@ -50,6 +50,7 @@ export function createDriveAudio(): DriveAudio {
  let kerbOsc: OscillatorNode | null = null;
 
  let enabled = true;
+ let attemptedPlayback = false;
  let volume = 0.36;
  let lastGear = 1;
  let shiftCutUntil = 0;
@@ -61,7 +62,8 @@ export function createDriveAudio(): DriveAudio {
    (window as unknown as {webkitAudioContext?: typeof AudioContext}).webkitAudioContext;
   if (!Ctor) return null;
   try {
-   ctx = new Ctor();
+   if(prepared){ctx=prepared;prepared=null;}
+   else ctx=new Ctor();
   } catch {
    return null;
   }
@@ -176,7 +178,8 @@ export function createDriveAudio(): DriveAudio {
 
  function setEnabled(on: boolean) {
   enabled = on;
-  if (enabled) unlock();
+  // Visibility changes restore an existing engine. Allocate it on a gesture or the first audible sample.
+  if (enabled && ctx?.state === 'suspended') void ctx.resume().catch(() => {});
   if (ctx && master) {
    master.gain.setTargetAtTime(enabled ? volume : 0, ctx.currentTime, 0.04);
   }
@@ -190,6 +193,10 @@ export function createDriveAudio(): DriveAudio {
  }
 
  function update(s: DriveAudioSample) {
+  if (!ctx && enabled && s.active && !attemptedPlayback) {
+   attemptedPlayback = true;
+   unlock();
+  }
   if (!ctx || !enabled || ctx.state !== 'running') return;
   const now = ctx.currentTime;
 
@@ -324,6 +331,7 @@ export function createDriveAudio(): DriveAudio {
  }
 
  function dispose() {
+  if(prepared){void prepared.close().catch(()=>{});prepared=null;}
   if (ctx) {
    ctx.close().catch(() => {});
    ctx = null;

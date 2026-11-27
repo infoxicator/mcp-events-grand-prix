@@ -1,3 +1,4 @@
+import {MeshResources} from './mesh-resources';
 import {finishRotor} from './brake-rotor';
 import {cornerService,jackLift} from './pit-service';
 import tyrePrintURL from './assets/slick-print.png?url';
@@ -94,8 +95,9 @@ function serviceWheels(material:T.Material){
  material.customProgramCacheKey=()=>key+'-service-wheels';
 }
 export function createField(track:Track,heightAt:(distance:number)=>number,paintSheet:T.Texture,surfaceWater={value:0}){
+ const loadingAssets=new AbortController();
  const root=new T.Group(),pose=new T.Object3D(),inkMap=new T.TextureLoader().load(tyrePrintURL);
- inkMap.colorSpace=T.SRGBColorSpace;inkMap.anisotropy=8;
+ inkMap.colorSpace=T.SRGBColorSpace;inkMap.anisotropy=import.meta.env.MCP_APP==='true'?4:8;
  const gridBoxes=extraGridBoxes(track,heightAt);const signage=new T.Group();signage.add(gridBoxes);
  const frustum=new T.Frustum(),projection=new T.Matrix4(),bounds=new T.Sphere(new T.Vector3(),3.6);
  const level=()=>({batches:[] as T.InstancedMesh[],palettes:[] as T.Color[][],
@@ -120,8 +122,17 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
  // Signed airbox and wing families, shared by the base mesh, trim and shadow at either LOD.
  const shapes:Record<(typeof grid)[number]['team'],number>={Mercedes:.82,'Aston Martin':.68,Williams:.90,Alpine:1,Ferrari:0,Haas:-.68,Audi:-1,Cadillac:-.9,McLaren:.18,'Red Bull Racing':-.18,'Racing Bulls':0};
  const strengths=opponents.map(e=>shapes[e.team]),modules=new Map<string,T.InstancedMesh>();
- const loaded=Promise.all([embeddedGLB(fieldURL,true),embeddedGLB(nearURL,true),constructorKit()]).then(([{scene},{scene:nearScene},kit])=>{
-  if(!disposed){
+ const loaded=Promise.allSettled([embeddedGLB(fieldURL,true,loadingAssets.signal),embeddedGLB(nearURL,true,loadingAssets.signal),constructorKit()] as const).then(([low,high,library])=>{
+  const sources=new MeshResources();
+  if(low.status==='fulfilled')sources.collect(low.value.scene);
+  if(high.status==='fulfilled')sources.collect(high.value.scene);
+  if(disposed||low.status==='rejected'||high.status==='rejected'||library.status==='rejected'){
+   sources.dispose();
+   if(!disposed)throw (low.status==='rejected'?low.reason:high.status==='rejected'?high.reason:library.status==='rejected'?library.reason:undefined);
+   return;
+  }
+  const scene=low.value.scene,nearScene=high.value.scene,kit=library.value;
+  {
    const art=document.createElement('canvas');art.width=256;art.height=144;
    const ctx=art.getContext('2d')!;ctx.fillStyle='#dfded1';ctx.fillRect(0,0,256,144);
    ctx.fillStyle='#192126';ctx.textAlign='center';ctx.font='bold 30px Arial';ctx.fillText('LEGACY',128,42);
@@ -135,7 +146,7 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    }
    boards.name='Legacy DRS activation';signage.add(boards);
   }
-  if(!disposed)for(const type of [...new Set([...profiles,...farModules]),'Contact','BrightWheelFaces']){
+  for(const type of [...new Set([...profiles,...farModules]),'Contact','BrightWheelFaces']){
    const mesh=trimMesh(kit,type,'#ffffff'),batch=new T.InstancedMesh(mesh.geometry,mesh.material,opponents.length);
    if(type==='BrightWheelFaces'){
     batch.geometry.setAttribute('removedWheels',new T.InstancedBufferAttribute(new Float32Array(opponents.length),1));
@@ -152,8 +163,6 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
   for(const [source,tier] of [[scene,far],[nearScene,close]] as const)source.traverse(obj=>{
    const near=tier===close;
    if(!(obj instanceof T.Mesh))return;
-   const old=obj.material as T.Material;
-   if(disposed){obj.geometry.dispose();old.dispose();return;}
    const trim=obj.name==='Trim',paint=obj.name==='Paint';
    const shadow=obj.name==='UndertrayShadow';
    const enamel=obj.name==='HelmetTint'||obj.name==='Visor';
@@ -261,7 +270,7 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
      };surface.customProgramCacheKey=()=>key+'-controls-'+(wheel?'steer':'flap');
     }
    }
-   old.dispose();batch.name='Field '+obj.name;batch.frustumCulled=false;
+   batch.name='Field '+obj.name;batch.frustumCulled=false;
    batch.castShadow=!shadow;batch.receiveShadow=!shadow;batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
    batch.onBeforeShadow=()=>{batch.count=tier.shadowCount;};
    batch.onAfterShadow=()=>{batch.count=tier.count;};
@@ -271,9 +280,9 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
     return tint.clone();
    });
    tier.palettes.push(palette);root.add(batch);tier.batches.push(batch);
-  });ready=!disposed;
+  });sources.dispose(new MeshResources().collect(root));ready=true;
  }).catch(e=>{error=String(e);});
- return {root,signage,loaded,get ready(){return ready;},get error(){return error;},update(field:readonly FieldCar[]|undefined,camera:T.PerspectiveCamera,focus:T.Vector3,shadowExtent:number,mirror=false,balanced=false){
+ return {root,signage,loaded,get ready(){return ready;},get error(){return error;},update(field:readonly FieldCar[]|undefined,camera:T.PerspectiveCamera,focus:T.Vector3,shadowExtent:number,mirror=false,balanced=false,drawShadows=true,viewHeight=0){
   root.visible=!!field?.length;if(!ready||!field)return;
   camera.updateMatrixWorld();frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
   for(const batch of modules.values())batch.count=0;
@@ -287,7 +296,7 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    centre.set(p.x,heightAt(c.distance)+.55,p.z);bounds.center.copy(centre);
    const focusSq=centre.distanceToSquared(focus);
    visibleInCamera[i]=Number(frustum.intersectsSphere(bounds));
-   if(!mirror&&focusSq<((balanced?1:1.42)*shadowExtent+6)**2)order[casters++]=i;
+   if(drawShadows&&!mirror&&focusSq<((balanced?1:1.42)*shadowExtent+6)**2)order[casters++]=i;
    else if(visibleInCamera[i])order[--others]=i;
   }
   for(let k=0;k<order.length;k++){
@@ -299,7 +308,8 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    const distanceSq=bounds.center.distanceToSquared(camera.position);
    const stopped=c.pit==='stopped',seconds=track.PIT_STOP_SECONDS-(c.service??0);
    const movingRange=balanced?(wasClose[i]?24:19):(wasClose[i]?38:32);
-   const range=mirror?(stopped?12:6):stopped?65:movingRange;
+   const pixelRange=viewHeight?viewHeight/(2*Math.tan(camera.fov*Math.PI/360))*2/48:Infinity;
+   const range=mirror?(stopped?12:6):stopped?65:Math.min(movingRange,pixelRange);
    const travel=c.distance-lastDistance[i];
    if(!mirror&&travel>0&&travel<35){
     const decel=(lastSpeed[i]**2-c.speed**2)/(2*Math.max(.02,travel)),dt=travel/Math.max(2,c.speed);
@@ -320,7 +330,9 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    const module=modules.get(near?profiles[i]:farModules[i])!,contact=modules.get('Contact')!;
    contact.setMatrixAt(contact.count++,pose.matrix);
    if(stopped){pose.position.y+=jackLift({distance:c.distance,pit:c.pit,pitTime:seconds});pose.updateMatrix();}
-   module.geometry.getAttribute('liveryRow').setX(module.count,rows[i]);module.setMatrixAt(module.count++,pose.matrix);
+   const row=module.geometry.getAttribute('liveryRow');
+   if(row.getX(module.count)!==rows[i]){row.setX(module.count,rows[i]);row.needsUpdate=true;}
+   module.setMatrixAt(module.count++,pose.matrix);
    if(opponents[i].team==='Cadillac'||opponents[i].team==='Racing Bulls'){
     const faces=modules.get('BrightWheelFaces')!;faces.geometry.getAttribute('removedWheels').setX(faces.count,off);
     faces.geometry.getAttribute('wheelMotion').setXY(faces.count,(c.distance/.36)%(2*Math.PI),c.speed);
@@ -328,17 +340,23 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    }
    for(const [j,batch] of tier.batches.entries()){
     batch.setMatrixAt(slot,pose.matrix);
-    if(batch.name==='Field CompoundInk'){batch.setColorAt(slot,compoundColor.set(compoundColors[c.compound??'medium']));batch.instanceColor!.needsUpdate=true;}
+    if(batch.name==='Field CompoundInk'){compoundColor.set(compoundColors[c.compound??'medium']);const color=batch.instanceColor!;
+     if(color.getX(slot)!==Math.fround(compoundColor.r)||color.getY(slot)!==Math.fround(compoundColor.g)||color.getZ(slot)!==Math.fround(compoundColor.b)){batch.setColorAt(slot,compoundColor);color.needsUpdate=true;}}
     else if(tier.entries[slot]!==i)batch.setColorAt(slot,tier.palettes[j][i]);
    }
    if(tier.entries[slot]!==i){tier.entries[slot]=i;tier.rows.setX(slot,rows[i]);
     tier.forms.setX(slot,strengths[i]);tier.dirty=true;}
   }
-  removedWheels.needsUpdate=true;close.wheels.needsUpdate=true;close.controls.needsUpdate=true;rotorHeat.needsUpdate=true;
-  for(const m of modules.values()){m.visible=m.count>0;for(const name of ['wheelMotion','removedWheels']){const a=m.geometry.getAttribute(name);if(a)a.needsUpdate=true;}const row=m.geometry.getAttribute('liveryRow');if(row)row.needsUpdate=true;m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;}
+  if(close.count){removedWheels.needsUpdate=true;close.wheels.needsUpdate=true;close.controls.needsUpdate=true;rotorHeat.needsUpdate=true;}
+  for(const m of modules.values()){m.visible=m.count>0;if(!m.count)continue;for(const name of ['wheelMotion','removedWheels']){const a=m.geometry.getAttribute(name);if(a)a.needsUpdate=true;}m.instanceMatrix.needsUpdate=true;}
   for(const tier of [far,close]){
    if(tier.dirty){tier.rows.needsUpdate=true;tier.forms.needsUpdate=true;}
-   for(const batch of tier.batches){batch.castShadow=tier.shadowCount>0&&batch.name!=='Field UndertrayShadow';batch.count=tier.count;batch.visible=tier.count>0;batch.instanceMatrix.needsUpdate=true;if(tier.dirty)batch.instanceColor!.needsUpdate=true;}
+   for(const batch of tier.batches){batch.castShadow=tier.shadowCount>0&&batch.name!=='Field UndertrayShadow';batch.count=tier.count;batch.visible=tier.count>0;if(!tier.count)continue;batch.instanceMatrix.needsUpdate=true;if(tier.dirty)batch.instanceColor!.needsUpdate=true;}
   }
- },dispose(){disposed=true;inkMap.dispose();for(const mesh of [...far.batches,...close.batches,...modules.values()]){mesh.customDepthMaterial?.dispose();mesh.dispose();}}};
+ },dispose(){
+  if(disposed)return;
+  disposed=true;loadingAssets.abort();inkMap.dispose();root.removeFromParent();signage.removeFromParent();
+  new MeshResources().collect(root).collect(signage).dispose();
+  root.clear();signage.clear();modules.clear();far.batches.length=close.batches.length=0;
+ }};
 }

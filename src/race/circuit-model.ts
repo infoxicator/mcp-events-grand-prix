@@ -1,3 +1,5 @@
+import {batchCircuit,batchDistantInstances} from './embedded-batches';
+import {MeshResources} from './mesh-resources';
 import {wetRoad} from './wet-road';
 import {circuitSignals} from './circuit-signals';
 import vegasSurvey from './assets/circuits/las-vegas-manifest.json';
@@ -20,10 +22,34 @@ import {circuitHeight} from './elevation';
 import canopyLightURL from './assets/circuits/monza-canopy-light.png?url';
 import asphaltNormal from './assets/asphalt-normal.webp?url';
 import type {Track} from './track';
+// Transfer a selected Drive venue to its first scene. An abandoned invitation
+// releases the parsed buffers and decoded bitmaps even if parsing is in flight.
+type PreparedCircuit={night:boolean;controller:AbortController;loaded:ReturnType<typeof embeddedGLB>;timer:number};
+let prepared:PreparedCircuit|undefined;
+export function cancelPreparedCircuit(){
+ const entry=prepared;if(!entry)return;
+ prepared=undefined;clearTimeout(entry.timer);entry.controller.abort();
+ void entry.loaded.then(asset=>new MeshResources().collect(asset.scene).dispose(),()=>{});
+}
+export function prepareDriveCircuit(night:boolean){
+ if(prepared?.night===night)return;
+ cancelPreparedCircuit();
+ const controller=new AbortController(),loaded=embeddedGLB(night?vegasMcp:monzaMcp,true,controller.signal);
+ const entry={night,controller,loaded,timer:window.setTimeout(cancelPreparedCircuit,10000)};
+ prepared=entry;void loaded.catch(()=>{if(prepared===entry)cancelPreparedCircuit();});
+}
+function takeCircuit(night:boolean,signal:AbortSignal){
+ const entry=prepared;
+ if(!entry||entry.night!==night){cancelPreparedCircuit();return embeddedGLB(night?vegasMcp:monzaMcp,true,signal);}
+ prepared=undefined;clearTimeout(entry.timer);
+ const abort=()=>entry.controller.abort();
+ signal.addEventListener('abort',abort,{once:true});
+ return entry.loaded.finally(()=>signal.removeEventListener('abort',abort));
+}
 /** Reflect the actual resort and jets on the surface of the Blender lake. */
-function lakeReflection(bounds:T.Box3){
+function lakeReflection(bounds:T.Box3,cadence:()=>number){
  const size=bounds.getSize(new T.Vector3()),centre=bounds.getCenter(new T.Vector3());
- const water=new Reflector(new T.CircleGeometry(1,96),{textureWidth:512,textureHeight:384,clipBias:.002,multisample:0});
+ const water=new Reflector(new T.CircleGeometry(1,96),{textureWidth:import.meta.env.MCP_APP==='true'?320:512,textureHeight:import.meta.env.MCP_APP==='true'?240:384,clipBias:.002,multisample:0});
  water.position.set(centre.x,centre.y+.018,centre.z);water.rotation.x=-Math.PI/2;water.scale.set(size.x/2,size.z/2,1);
  const m=water.material as T.ShaderMaterial;m.transparent=true;m.depthWrite=false;
  m.uniforms.waterTime={value:0};
@@ -44,14 +70,15 @@ function lakeReflection(bounds:T.Box3){
  const reflect=water.onBeforeRender;let last=-Infinity;
  water.onBeforeRender=function(renderer,scene,camera,...rest){
   if(camera.name!=='Race camera'||camera.position.distanceTo(centre)>900||camera.parent instanceof T.CubeCamera)return;
-  const now=performance.now();if(now-last<33.33)return;last=now;
+  const now=performance.now();if(now-last<cadence())return;last=now;
   reflect.call(this,renderer,scene,camera,...rest);
  };
  return water;
 }
 /** All geometry is authored/exported by Blender. This loader only configures PBR and culling. */
-export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceWater={value:0}){
+export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceWater={value:0},multiDraw=false){
  let ready=false,error:string|undefined,disposed=false;
+ const loadingAssets=new AbortController();
  const heightAt=(d:number)=>circuitHeight(track.id,d);
  const people=tracksideMotion();
  const sp=track.project(-115.1621,36.1207),spherePosition=new T.Vector3(sp.x,32.9184,sp.z);
@@ -68,15 +95,21 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   data[4*i+1]=255*Math.max(0,...track.CORNERS.map(c=>1-track.wrap(c.d-d)/Math.max(35,165-c.speed)));data[4*i+3]=255;
  }
  const lineMap=new T.DataTexture(data,1024,1);lineMap.wrapS=T.RepeatWrapping;lineMap.minFilter=lineMap.magFilter=T.LinearFilter;lineMap.needsUpdate=true;
+ let reflectionMs=import.meta.env.MCP_APP==='true'?50:33.33;
+ let circuitRoot:T.Group|undefined;
+ let batches:T.BatchedMesh[]=[];
+ let distantInstances:ReturnType<typeof batchDistantInstances>|undefined;
  const lakeBounds=new T.Box3();let reflection:Reflector|undefined;
  const distant:T.Mesh[]=[],casters:T.Mesh[]=[],receivers:T.Mesh[]=[];
  const circuitLods:T.LOD[]=[],detailCamera=new T.PerspectiveCamera();
  let manualDetail=false;
  const draco=import.meta.env.MCP_APP==='true'?null:new DRACOLoader().setDecoderPath({js:decoderJS,wasm:decoderWasm}).setWorkerLimit(2);
- const source=import.meta.env.MCP_APP==='true'?embeddedGLB(track.night?vegasMcp:monzaMcp,true):gzipBytes(track.night?vegasURL:monzaURL).then(b=>new GLTFLoader().setDRACOLoader(draco!).parseAsync(b,''));
+ const source=import.meta.env.MCP_APP==='true'?takeCircuit(!!track.night,loadingAssets.signal):gzipBytes(track.night?vegasURL:monzaURL,loadingAssets.signal).then(b=>new GLTFLoader().setDRACOLoader(draco!).parseAsync(b,''));
  const loaded=source.then(gltf=>{
   draco?.dispose();
-  if(disposed){gltf.scene.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material]){for(const value of Object.values(m))if(value instanceof T.Texture)value.dispose();m.dispose();}}});return;}
+  const original=new MeshResources().collect(gltf.scene);
+  if(disposed){original.dispose();return;}
+  circuitRoot=gltf.scene;
   // Partition Blender EXT_mesh_gpu_instancing by spatial tile for culling and shadows.
   gltf.scene.updateMatrixWorld(true);
   const drySurfaces=new Set<T.MeshStandardMaterial>();
@@ -93,7 +126,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
    const key=!o.name.startsWith('LOD_Canopy')?o.name:(o.material as T.Material).name;
    farCrowns.set(key,geometry.applyMatrix4(o.matrixWorld));lodSources.push(o);
   });
-  lodSources.forEach(o=>{o.removeFromParent();o.geometry.dispose();});
+  lodSources.forEach(o=>{o.removeFromParent();});
   const buckets=new Map<string,{mesh:T.Mesh;matrix:T.Matrix4}[]>(),sources:T.Mesh[]=[];
   gltf.scene.traverse(o=>{if(o instanceof T.Mesh&&(o instanceof T.InstancedMesh||o.name.startsWith('Instance_'))){sources.push(o);const count=o instanceof T.InstancedMesh?o.count:1;
    for(let i=0;i<count;i++){const matrix=new T.Matrix4();if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);matrix.premultiply(o.matrixWorld);const p=new T.Vector3().setFromMatrixPosition(matrix),key=`${o.geometry.uuid}:${(o.material as T.Material).uuid}:${Math.floor(p.x/180)}:${Math.floor(p.z/180)}`;const group=buckets.get(key)??[];group.push({mesh:o,matrix});buckets.set(key,group);}
@@ -438,6 +471,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     }
 
    }
+   if(import.meta.env.MCP_APP==='true'&&materials.some(m=>/^(Canopy|Trunk|Foliage|Spectator|Seated|Skin|.*Uniform|Fountain)/.test(m.name)))o.layers.set(1);
    if(o.receiveShadow)receivers.push(o);
    o.userData.cullRadius=(o instanceof T.InstancedMesh?o.boundingSphere:o.geometry.boundingSphere)!.radius*o.matrixWorld.getMaxScaleOnAxis();
   });
@@ -461,11 +495,18 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
    };
    material.customProgramCacheKey=()=>`dry-${material.name}`;
   }
+  if(import.meta.env.MCP_APP==='true'){
+   if(multiDraw)batches=batchCircuit(gltf.scene);
+   distantInstances=batchDistantInstances(gltf.scene);
+  }
+  const active=new MeshResources().collect(gltf.scene);
+  for(const geometry of farCrowns.values())original.geometries.add(geometry);
+  original.dispose(active);
   scene.add(gltf.scene);
-  if(!lakeBounds.isEmpty()){reflection=lakeReflection(lakeBounds);scene.add(reflection);}
+  if(!lakeBounds.isEmpty()){reflection=lakeReflection(lakeBounds,()=>reflectionMs);scene.add(reflection);}
   ready=true;
- }).catch(e=>{draco?.dispose();error=String(e);console.error('Blender circuit asset failed',e);});
- return {loaded,heightAt,spherePosition,people,signals,puddles,get sphereShow(){return sphereShow;},get ready(){return ready;},get error(){return error;},viewDetail(camera:T.Camera|null,detail=1,drawDistance=1){
+ }).catch(e=>{draco?.dispose();if(disposed)return;error=String(e);console.error('Blender circuit asset failed',e);});
+ return {setReflectionCadence(ms:number){reflectionMs=ms;},loaded,heightAt,spherePosition,people,signals,puddles,get sphereShow(){return sphereShow;},get ready(){return ready;},get error(){return error;},viewDetail(camera:T.Camera|null,detail=1,drawDistance=1){
   if(!camera&&!manualDetail)return;
   manualDetail=!!camera;
   if(camera){detailCamera.matrixWorld.copy(camera.matrixWorld);detailCamera.zoom=detail;}
@@ -477,6 +518,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     end.distance=range*drawDistance/detail;lod.update(detailCamera);end.distance=range;
    }
   }
+  distantInstances?.(camera);
  },update(time:number,focus:T.Vector3,camera:T.Vector3,shadowExtent:number,balanced:boolean){
   animation.value=time;shadowPatch.value.set(focus.x,focus.z,balanced?0:shadowExtent);
   if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;
@@ -488,5 +530,11 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   for(const mesh of casters)mesh.castShadow=(!balanced||!canopyLight||!mesh.userData.foliageCaster)&&near(mesh,balanced?48:105);
   for(const mesh of receivers)mesh.receiveShadow=near(mesh,balanced?shadowExtent+8:shadowExtent*1.5+15);
   for(const mesh of distant)mesh.visible=near(mesh,balanced?640:950);
- },dispose:()=>{disposed=true;puddles.dispose();signals.dispose();lineMap.dispose();gravelNormal.dispose();waterNormal.dispose();normal.dispose();canopyLight?.dispose();if(reflection){reflection.removeFromParent();reflection.geometry.dispose();reflection.dispose();}}};
+ },dispose:()=>{if(disposed)return;disposed=true;loadingAssets.abort();
+  if(circuitRoot){
+   circuitRoot.removeFromParent();const assets=new MeshResources().collect(circuitRoot);
+   for(const batch of batches){assets.geometries.delete(batch.geometry);batch.dispose();}
+   assets.dispose();circuitRoot=undefined;
+  }
+  puddles.dispose();signals.dispose();lineMap.dispose();gravelNormal.dispose();waterNormal.dispose();normal.dispose();canopyLight?.dispose();if(reflection){reflection.removeFromParent();reflection.geometry.dispose();reflection.dispose();}}};
 }

@@ -1,3 +1,5 @@
+import {rigidCarParts} from './embedded-batches';
+import {MeshResources} from './mesh-resources';
 import {finishRotor} from './brake-rotor';
 import {helmetLivery} from './helmet-livery';
 import {compoundColors} from './grid';
@@ -49,7 +51,7 @@ function getSharedMaps(){
    fibers[k]=(normal.x+1)*127.5;fibers[k+1]=(normal.y+1)*127.5;fibers[k+2]=(normal.z+1)*127.5;fibers[k+3]=255;
   }
   const weaveNormal=new T.DataTexture(fibers,n,n);weaveNormal.wrapS=weaveNormal.wrapT=T.RepeatWrapping;
-  weaveNormal.repeat.copy(carbonMap.repeat);weaveNormal.magFilter=T.LinearFilter;weaveNormal.minFilter=T.LinearMipmapLinearFilter;weaveNormal.generateMipmaps=true;weaveNormal.anisotropy=8;weaveNormal.needsUpdate=true;weaveNormal.userData.shared=true;
+  weaveNormal.repeat.copy(carbonMap.repeat);weaveNormal.magFilter=T.LinearFilter;weaveNormal.minFilter=T.LinearMipmapLinearFilter;weaveNormal.generateMipmaps=true;weaveNormal.anisotropy=import.meta.env.MCP_APP==='true'?4:8;weaveNormal.needsUpdate=true;weaveNormal.userData.shared=true;
   carbonMap.userData.shared=grainMap.userData.shared=fabricMap.userData.shared=true;
   sharedMaps={carbonMap,weaveNormal,grainMap,fabricMap};
  }
@@ -75,22 +77,35 @@ function assets(withInternals:boolean){
  const low=raceLowTemplate??=loadTemplate(raceLowURL);
  return Promise.all([high,low]);
 }
+export function prepareRaceCars(){
+ return Promise.all([assets(false),constructorKit()]);
+}
+function fabricTexture(size:number,repeat:number,sample:(x:number,y:number)=>number){
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
+ const ctx=canvas.getContext('2d')!,image=ctx.createImageData(size,size);
+ for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+  const offset=4*(y*size+x),value=Math.round(sample(x,y));
+  image.data[offset]=image.data[offset+1]=image.data[offset+2]=value;image.data[offset+3]=255;
+ }
+ ctx.putImageData(image,0,0);
+ const t=new T.CanvasTexture(canvas);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(repeat,repeat);
+ t.anisotropy=import.meta.env.MCP_APP==='true'?4:8;return t;
+}
 function grain(){
- const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const c=canvas.getContext('2d')!;
- let seed=26;for(let y=0;y<128;y++)for(let x=0;x<128;x++){seed=(Math.imul(seed,1664525)+1013904223)|0;const v=238+((seed>>>24)%17);c.fillStyle=`rgb(${v},${v},${v})`;c.fillRect(x,y,1,1);}
- const t=new T.CanvasTexture(canvas);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(48,48);t.anisotropy=8;return t;
+ let seed=26;
+ return fabricTexture(128,48,()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return 238+((seed>>>24)%17);});
 }
 function twill(){
- const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const c=canvas.getContext('2d')!;
- // 2-over / 2-under diagonal twill, with curved fibre bundles rather than checker squares.
- for(let y=0;y<128;y++)for(let x=0;x<128;x++){const a=Math.floor(x/8),b=Math.floor(y/8),over=((a-b)%4+4)%4<2;const v=over?x%8:y%8;const n=(over?152:183)+54*Math.sin(v/8*Math.PI)+2*Math.cos((over?y:x)*Math.PI);c.fillStyle=`rgb(${n},${n},${n})`;c.fillRect(x,y,1,1);}
- const t=new T.CanvasTexture(canvas);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(9,9);t.anisotropy=8;return t;
+ return fabricTexture(128,9,(x,y)=>{
+  const a=Math.floor(x/8),b=Math.floor(y/8),over=((a-b)%4+4)%4<2,v=over?x%8:y%8;
+  return (over?152:183)+54*Math.sin(v/8*Math.PI)+2*Math.cos((over?y:x)*Math.PI);
+ });
 }
 function knit(){
- const canvas=document.createElement('canvas');canvas.width=canvas.height=64;const c=canvas.getContext('2d')!;
- // Small alternating textile loops, distinct from the rigid carbon twill.
- for(let y=0;y<64;y++)for(let x=0;x<64;x++){const row=Math.floor(y/8),u=(x+(row%2)*4)%8,v=y%8;const thread=Math.exp(-Math.pow((u-4-Math.sin(v/8*Math.PI)*2)/1.4,2));const n=150+85*thread+8*Math.sin(v*Math.PI);c.fillStyle=`rgb(${n},${n},${n})`;c.fillRect(x,y,1,1);}
- const t=new T.CanvasTexture(canvas);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(96,96);t.anisotropy=8;return t;
+ return fabricTexture(64,96,(x,y)=>{
+  const row=Math.floor(y/8),u=(x+(row%2)*4)%8,v=y%8,thread=Math.exp(-Math.pow((u-4-Math.sin(v/8*Math.PI)*2)/1.4,2));
+  return 150+85*thread+8*Math.sin(v*Math.PI);
+ });
 }
 export interface CarTelemetry{wear?:number;flag?:string;damage?:PanelDamage;distance:number;speed:number;offset?:number;heading?:number;steering?:number;drs?:boolean;compound?:string;acceleration?:number;lateralG?:number;pit?:string;pitTime?:number;totalStop?:number;instruction?:{tyre?:string};gear?:number;rpm?:number;ers?:number;lastLap?:number;bestLap?:number}
 function drawTelemetry(ctx:CanvasRenderingContext2D,c:CarTelemetry){
@@ -112,11 +127,12 @@ function drawTelemetry(ctx:CanvasRenderingContext2D,c:CarTelemetry){
  rect(172,230,162,9,'#33414a');rect(172,230,1.62*T.MathUtils.clamp(charge,0,100),9,'#58b5c0');
  rect(349,183,154,61,c.drs?'#aaeebc':'#d4dde0');label('AERO MODE',357,204,19,'#283741',true);label(c.drs?'OVERTAKE':'CORNER',356,235,27,'#07121b',true);
 }
-export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceWater={value:0},reviewPose?:string,progress=1){
+export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMorph:(source:T.BufferGeometry)=>T.BufferGeometry,surfaceWater={value:0},reviewPose?:string,progress=1){
  const suspension=new Suspension(),inverseBody=new T.Quaternion();
  const root=new T.Group(),chassis=new T.Group(),lod=new T.LOD();root.add(chassis);chassis.add(lod);
  let shell:InspectionShell|undefined,poses:InspectionPoses|undefined,posed=false;
  const cowlStripPower={value:0};
+ const owned=new MeshResources();
  const pairs=new Map<T.Mesh,{rest:T.BufferGeometry;inspection:T.BufferGeometry}>();
  const instruments:T.Mesh[]=[];
  const wireSurfaces:T.Mesh[]=[];
@@ -219,8 +235,12 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
  let wheelBrand:T.CanvasTexture|undefined;
  const flagRows:T.MeshBasicMaterial[][]=[],rams:T.Mesh[]=[];
  let brakeHeat=0,lastHeatTime=0;
+ // Keep the map shader variant stable when the rear camera supplies its first image.
+ const mirrorFallback=import.meta.env.MCP_APP==='true'?new T.DataTexture(new Uint8Array([255,255,255,255]),1,1):null;
+ if(mirrorFallback){mirrorFallback.needsUpdate=true;owned.textures.add(mirrorFallback);}
  const mirrorFaces=new Set<T.Mesh>(),mirrors:T.MeshPhysicalMaterial[]=[];
  type RigNodes={model:T.Group;hubs:(T.Object3D|undefined)[];knuckles:(T.Object3D|undefined)[];hands:T.Object3D|undefined;suit:T.Object3D|undefined;helmet:T.Object3D|undefined;steering:T.Object3D|undefined;drs:T.Object3D|undefined};
+ const rigidUpdates:ReturnType<typeof rigidCarParts>[]=[];
  const rigs:T.Group[]=[],rigNodes:RigNodes[]=[],dashTextures:T.CanvasTexture[]=[],dashContexts:CanvasRenderingContext2D[]=[],lights:T.MeshBasicMaterial[][]=[];
  const deformations:((panels:PanelDamage)=>void)[]=[];
  const intact:PanelDamage=[0,0,0,0];let previousPanels:PanelDamage=intact;
@@ -285,6 +305,7 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
    let ancestor:T.Object3D|null=o.parent,inBody=bodyGroups.has(parent);
    while(!inBody&&ancestor&&ancestor!==model){if(bodyGroups.has(ancestor.name.split('_')[0])){inBody=true;break;}ancestor=ancestor.parent;}
    if(inBody||(index===0&&reviewPose)){o.geometry=o.geometry.clone();o.geometry.userData={...o.geometry.userData,shared:false};}
+   else if(Object.keys(o.geometry.morphAttributes).length)o.geometry=sceneMorph(o.geometry);
    if(team==='b'&&['Chassis','Floor','ConformalDecals','NumberA','NumberB','DRS'].includes(parent))shapeBody(o.geometry,-1,parent==='DRS');if((Array.isArray(o.material)?o.material:[o.material]).some((m:T.Material)=>m.name==='Mirror'))mirrorFaces.add(o);const make=(original:T.MeshStandardMaterial)=>{const wheelRubber=original.name==='SlickRubber';const wheelRotor=original.name==='BrakeDisc'&&/^(Front|Rear)[LR]_/.test(o.name);let m=wheelRubber||wheelRotor?undefined:materials.get(original);if(!m){const p=new T.MeshPhysicalMaterial({color:original.color,vertexColors:original.vertexColors,roughness:original.roughness,metalness:original.metalness,map:original.map,transparent:original.transparent,opacity:original.opacity});p.name=original.name;
    if(p.name==='Livery'){p.color.set(team==='a'?'#cf101e':'#545f66');p.roughness=team==='a'?.39:.32;p.metalness=team==='a'?.045:.48;p.clearcoat=team==='a'?.43:.70;p.clearcoatRoughness=team==='a'?.23:.145;p.specularIntensity=team==='a'?.45:.63;p.bumpMap=grainMap;p.bumpScale=.000018;}
    if(p.name==='DeepLivery'){p.color.set(team==='a'?'#640c28':'#17262c');p.roughness=.40;p.clearcoat=.54;p.clearcoatRoughness=.22;}
@@ -330,19 +351,20 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
    if(p.name==='VisorInk'&&team==='b'){
     if(!wheelBrand){const plate=document.createElement('canvas');plate.width=1024;plate.height=240;const ink=plate.getContext('2d')!;
      ink.font='italic bold 130px Arial';ink.textAlign='center';ink.fillStyle='#dce4e5';ink.fillText('AMG PETRONAS',512,169,965);
-     wheelBrand=new T.CanvasTexture(plate);wheelBrand.colorSpace=T.SRGBColorSpace;wheelBrand.anisotropy=8;}
+     wheelBrand=new T.CanvasTexture(plate);wheelBrand.colorSpace=T.SRGBColorSpace;wheelBrand.anisotropy=import.meta.env.MCP_APP==='true'?4:8;}
     p.map=wheelBrand;p.transparent=true;p.alphaTest=.04;
    }
    if(p.name==='BankInk'){p.color.multiplyScalar(1.329);p.specularIntensity=.28;}
    if(p.name==='FlapInk'||p.name==='BodyInk'){
     p.color.set('#ffffff');p.specularIntensity=.12;p.roughness=.67;p.depthWrite=false;
-    if(p.map)p.map.anisotropy=8;
+    if(p.map)p.map.anisotropy=import.meta.env.MCP_APP==='true'?4:8;
    }
    if(p.name==='GripRubber'){p.roughness*=1.27;p.color.multiplyScalar(1.9);}
    if(p.name==='Wheel graphite brow'){p.roughness*=1.1880;p.color.multiplyScalar(.78);p.specularIntensity=.32;p.envMapIntensity=.45;}
    if(p.name==='HaloComposite'){p.color.set('#41464b');p.roughness=.39;p.metalness=.18;p.clearcoat=.18;p.clearcoatRoughness=.36;}
    if(p.name.startsWith('Button')){p.roughness=.44;p.clearcoat=.20;p.clearcoatRoughness=.30;}
    if(p.name==='Mirror'){
+    if(mirrorFallback)p.map=p.emissiveMap=mirrorFallback;
     mirrors.push(p);o.geometry.computeBoundingBox();const bounds=o.geometry.boundingBox!,pos=o.geometry.getAttribute('position'),uv=new Float32Array(pos.count*2),mid=(bounds.min.x+bounds.max.x)/2;
     for(let i=0;i<pos.count;i++){const cx=pos.getX(i)<mid?bounds.min.x+.0875:bounds.max.x-.0875;uv[i*2]=(pos.getX(i)<mid?.5:0)+.5*(.5+(pos.getX(i)-cx)/.175);uv[i*2+1]=(pos.getY(i)-bounds.min.y)/.038;}o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
    }
@@ -390,7 +412,7 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
    if(p.name==='Rubber'||wheelRubber){p.color.set(p.map?'#ffffff':'#17181a');p.roughness=wheelRubber?.64:.87;p.bumpMap=grainMap;p.bumpScale=.00018;p.roughnessMap=grainMap;}
    if(wheelRubber){
     p.roughnessMap=null;p.roughness=.89;p.metalness=0;p.specularIntensity=.37;p.ior=1.47;
-    if(p.map)p.map.anisotropy=8;
+    if(p.map)p.map.anisotropy=import.meta.env.MCP_APP==='true'?4:8;
     const u={spin:{value:0},load:{value:.008},shutter:{value:0},grooves:{value:0},wheel:wheelStations.findIndex(w=>w.name===o.parent!.name)};tyreUniforms.push(u);
     p.onBeforeCompile=shader=>{// Sidewall mould lines and circumferential tread scrub are anchored to
      // tyre space, so their finish rotates with the wheel and survives LOD changes.
@@ -457,21 +479,23 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
      transformed.x+=sign(position.x)*tyreLoad*.4*contactWeight;
     `);};p.customProgramCacheKey=()=> 'loaded-slick-shutter';
    }
-   p.aoMap=['Mirror','MarkWhite','BankInk','BodyInk','FlapInk','VisorInk','GloveFabric','GlovePanel','GloveSuede','GloveStitch','Sleeve'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='HelmetPaint'?.10:p.name==='WheelDish'?.28:p.name==='PortRecess'?.10:.65;p.side=T.DoubleSide;m=p;if(!wheelRubber&&!wheelRotor)materials.set(original,m);
+   p.aoMap=['Mirror','MarkWhite','BankInk','BodyInk','FlapInk','VisorInk','GloveFabric','GlovePanel','GloveSuede','GloveStitch','Sleeve'].includes(p.name)?null:aoMap;p.aoMapIntensity=p.name==='HelmetPaint'?.10:p.name==='WheelDish'?.28:p.name==='PortRecess'?.10:.65;p.side=T.DoubleSide;m=p;owned.material(p);if(!wheelRubber&&!wheelRotor)materials.set(original,m);
   }return m;};o.material=Array.isArray(o.material)?o.material.map(m=>make(m as T.MeshStandardMaterial)):make(o.material as T.MeshStandardMaterial);o.castShadow=!(Array.isArray(o.material)?o.material:[o.material]).every(m=>bakedDetailShadow.has(m.name));o.receiveShadow=!(o.name==='Helmet_HelmetPaint');originals.set(o,o.material);}});
   model.updateMatrixWorld(true);
   model.traverse(node=>{
    if(!(node instanceof T.Mesh))return;
    if(node.name.endsWith('_ActuatorRam')){
+    owned.geometries.add(node.geometry);
     const geometry=node.geometry.clone(),pos=geometry.getAttribute('position'),delta=new Float32Array(pos.count*3),p=new T.Vector3(),q=new T.Vector3();
     const hinge=new T.Vector3(0,.87,-2.42),axis=new T.Vector3(1,0,0),end=new T.Vector3(0,.89,-2.46);
     const throwVector=end.clone().sub(hinge).applyAxisAngle(axis,-.43).add(hinge).sub(end);
     for(let i=0;i<pos.count;i++){p.fromBufferAttribute(pos,i);node.localToWorld(p);q.copy(p).addScaledVector(throwVector,T.MathUtils.clamp((-2.32-p.z)/.14,0,1));node.worldToLocal(q);delta.set([q.x-pos.getX(i),q.y-pos.getY(i),q.z-pos.getZ(i)],3*i);}
-    geometry.morphTargetsRelative=true;geometry.morphAttributes.position=[new T.BufferAttribute(delta,3)];node.geometry=geometry;node.updateMorphTargets();rams.push(node);
+    geometry.userData={...geometry.userData,shared:false};geometry.morphTargetsRelative=true;geometry.morphAttributes.position=[new T.BufferAttribute(delta,3)];node.geometry=geometry;node.updateMorphTargets();rams.push(node);
    }
    if(node.name.includes('ShiftPaddle')){paddles.push(node);node.userData.restYaw=node.rotation.y;}
    if(node.name.includes('MovingFlap')){frontFlaps.push(node);node.userData.restPitch=node.rotation.x;}
    if(!node.name.includes('SuspensionCarbon'))return;
+   owned.geometries.add(node.geometry);
    const geo=node.geometry.clone(),pos=geo.getAttribute('position'),morphs=wheelStations.map(()=>new Float32Array(pos.count*3));
    const pt=new T.Vector3(),tip=new T.Vector3();
    for(let i=0;i<pos.count;i++){
@@ -480,7 +504,7 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
     tip.copy(pt);tip.y+=T.MathUtils.clamp((Math.abs(pt.x)-.17)/.64,0,1);
     node.worldToLocal(tip);morphs[corner][3*i]=tip.x-pos.getX(i);morphs[corner][3*i+1]=tip.y-pos.getY(i);morphs[corner][3*i+2]=tip.z-pos.getZ(i);
    }
-   geo.morphTargetsRelative=true;geo.morphAttributes.position=morphs.map(a=>new T.BufferAttribute(a,3));
+   geo.userData={...geo.userData,shared:false};geo.morphTargetsRelative=true;geo.morphAttributes.position=morphs.map(a=>new T.BufferAttribute(a,3));
    node.geometry=geo;node.updateMorphTargets();linkageMeshes.push(node);
   });
   if(team==='a'&&reviewPose)model.traverse(node=>{
@@ -585,15 +609,16 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
     node.material=Array.isArray(node.material)?node.material.map(wrap):wrap(node.material);originals.set(node,node.material);
    });
   }
+  const changing=new Set<T.Mesh>(cockpitFittings);
   for(const group of ['Chassis','Floor','ConformalDecals','NumberA','NumberB','DRS']){
    for(const part of model.getObjectByName(group)?.children??[]){
     if(!(part instanceof T.Mesh)&&!part.name.startsWith(group+'_'))continue;
     part.traverse(node=>{
-     if(node instanceof T.Mesh){const deform=bindBodyDamage(node);if(deform)deformations.push(deform);}
+     if(node instanceof T.Mesh){const deform=bindBodyDamage(node);if(deform){deformations.push(deform);changing.add(node);}}
     });
    }
   }
-  compression.set(model,([-1,1] as const).map(side=>{const hand=model.getObjectByName(side<0?'HandL':'HandR');return {side,meshes:hand?bindGloveCompression(hand,side):[]};}));
+  compression.set(model,([-1,1] as const).map(side=>{const hand=model.getObjectByName(side<0?'HandL':'HandR');return {side,meshes:hand?bindGloveCompression(hand,side,sceneMorph):[]};}));
   fingerRigs.set(model,([-1,1] as const).flatMap(side=>Array.from({length:5},(_,digit)=>({node:model.getObjectByName(`Finger${side<0?'L':'R'}${digit}`)!,side,digit})).filter(binding=>!!binding.node)));
   if(index===0&&poses&&reviewPose){
    const data=poses,name=reviewPose;
@@ -603,6 +628,16 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
     if(inspection!==rest)pairs.set(o,{rest,inspection});
    });
    if(!pairs.size)throw new Error('Missing inspection bindings for '+name);
+  }
+  if(import.meta.env.MCP_APP==='true'){
+   model.traverse(o=>{
+    if(!(o instanceof T.Mesh))return;
+    const g=o.geometry;if(!g.boundingSphere)g.computeBoundingSphere();
+    const radius=g.boundingSphere!.radius*o.matrixWorld.getMaxScaleOnAxis();
+    if(radius<.025)o.castShadow=false;
+    if(radius<.12||/Glove|Stitch|Knuckle|Caliper|Centrelock|Button|VisorInk|Number[A-B]/.test(o.name))o.layers.set(1);
+   });
+   rigidUpdates.push(rigidCarParts(model,changing));
   }
   rigs.push(model);lod.addLevel(model,index===0?0:32);
   rigNodes.push({
@@ -625,10 +660,12 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
     led.position.set(-.012+side*.089,.021+i*.011,-.041);steering.add(led);instruments.push(led);originals.set(led,lm);flags.push(lm);}flagRows.push(flags);
   }
  });ready=true;setFinish(finish);}).catch(e=>{error=String(e);console.error('Car asset failed',e);});
- let lastDash=-1,lastLodLevel=-1,lastCockpitDetail:boolean|undefined;
- return {root,chassis,loaded,get ready(){return ready;},get error(){return error;},setFinish,setMirrorVisible(visible:boolean){for(const mirror of mirrorFaces)mirror.visible=visible;},setMirror(texture:T.Texture|null){for(const m of mirrors){if(m.map!==texture){m.map=texture;m.emissiveMap=texture;m.emissive.set(texture?'#ffffff':'#000000');m.emissiveIntensity=.7;m.roughness=texture?.16:.08;m.metalness=texture?.40:.9;m.clearcoat=.72;m.ior=1.47;m.needsUpdate=true;}}},
- update(c:CarTelemetry,onboard=false,studio=false,now=performance.now(),showDash=onboard||studio){
+ let dashKey='',lastDash=-1,lastLodLevel=-1,lastCockpitDetail:boolean|undefined;
+ return {root,chassis,loaded,setLodRange(range:number){if(lod.levels[1])lod.levels[1].distance=range;},get ready(){return ready;},get error(){return error;},setFinish,setMirrorVisible(visible:boolean){for(const mirror of mirrorFaces)mirror.visible=visible;},setMirror(texture:T.Texture|null){for(const m of mirrors){const map=texture??mirrorFallback;if(m.map!==map){const recompile=!!m.map!==!!map;m.map=map;m.emissiveMap=map;m.emissive.set(texture?'#ffffff':'#000000');m.emissiveIntensity=.7;m.roughness=texture?.16:.08;m.metalness=texture?.40:.9;m.clearcoat=.72;m.ior=1.47;if(recompile)m.needsUpdate=true;}}},
+ update(c:CarTelemetry,onboard=false,studio=false,now=performance.now(),showDash=onboard||studio,flag=c.flag){
   setInspection(studio);
+  const damage=c.damage,damaged=!!damage&&(damage[0]>0||damage[1]>0||damage[2]>0||damage[3]>0);
+  for(const update of rigidUpdates)update(studio,damaged);
   const flashing=!studio&&(surfaceWater.value>.08||(c.pit&&c.pit!=='none')||(c.acceleration??0)<-10);
   for(const light of rainLights)light.emissiveIntensity=flashing?(now%250<115?4.6:.06):light.name==='TailOptic'?.90:.26;
   // Three selects the LOD during the draw, after the camera has moved. A cut to
@@ -717,20 +754,32 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,surfaceW
    }
    if(drs)drs.rotation.x=suspension.flap;
   }
-  if(dashContexts.length&&(showDash||lastDash<0)){
-   const stamp=Math.floor(now*60/1000);
+  if(dashContexts.length&&showDash){
+   const stamp=Math.floor(now*15/1000);
    if(stamp!==lastDash){
     lastDash=stamp;
-    for(let i=0;i<dashContexts.length;i++){
+    const key=studio?'studio':[c.gear,Math.round(c.speed*3.6),Math.ceil(T.MathUtils.clamp(((c.rpm??0)-6500)/5500,0,1)*24),Math.round(damageLevel(c.damage)*100),c.lastLap,c.bestLap,Math.round(c.ers??90),c.drs].join('/');
+    if(key!==dashKey)for(let i=0;i<dashContexts.length;i++){
      const ctx=dashContexts[i];
      drawTelemetry(ctx,c);
      if(studio){ctx.fillStyle='#020403';ctx.fillRect(0,0,512,256);}
      dashTextures[i].needsUpdate=true;
     }
+    dashKey=key;
     const rpm=studio?0:c.rpm??(c.speed?10500:0),n=Math.round(T.MathUtils.clamp((rpm-7500)/4500,0,1)*12);
-    for(const row of flagRows)for(const lamp of row)lamp.color.set(!studio&&now%560<360?(c.flag==='yellow'?'#ffcb1a':c.flag==='blue'?'#3681ff':c.flag==='red'?'#ff3530':'#172021'):'#172021');
+    for(const row of flagRows)for(const lamp of row)lamp.color.set(!studio&&now%560<360?(flag==='yellow'?'#ffcb1a':flag==='blue'?'#3681ff':flag==='red'?'#ff3530':'#172021'):'#172021');
     for(let i=0;i<lights.length;i++)lights[i].forEach((m,j)=>m.color.set(j<n?(j<4?'#63ff87':j<8?'#ff4549':'#709aff'):'#112019'));
    }
   }
- },dispose(){dead=true;heroSheet?.dispose();helmetMap.dispose();wheelBrand?.dispose();for(const [mesh,geo] of pairs){mesh.geometry=geo.rest;geo.inspection.dispose();}for(const [mesh,original] of originals)mesh.material=original;wireSurfaces.forEach(o=>o.geometry.dispose());wireLines.forEach(o=>o.geometry.dispose());if(finishMats){Object.values(finishMats).forEach(m=>m.dispose());finishMats=undefined;}dashTextures.forEach(t=>t.dispose());}};
+ },dispose(){
+  if(dead)return;
+  dead=true;
+  owned.collect(root);
+  root.removeFromParent();
+  for(const material of originals.values())for(const m of Array.isArray(material)?material:[material])owned.material(m);
+  for(const pair of pairs.values()){owned.geometries.add(pair.rest);owned.geometries.add(pair.inspection);}
+  if(finishMats)for(const m of Object.values(finishMats))owned.material(m);
+  for(const texture of [heroSheet,helmetMap,wheelBrand,...dashTextures])if(texture)owned.textures.add(texture);
+  owned.dispose();root.clear();originals.clear();pairs.clear();
+ }};
 }

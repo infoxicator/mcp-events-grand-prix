@@ -1,3 +1,4 @@
+import {moveMapDot,setTextIfChanged,setAttributeIfChanged} from './hud-dom';
 import './drive.css';
 import {damageLevel} from './crashes';
 import {damageRepairSeconds, drsAllowed, DT} from './physics';
@@ -62,6 +63,8 @@ function escapeHtml(text: string): string {
 }
 
 export interface DriveMountOptions {
+ circuit?: CircuitId;
+ audioOutput?: AudioContext|null;
  team?: Team;
  embedded?: boolean;
  canStart?: () => boolean;
@@ -528,7 +531,8 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   </div>
  </div>${embedded ? '<section id="race-event-log" class="race-event-log" aria-labelledby="event-log-title"></section>' : ''}`;
 
- const el = (id: string) => document.getElementById(id)!;
+ const elements=new Map(Array.from(app.querySelectorAll<HTMLElement>('[id]'),node=>[node.id,node]));
+ const el=(id:string)=>elements.get(id)!;
  if (embedded) {
   app.querySelectorAll<HTMLElement>('[data-dmode="jev"]').forEach((node) => { node.hidden = true; });
  }
@@ -581,14 +585,18 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   onRacingLineToggle: () => cycleRacingLine(),
   onAudioToggle: () => toggleAudio(),
  });
- const audio = createDriveAudio();
+ const audio = createDriveAudio(options.audioOutput);
  let audioEnabled = true;
 
- let currentCircuit: CircuitId = isCircuit(params.get('circuit')) ? params.get('circuit') as CircuitId : 'monza';
+ let currentCircuit: CircuitId = options.circuit ?? (isCircuit(params.get('circuit')) ? params.get('circuit') as CircuitId : 'monza');
  let track = getTrack(currentCircuit);
- let scene = createScene(viewport, track);
- scene.setMode(resolveSceneCamera());
- scene.setRacingLine(racingLineMode, seat);
+ const hidden=()=>embedded&&(document.hidden||document.documentElement.dataset.mcpHidden==='true');
+ function makeScene(){
+  const view=createScene(viewport,track);
+  view.setMode(resolveSceneCamera());view.setRacingLine(racingLineMode,seat);
+  return view;
+ }
+ let scene=hidden()?undefined:makeScene();
 
  function rebuildMinimap() {
   const {LENGTH, pointAt} = track;
@@ -658,6 +666,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
    const res = await fetch('/api/rooms?' + createParams.toString(), {method: 'POST'});
    if (!res.ok) throw new Error('Could not open online room (' + res.status + ').');
    const links: RoomLinks = await res.json();
+   if(disposed)throw new Error('Drive view closed');
    const ownerUrl = new URL(links.owner);
    const token = new URLSearchParams(ownerUrl.hash.slice(1)).get('token') ?? '';
    ownerUrl.searchParams.set('drive', '');
@@ -692,6 +701,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   showAlert(mode === 'joined' ? 'STRATEGY ENGINEER: LIVE PIT WALL' : 'STRATEGY ENGINEER: MOCKED AUTO', 'info', 2500);
  }
 
+ let copyTimer:ReturnType<typeof setTimeout>|undefined;
  async function copyEngineerLink(btn: HTMLButtonElement) {
   if (room.local) {
    try { await ensureOnlineRoom(true); } catch { showAlert('COULD NOT OPEN LIVE ROOM', 'red', 3000); return; }
@@ -699,9 +709,11 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   const url = engineerUrl();
   try {
    await navigator.clipboard.writeText(url);
+   if(disposed)return;
+   clearTimeout(copyTimer);
    const prev = btn.textContent;
    btn.textContent = 'Copied link ✓';
-   setTimeout(() => { btn.textContent = prev; }, 1800);
+   copyTimer=setTimeout(() => { btn.textContent = prev; }, 1800);
   } catch {
    window.prompt('Copy Strategy Engineer Pit Wall link:', url);
   }
@@ -767,7 +779,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
  bindSeg('opt-abs', (v) => { absEnabled = v === 'on'; });
  bindSeg('opt-line', (v) => {
   racingLineMode = v as RacingLineMode;
-  scene.setRacingLine(racingLineMode, seat);
+  scene?.setRacingLine(racingLineMode, seat);
   el('drive-line-label').textContent = racingLineMode.toUpperCase();
  });
  bindSeg('opt-pit', (v) => { pitAssist = v === 'on'; });
@@ -814,7 +826,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
  }
  function cycleRacingLine() {
   racingLineMode = LINE_CYCLE[(LINE_CYCLE.indexOf(racingLineMode) + 1) % LINE_CYCLE.length];
-  scene.setRacingLine(racingLineMode, seat);
+  scene?.setRacingLine(racingLineMode, seat);
   el('drive-line-label').textContent = racingLineMode.toUpperCase();
   showAlert(`RACING LINE: ${racingLineMode.toUpperCase()}`, 'info', 1400);
  }
@@ -950,9 +962,8 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   if (s.race.circuit !== currentCircuit) {
    currentCircuit = s.race.circuit;
    track = getTrack(currentCircuit);
-   scene.dispose();
-   scene = createScene(viewport, track);
-   scene.setRacingLine(racingLineMode, seat);
+   scene?.dispose();
+   scene=hidden()?undefined:makeScene();
    rebuildMinimap();
   }
 
@@ -1029,11 +1040,16 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   setEngineerMode,
  };
 
+ let lastMapAt=-Infinity;
+ let controlDriver:DriverControlMode|undefined,controlEngineer:EngineerControlMode|undefined;
+ let controlCircuit:CircuitId|undefined,controlOnline=false,controlReset=false;
  function syncControlButtons(s: RaceState) {
   const dMode = currentDriverMode(s);
   const eMode = currentEngineerMode(s);
   const engOnline = Boolean(s.engineerConnected?.[seat]);
 
+  if(controlDriver===dMode&&controlEngineer===eMode&&controlOnline===engOnline&&controlCircuit===s.race.circuit&&controlReset===conn.canReset)return;
+  controlDriver=dMode;controlEngineer=eMode;controlOnline=engOnline;controlCircuit=s.race.circuit;controlReset=conn.canReset;
   // Topbar driver mode switcher
   el('drive-mode-switcher').querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
    b.classList.toggle('active', b.dataset.dmode === dMode);
@@ -1091,14 +1107,14 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   const inLobby = r.phase === 'lobby';
   const isFinished = r.phase === 'finished' && !replayActive;
 
-  document.body.dataset.phase = r.phase;
-  document.body.dataset.room = s.room;
-  document.body.dataset.circuit = r.circuit;
-  document.body.dataset.connected = String(s.connected.a && s.connected.b);
-  document.body.dataset.driverMode = dMode;
-  document.body.dataset.engineerMode = currentEngineerMode(s);
+  setAttributeIfChanged(document.body,'data-phase',r.phase);
+  setAttributeIfChanged(document.body,'data-room',s.room);
+  setAttributeIfChanged(document.body,'data-circuit',r.circuit);
+  setAttributeIfChanged(document.body,'data-connected',String(s.connected.a && s.connected.b));
+  setAttributeIfChanged(document.body,'data-driver-mode',dMode);
+  setAttributeIfChanged(document.body,'data-engineer-mode',currentEngineerMode(s));
 
-  const modelsReady = scene.ready;
+  const modelsReady = scene?.ready;
   loadingEl.hidden = modelsReady || inLobby;
   lobbyEl.hidden = !inLobby;
   resultsEl.hidden = !isFinished;
@@ -1114,21 +1130,21 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
    const startReady = options.startReady?.(s) ?? true;
    const startBtn = el('drive-start-btn') as HTMLButtonElement;
    startBtn.disabled = !seatsReady || !canStart || !startReady || conn.status !== 'CONNECTED';
-   startBtn.textContent = !seatsReady
+   setTextIfChanged(startBtn,!seatsReady
     ? 'Connecting seats…'
     : !canStart
      ? 'Waiting for Team A to start…'
      : !startReady
       ? 'Waiting for ChatGPT to subscribe…'
-      : `START ${track.name.toUpperCase()} GRAND PRIX (${r.laps} LAPS) ↗`;
+      : `START ${track.name.toUpperCase()} GRAND PRIX (${r.laps} LAPS) ↗`);
    const padInfo = latestGamepadName ? ` · Gamepad: ${latestGamepadName}` : '';
-   el('lobby-pad-badge').textContent = room.local ? `Local Race · 0ms${padInfo}` : `Room ${s.room.slice(0, 8)} · ${conn.status} (${conn.latency}ms)${padInfo}`;
+   setTextIfChanged(el('lobby-pad-badge'),room.local ? `Local Race · 0ms${padInfo}` : `Room ${s.room.slice(0, 8)} · ${conn.status} (${conn.latency}ms)${padInfo}`);
   }
 
   // Topbar pills
-  el('drive-conn-pill').textContent = room.local ? 'LOCAL · 0MS' : `${conn.status} · ${conn.latency}MS`;
-  el('drive-circuit-tag').textContent = track.name.toUpperCase();
-  el('drive-corner-name').textContent = track.cornerName(car.distance);
+  setTextIfChanged(el('drive-conn-pill'),room.local ? 'LOCAL · 0MS' : `${conn.status} · ${conn.latency}MS`);
+  setTextIfChanged(el('drive-circuit-tag'),track.name.toUpperCase());
+  setTextIfChanged(el('drive-corner-name'),track.cornerName(car.distance));
 
   // Starting lights
   lightsEl.hidden = r.phase !== 'lights';
@@ -1137,12 +1153,11 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
    if (lit > prevLightsLit && audioEnabled) audio.playStartBeep(false);
    prevLightsLit = lit;
    for (let i = 0; i < lightPods.length; i++) lightPods[i].classList.toggle('lit', i < lit);
-   el('drive-launch-label').textContent =
-    dMode === 'human'
+   setTextIfChanged(el('drive-launch-label'),dMode === 'human'
      ? 'GET READY — FLOOR GAS ON LIGHTS OUT!'
      : dMode === 'jev'
       ? 'JEV ON THE GRID — LIGHTS SEQUENCE'
-      : 'AUTOPILOT ARMED — LIGHTS SEQUENCE';
+      : 'AUTOPILOT ARMED — LIGHTS SEQUENCE');
   } else {
    if (prevPhase === 'lights' && r.phase === 'racing') {
     if (audioEnabled) audio.playStartBeep(true);
@@ -1153,16 +1168,16 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   prevPhase = r.phase;
 
   // Timing & position
-  el('drive-pos-val').textContent = `P${place}`;
-  el('drive-lap-val').textContent = `${Math.min(r.laps, car.lap + 1)} / ${r.laps}`;
+  setTextIfChanged(el('drive-pos-val'),`P${place}`);
+  setTextIfChanged(el('drive-lap-val'),`${Math.min(r.laps, car.lap + 1)} / ${r.laps}`);
   const curLapSec = car.finishTime !== null ? car.lastLap : Math.max(0, r.time - car.lapStart);
-  el('drive-cur-lap').textContent = curLapSec > 0 ? formatLap(curLapSec) : '0:00.000';
-  el('drive-best-lap').textContent = car.bestLap > 0 ? formatLap(car.bestLap) : '—:—.———';
+  setTextIfChanged(el('drive-cur-lap'),curLapSec > 0 ? formatLap(curLapSec) : '0:00.000');
+  setTextIfChanged(el('drive-best-lap'),car.bestLap > 0 ? formatLap(car.bestLap) : '—:—.———');
 
   const {flag} = raceControlTelemetry(r);
   const rain = r.control?.rain ?? 'dry';
   const flagEl = el('drive-flag-chip');
-  flagEl.textContent = replayActive
+  setTextIfChanged(flagEl,replayActive
    ? 'REPLAY'
    : flag === 'safety-car'
     ? 'SAFETY CAR'
@@ -1170,15 +1185,15 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
      ? 'YELLOW'
      : rain !== 'dry'
       ? rainLabel(rain).toUpperCase()
-      : 'GREEN';
-  flagEl.dataset.sign = flag === 'green' ? 'fast' : 'slow';
+      : 'GREEN');
+  setAttributeIfChanged(flagEl,'data-sign',flag === 'green' ? 'fast' : 'slow');
 
   const penTag = el('drive-pen-tag');
   penTag.hidden = car.penalty <= 0;
-  if (car.penalty > 0) penTag.textContent = `+${car.penalty}s PEN`;
+  if (car.penalty > 0) setTextIfChanged(penTag,`+${car.penalty}s PEN`);
 
   for (let i = 0; i < 3; i++) {
-   sectorChips[i].dataset.state = car.sector === i ? 'active' : car.splits[i] ? car.splitColours[i] : 'idle';
+   setAttributeIfChanged(sectorChips[i],'data-state',car.sector === i ? 'active' : car.splits[i] ? car.splitColours[i] : 'idle');
   }
 
   // Standings compact tower (top 7 + player if outside top 7)
@@ -1199,22 +1214,22 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   }
 
   // Strategy strip + Radio banner timeout
-  el('dst-pace').textContent = `PACE: ${car.instruction.pace.toUpperCase()}`;
-  el('dst-ers').textContent = `ERS: ${(localErsMode ?? car.instruction.ers).toUpperCase()}`;
-  el('dst-tactic').textContent = car.instruction.tactic.toUpperCase();
+  setTextIfChanged(el('dst-pace'),`PACE: ${car.instruction.pace.toUpperCase()}`);
+  setTextIfChanged(el('dst-ers'),`ERS: ${(localErsMode ?? car.instruction.ers).toUpperCase()}`);
+  setTextIfChanged(el('dst-tactic'),car.instruction.tactic.toUpperCase());
   const boxBadge = el('dst-box');
   boxBadge.hidden = !car.instruction.box && car.pit === 'none';
   if (!boxBadge.hidden) {
-   boxBadge.textContent = car.pit !== 'none' ? `IN PIT LANE · ${car.pit.toUpperCase()}` : `BOX THIS LAP · ${car.instruction.tyre.toUpperCase()}`;
+   setTextIfChanged(boxBadge,car.pit !== 'none' ? `IN PIT LANE · ${car.pit.toUpperCase()}` : `BOX THIS LAP · ${car.instruction.tyre.toUpperCase()}`);
   }
   if (now > radioBannerUntil) el('drive-radio-banner').hidden = true;
   if (now > alertUntil) el('drive-alert').hidden = true;
 
   // Tachometer & Pedals
   const kph = Math.round(car.speed * 3.6);
-  el('drive-speed-val').textContent = String(kph).padStart(3, '0');
-  el('drive-rpm-val').textContent = `${Math.round(car.rpm)} RPM`;
-  el('drive-gear-val').textContent = String(car.gear);
+  setTextIfChanged(el('drive-speed-val'),String(kph).padStart(3, '0'));
+  setTextIfChanged(el('drive-rpm-val'),`${Math.round(car.rpm)} RPM`);
+  setTextIfChanged(el('drive-gear-val'),String(car.gear));
   el('drive-thr-bar').style.height = `${Math.round(car.throttle * 100)}%`;
   el('drive-brk-bar').style.height = `${Math.round(car.brake * 100)}%`;
 
@@ -1230,18 +1245,17 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   // Status pills (DRS, Active Driver Lamp, TC, ABS)
   const drsPill = el('drive-drs-pill');
   const drsReady = drsAllowed(car, track) && r.time > 20;
-  drsPill.dataset.state = car.drs ? 'open' : drsReady ? 'ready' : 'off';
-  drsPill.textContent = car.drs ? 'DRS OPEN' : drsReady ? 'DRS READY' : 'DRS';
+  setAttributeIfChanged(drsPill,'data-state',car.drs ? 'open' : drsReady ? 'ready' : 'off');
+  setTextIfChanged(drsPill,car.drs ? 'DRS OPEN' : drsReady ? 'DRS READY' : 'DRS');
 
   const driverLamp = el('drive-driver-lamp');
-  driverLamp.dataset.mode = dMode;
+  setAttributeIfChanged(driverLamp,'data-mode',dMode);
   const dec = s.decisions[seat];
-  driverLamp.textContent =
-   dMode === 'human'
+  setTextIfChanged(driverLamp,dMode === 'human'
     ? 'YOU'
     : dMode === 'jev'
      ? `JEV${dec ? ` · ${dec.responseMs}MS` : ''}`
-     : 'AUTO';
+     : 'AUTO');
   driverLamp.classList.add('active');
 
   el('drive-tc-lamp').classList.toggle('active', dMode === 'human' && tractionControl !== 'off');
@@ -1251,51 +1265,52 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   const ersModeDisplay = dMode === 'human' && localErsMode ? localErsMode : car.instruction.ers;
   const deploying = (car.ersPowerKw ?? 0) > 5;
   const ersModeEl = el('drive-ers-mode');
-  ersModeEl.textContent = `${deploying ? 'DEPLOYING' : ersModeDisplay.toUpperCase()} · ${Math.round(car.ers)}%`;
-  ersModeEl.dataset.mode = deploying ? 'overtake' : ersModeDisplay === 'harvest' ? 'none' : 'balanced';
+  setTextIfChanged(ersModeEl,`${deploying ? 'DEPLOYING' : ersModeDisplay.toUpperCase()} · ${Math.round(car.ers)}%`);
+  setAttributeIfChanged(ersModeEl,'data-mode',deploying ? 'overtake' : ersModeDisplay === 'harvest' ? 'none' : 'balanced');
   const ersFill = el('drive-ers-fill');
   ersFill.style.width = `${clamp(car.ers, 0, 100)}%`;
   ersFill.classList.toggle('overtake', deploying);
 
-  el('drive-fuel-val').textContent = `${car.fuel.toFixed(1)} KG`;
-  el('drive-bb-val').textContent = `${brakeBias}%`;
+  setTextIfChanged(el('drive-fuel-val'),`${car.fuel.toFixed(1)} KG`);
+  setTextIfChanged(el('drive-bb-val'),`${brakeBias}%`);
   const tyreBadge=el('drive-tyre-badge');
   if(tyreBadge.dataset.compound!==car.compound){tyreBadge.dataset.compound=car.compound;tyreBadge.textContent=car.compound.toUpperCase();}
 
   // MFD Car & Pit updates
   const tyreLife = Math.round((1 - car.wear) * 100);
-  el('mfd-tyre-life').textContent = `${tyreLife}%`;
-  el('mfd-tyre-life').parentElement!.dataset.health = tyreLife > 45 ? 'good' : tyreLife > 22 ? 'warn' : 'crit';
-  el('mfd-tyre-temp').textContent = `${Math.round(car.temperature)}°C`;
-  el('mfd-tyre-temp').parentElement!.dataset.health = car.temperature > 112 ? 'crit' : car.temperature > 104 ? 'warn' : 'good';
-  el('mfd-ers-val').textContent = ersModeDisplay.toUpperCase();
-  el('mfd-bb-val').textContent = `${brakeBias}%`;
+  setTextIfChanged(el('mfd-tyre-life'),`${tyreLife}%`);
+  setAttributeIfChanged(el('mfd-tyre-life').parentElement!,'data-health',tyreLife > 45 ? 'good' : tyreLife > 22 ? 'warn' : 'crit');
+  setTextIfChanged(el('mfd-tyre-temp'),`${Math.round(car.temperature)}°C`);
+  setAttributeIfChanged(el('mfd-tyre-temp').parentElement!,'data-health',car.temperature > 112 ? 'crit' : car.temperature > 104 ? 'warn' : 'good');
+  setTextIfChanged(el('mfd-ers-val'),ersModeDisplay.toUpperCase());
+  setTextIfChanged(el('mfd-bb-val'),`${brakeBias}%`);
   const dmgPct = Math.round(damageLevel(car.damage) * 100);
-  el('mfd-dmg-val').textContent = `${dmgPct}%`;
-  el('mfd-warn-val').textContent = `${car.warnings} / +${car.penalty}s`;
-  el('mfd-cur-tyre').textContent = car.compound.toUpperCase();
-  el('mfd-next-tyre').textContent = nextCompound.toUpperCase();
+  setTextIfChanged(el('mfd-dmg-val'),`${dmgPct}%`);
+  setTextIfChanged(el('mfd-warn-val'),`${car.warnings} / +${car.penalty}s`);
+  setTextIfChanged(el('mfd-cur-tyre'),car.compound.toUpperCase());
+  setTextIfChanged(el('mfd-next-tyre'),nextCompound.toUpperCase());
   const boxBtn = el('mfd-box-btn');
-  boxBtn.classList.toggle('armed', car.instruction.box);
-  boxBtn.innerHTML = car.instruction.box ? 'BOX ARMED · CANCEL <kbd>P</kbd>' : 'REQUEST BOX THIS LAP <kbd>P</kbd>';
-  el('mfd-pit-est').textContent = `${(track.PIT_STOP_SECONDS + damageRepairSeconds(car.damage)).toFixed(1)}s`;
+  if(boxBtn.classList.contains('armed')!==car.instruction.box){
+   boxBtn.classList.toggle('armed',car.instruction.box);
+   boxBtn.innerHTML = car.instruction.box ? 'BOX ARMED · CANCEL <kbd>P</kbd>' : 'REQUEST BOX THIS LAP <kbd>P</kbd>';
+  }
+  setTextIfChanged(el('mfd-pit-est'),`${(track.PIT_STOP_SECONDS + damageRepairSeconds(car.damage)).toFixed(1)}s`);
 
   // Minimap dots
-  const fieldDots = el('dm-field').children;
-  for (let i = 0; i < fieldDots.length; i++) {
-   const f = r.field[i];
-   if (!f) continue;
-   const pt = track.pointAt(f.distance);
-   fieldDots[i].setAttribute('cx', String(pt.x));
-   fieldDots[i].setAttribute('cy', String(pt.z));
+  if(now-lastMapAt>=100){
+   lastMapAt=now;
+   const fieldDots = el('dm-field').children;
+   for (let i = 0; i < fieldDots.length; i++) {
+    const f = r.field[i];
+    if (!f) continue;
+    const pt = track.pointAt(f.distance);
+    moveMapDot(fieldDots[i],pt);
+   }
+   const pPt = track.pointAt(car.distance);
+   moveMapDot(el('dm-player'),pPt);
+   const rPt = track.pointAt(rival.distance);
+   moveMapDot(el('dm-rival'),rPt);
   }
-  const pPt = track.pointAt(car.distance);
-  el('dm-player').setAttribute('cx', String(pPt.x));
-  el('dm-player').setAttribute('cy', String(pPt.z));
-  const rPt = track.pointAt(rival.distance);
-  el('dm-rival').setAttribute('cx', String(rPt.x));
-  el('dm-rival').setAttribute('cy', String(rPt.z));
-
   // T-cam 2026 Halo Overlay (when in T-Cam & racing)
   if (cameraKind === 'tcam' && haloVisible && r.phase === 'racing' && !menuOpen) {
    tcam.update(
@@ -1314,11 +1329,11 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
 
   // Chequered Flag Results
   if (isFinished) {
-   el('res-title').textContent = `${order[0].entry.name} wins ${track.name}!`;
-   el('res-pos').textContent = `P${place}`;
-   el('res-best').textContent = car.bestLap > 0 ? formatLap(car.bestLap) : '—:—.———';
-   el('res-stops').textContent = String(car.stops);
-   el('res-pen').textContent = `${car.penalty}s`;
+   setTextIfChanged(el('res-title'),`${order[0].entry.name} wins ${track.name}!`);
+   setTextIfChanged(el('res-pos'),`P${place}`);
+   setTextIfChanged(el('res-best'),car.bestLap > 0 ? formatLap(car.bestLap) : '—:—.———');
+   setTextIfChanged(el('res-stops'),String(car.stops));
+   setTextIfChanged(el('res-pen'),`${car.penalty}s`);
    const rHtml = order.slice(0, 10).map((row, idx) => {
     const isP = row.entry.seat === seat;
     const comp = (row.car.compound ?? 'medium') as Compound;
@@ -1333,8 +1348,10 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
  }
 
  function tick(now: number) {
-  if (disposed) return;
-  frameId = requestAnimationFrame(tick);
+  frameId=0;
+  if(disposed||hidden())return;
+  scene??=makeScene();
+  frameId=requestAnimationFrame(tick);
   const dt = Math.min(0.05, (now - lastFrameAt) / 1000);
   lastFrameAt = now;
 
@@ -1439,21 +1456,43 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   }
  }
 
- frameId = requestAnimationFrame(tick);
+ function onVisibility(){
+  if(disposed)return;
+  if(hidden()){
+   cancelAnimationFrame(frameId);frameId=0;
+   if(audioEnabled)audio.setEnabled(false);
+  }else if(!frameId){
+   lastFrameAt=performance.now();if(audioEnabled)audio.setEnabled(true);
+   frameId=requestAnimationFrame(tick);
+  }
+ }
+ if(embedded){
+  document.addEventListener('visibilitychange',onVisibility);
+  document.addEventListener('mcp-visibility',onVisibility);
+ }
+ onVisibility();
 
  return {
   get connection() { return conn; },
-  suspend3D: () => {},
+  suspend3D:()=>{
+   if(!embedded)return;
+   cancelAnimationFrame(frameId);frameId=0;
+   scene?.dispose();scene=undefined;
+  },
   dispose: () => {
+   if(disposed)return;
    disposed = true;
+   document.removeEventListener('visibilitychange',onVisibility);
+   document.removeEventListener('mcp-visibility',onVisibility);
    cancelAnimationFrame(frameId);
    window.removeEventListener('keydown', onKeyDown);
    eventLog?.dispose();
-   controls.dispose();
+   clearTimeout(copyTimer);controls.dispose();
    audio.dispose();
-   tcam.hide();
+   tcam.dispose();driverRadio?.dispose();replayFrames.length=0;
+   Reflect.deleteProperty(window,'__raceState');Reflect.deleteProperty(window,'__driveDebug');
    conn.close();
-   scene.dispose();
+   scene?.dispose();scene=undefined;app.replaceChildren();elements.clear();
    document.body.classList.remove('drive-active');
   },
  };

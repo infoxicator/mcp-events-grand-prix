@@ -81,7 +81,7 @@ async function copyPayloadText(text:string){
  }
 }
 
-function renderRow(entry:VisibleLogEntry,onHeightChange:()=>void){
+function renderRow(entry:VisibleLogEntry,onHeightChange:()=>void,onCopy:(button:HTMLButtonElement,json:string)=>void){
  const item=document.createElement('li');
  item.className='event-log-row';
  item.dataset.kind=entry.data.kind;
@@ -158,13 +158,7 @@ function renderRow(entry:VisibleLogEntry,onHeightChange:()=>void){
    copyBtn.className='event-log-copy';
    copyBtn.textContent='Copy JSON';
    const json=JSON.stringify(entry.data,null,2);
-   let resetTimer:ReturnType<typeof setTimeout>|undefined;
-   copyBtn.onclick=async()=>{
-    const copied=await copyPayloadText(json);
-    copyBtn.textContent=copied?'Copied':'Copy failed';
-    if(resetTimer)clearTimeout(resetTimer);
-    resetTimer=setTimeout(()=>{copyBtn.textContent='Copy JSON';},1400);
-   };
+   copyBtn.onclick=()=>onCopy(copyBtn,json);
    bar.append(heading,copyBtn);
    const payload=document.createElement('pre');
    payload.className='event-log-payload';
@@ -272,8 +266,17 @@ export function mountEventLog(panel:HTMLElement,connection:Connection){
   }
  }
 
+ const resets=new Map<HTMLButtonElement,ReturnType<typeof setTimeout>>();
+ let disposed=false;
+ async function onCopy(button:HTMLButtonElement,json:string){
+  const copied=await copyPayloadText(json);
+  if(disposed||!panel.contains(button))return;
+  button.textContent=copied?'Copied':'Copy failed';
+  clearTimeout(resets.get(button));
+  resets.set(button,setTimeout(()=>{resets.delete(button);button.textContent='Copy JSON';},1400));
+ }
  function addRow(entry:VisibleLogEntry){
-  const row=renderRow(entry,syncScrollState);
+  const row=renderRow(entry,syncScrollState,onCopy);
   rows.set(entry.id,row);
   list.prepend(row);
  }
@@ -352,6 +355,7 @@ export function mountEventLog(panel:HTMLElement,connection:Connection){
 
  return {
   dispose(){
+   disposed=true;for(const timer of resets.values())clearTimeout(timer);resets.clear();
    list.removeEventListener('scroll',onScroll);
    resizeObserver?.disconnect();
    connection.subscribeEventLog(false);

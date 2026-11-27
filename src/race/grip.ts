@@ -66,7 +66,7 @@ export function fingerCurl(side:-1|1,digit:number,steering:number,distance:numbe
 
 /** A millimetre of compression on the back of the glove. All applique and
  * seam meshes use the same hand-space field so the layers stay registered. */
-export function bindGloveCompression(hand:T.Object3D,side:-1|1){
+export function bindGloveCompression(hand:T.Object3D,side:-1|1,sceneMorph?:(source:T.BufferGeometry)=>T.BufferGeometry){
  hand.updateWorldMatrix(true,true);hand.updateMatrixWorld(true);
  const inverseHand=hand.matrixWorld.clone().invert(),point=new T.Vector3(),shift=new T.Vector3();
  const meshes:T.Mesh[]=[];
@@ -74,6 +74,11 @@ export function bindGloveCompression(hand:T.Object3D,side:-1|1){
  hand.traverse(o=>{if(o instanceof T.Mesh&&(o.parent===hand||o instanceof T.SkinnedMesh))candidates.push(o);});
  for(const child of candidates){
   if(!(child instanceof T.Mesh))continue;
+  // The compression morph is generated after glTF cloning. Bind it to the
+  // scene's geometry before Three installs its morph-texture disposal callback.
+  if(sceneMorph&&child.geometry.userData.shared&&!child.geometry.morphAttributes.position?.length){
+   child.geometry=sceneMorph(child.geometry);
+  }
   const geometry=child.geometry,base=geometry.getAttribute('position');
   if(!base)continue;
   if(geometry.morphAttributes.position?.length){
