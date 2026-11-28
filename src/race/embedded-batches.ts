@@ -1,6 +1,12 @@
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import * as T from 'three';
 
+// Both mixed-format GLB UV accessors and their normalized flags must survive a merge.
+function attributeLayout(geometry:T.BufferGeometry){
+ return Object.entries(geometry.attributes)
+  .map(([name,a])=>[name,a.array.constructor.name,a.itemSize,a.normalized].join(':')).sort().join('/');
+}
+
 // Keep individual survey transforms and geometry bounds. Multi-draw submits the
 // visible chunks of each opaque material together without joining distant bounds.
 export function batchCircuit(root:T.Group){
@@ -11,7 +17,7 @@ export function batchCircuit(root:T.Group){
   const m=o.material;
   if(!/^(Armco|Asphalt|RepairCourse|Concrete|Steel|White|Red|Green|Dark|Glass|Windows|WarmWindows|RoofSheet|DistantRidge|Grass|Gravel|Sign|Gold|Ice|Barrier|Stage|Roof|ParkHorizon|CityGround|Kerb|RunoffPaint|LeafLitter)$/.test(m.name))return;
   if(o instanceof T.InstancedMesh&&(o.instanceColor||o.morphTexture))return;
-  const layout=Object.entries((o.geometry as T.BufferGeometry).attributes).map(([k,a])=>k+a.array.constructor.name+a.itemSize+a.normalized).sort().join('/');
+  const layout=attributeLayout(o.geometry);
   const key=m.uuid+layout+Boolean(o.geometry.index)+o.renderOrder;
   const meshes=buckets.get(key)??[];meshes.push(o);buckets.set(key,meshes);
  });
@@ -151,7 +157,7 @@ export function rigidCarParts(model:T.Group,changing:Set<T.Mesh>){
   if(o.castShadow)candidates.push(o);
   if(changing.has(o))return;
   // Same local frame keeps custom normal, UV and livery-point shaders exact.
-  const k=[o.material.uuid,o.matrixWorld.elements.join(','),o.castShadow,o.receiveShadow,o.layers.mask,o.renderOrder,Object.keys(o.geometry.attributes).sort().join(',')].join('/');
+  const k=[o.material.uuid,o.matrixWorld.elements.join(','),o.castShadow,o.receiveShadow,o.layers.mask,o.renderOrder,Boolean(o.geometry.index),attributeLayout(o.geometry)].join('/');
   const list=opaque.get(k)??[];list.push(o);opaque.set(k,list);
  });
  const merged:{sources:T.Mesh[];mesh:T.Mesh}[]=[];
