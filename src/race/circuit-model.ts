@@ -529,6 +529,10 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   for(const geometry of farCrowns.values())original.geometries.add(geometry);
   original.dispose(active);
   scene.add(gltf.scene);
+  // Finalize the appended batches as well. The venue stays in survey space for
+  // its entire lifetime. Main, mirror and shadow renders can reuse these matrices.
+  gltf.scene.updateMatrixWorld(true);
+  gltf.scene.updateMatrixWorld=()=>{};
   if(!lakeBounds.isEmpty()){reflection=lakeReflection(lakeBounds,()=>reflectionMs);scene.add(reflection);}
   ready=true;
  }).catch(e=>{draco?.dispose();if(disposed)return;error=String(e);console.error('Blender circuit asset failed',e);});
