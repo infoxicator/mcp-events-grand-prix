@@ -6,7 +6,9 @@ from mathutils.kdtree import KDTree
 root=Path(__file__).resolve().parents[2]
 bpy.ops.wm.open_mainfile(filepath=str(root/'scripts/blender/pit-equipment.blend'))
 bpy.context.preferences.filepaths.save_version=0
-verts=[];faces=[];samples=[];bones={'Core':(Vector((0,0,0)),Vector((0,.48,0)))}
+verts=[];faces=[];samples=[];bones={'Core':(Vector((0,0,0)),Vector((0,.22,0)))}
+bones['Chest']=(Vector((0,.22,0)),Vector((0,.49,0)))
+bones['Neck']=(Vector((0,.49,0)),Vector((0,.55,0)))
 limbs={}
 def smooth(t):
     t=max(0,min(1,t));return t*t*(3-2*t)
@@ -17,10 +19,11 @@ def append(obj,anchor,direction,names=None,a=0,b=0):
     weights=obj.data.color_attributes.active_color
     for i,v in enumerate(obj.data.vertices):
         p=Vector((v.co.x,v.co.z,-v.co.y));world=anchor+q@p
-        mix={'Core':1}
+        chest=smooth((world.y-.14)/.16);neck=smooth((world.y-.45)/.08)
+        mix={'Core':1-chest,'Chest':chest*(1-neck),'Neck':neck}
         if names:
             base=smooth((p.y+.045)/.126);joint=smooth((p.y-a+.078)/.156)
-            mix={'Core':1-base,names[0]:base*(1-joint),names[1]:base*joint}
+            mix={'Chest' if names[0].startswith('Arm') else 'Core':1-base,names[0]:base*(1-joint),names[1]:base*joint}
         verts.append(world);samples.append((mix,tuple(weights.data[i].color),uvByVertex.get(i,(.96,.327))))
     for f in obj.data.polygons:faces.append(tuple(offset+i for i in f.vertices))
 append(bpy.data.objects['Torso'],Vector((0,0,0)),Vector((0,1,0)))
@@ -50,7 +53,7 @@ bpy.context.view_layer.objects.active=rig;bpy.ops.object.mode_set(mode='EDIT')
 for name,(head,tail) in bones.items():
     bone=arm.edit_bones.new(name);bone.head=head;bone.tail=tail
 bpy.ops.object.mode_set(mode='OBJECT');suit.parent=rig
-mod=suit.modifiers.new('Nine region suit skin','ARMATURE');mod.object=rig
+mod=suit.modifiers.new('Eleven region suit skin','ARMATURE');mod.object=rig
 groups={n:suit.vertex_groups.new(name=n) for n in bones}
 colors=mesh.color_attributes.new(name='Fabric panels',type='BYTE_COLOR',domain='POINT')
 uv=mesh.uv_layers.new(name='Fireproof fabric');coordinates=[]
@@ -67,10 +70,7 @@ for v in mesh.vertices:
     panel=smooth((abs(x)-.122)/.108)*smooth((.20-abs(y-.23))/.11) if abs(x)<.29 else 0
     val=.76*shade*(1-.40*panel)*(.38+.62*max(c[:3]))
     colors.data[v.index].color=(val,val*.985,val*.97,1)
-    # Stable fabric UVs after welding. Keep the shoulder patch on the back.
-    if z<-.071 and .334<y<.410 and abs(x)<.145:
-        coordinates.append(((10+282*(.5-x/.29))/512,1-(605+64*(.410-y)/.076)/768))
-    else:coordinates.append((.61+.35*((x*1.6+z*.45+.5)%1),1-(533+209*((y*.9+.31)%1))/768))
+    coordinates.append((.61+.35*((x*1.6+z*.45+.5)%1),1-(533+209*((y*.9+.31)%1))/768))
 for loop in mesh.loops:uv.data[loop.index].uv=coordinates[loop.vertex_index]
 for f in mesh.polygons:f.use_smooth=True
 suit.shape_key_add(name='Basis')

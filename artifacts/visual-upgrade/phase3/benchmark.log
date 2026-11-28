@@ -1,0 +1,17 @@
+MCP host: http://127.0.0.1:5748
+MCP endpoint: http://127.0.0.1:5747/mcp
+Sandbox: http://127.0.0.1:5749
+MCP GRAND PRIX · MONZA · JEV-VS-JEV · MOCK · 4× race clock
+http://127.0.0.1:5747/?team=a
+http://127.0.0.1:5747/?spectate
+http://127.0.0.1:5747/?team=b
+MCP: http://127.0.0.1:5747/mcp
+monza-inline 59.959178663610885 0
+monza-expanded 59.954329175390626 0
+vegas-inline 60.00609614616963 0
+vegas-expanded 59.96005695763486 0
+drive 59.999818044589574 1
+lifecycle 59.99872633497671 5
+monza-inline-stress 58.70610116008893 0
+vegas-expanded-stress 56.91677341394543 0
+drive-stress 46.828940376095574 0

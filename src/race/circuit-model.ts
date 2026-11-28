@@ -82,7 +82,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
  let ready=false,error:string|undefined,disposed=false;
  const loadingAssets=new AbortController();
  const heightAt=(d:number)=>circuitHeight(track.id,d);
- const people=tracksideMotion();
+ const people=tracksideMotion(!!track.night);
  const sp=track.project(-115.1621,36.1207),spherePosition=new T.Vector3(sp.x,32.9184,sp.z);
  let sphereShow:ReturnType<typeof createSphereShow>|undefined;
  const normal=new T.TextureLoader().load(asphaltNormal);normal.colorSpace=T.NoColorSpace;normal.flipY=false;normal.wrapS=normal.wrapT=T.RepeatWrapping;normal.anisotropy=anisotropy;
@@ -103,8 +103,10 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
  let distantInstances:ReturnType<typeof batchDistantInstances>|undefined;
  const lakeBounds=new T.Box3();let reflection:Reflector|undefined;
  const distant:T.Mesh[]=[],casters:T.Mesh[]=[],receivers:T.Mesh[]=[];
+ const detailProps:{mesh:T.InstancedMesh;stations:readonly {matrix:T.Matrix4}[];colors:T.Color[]|null;range:number}[]=[];
+ const lastPropCamera=new T.Vector3(Infinity,0,0);
  const spectatorLods:T.LOD[]=[];let crowdRange=0;
- const circuitLods:T.LOD[]=[],detailCamera=new T.PerspectiveCamera();
+ const circuitLods:T.LOD[]=[];
  let manualDetail=false;
  const draco=import.meta.env.MCP_APP==='true'?null:new DRACOLoader().setDecoderPath({js:decoderJS,wasm:decoderWasm}).setWorkerLimit(2);
  const source=import.meta.env.MCP_APP==='true'?takeCircuit(!!track.night,loadingAssets.signal):gzipBytes(track.night?vegasURL:monzaURL,loadingAssets.signal).then(b=>new GLTFLoader().setDRACOLoader(draco!).parseAsync(b,''));
@@ -132,8 +134,9 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   lodSources.forEach(o=>{o.removeFromParent();});
   const buckets=new Map<string,{mesh:T.Mesh;matrix:T.Matrix4}[]>(),sources:T.Mesh[]=[];
   gltf.scene.traverse(o=>{if(o instanceof T.Mesh&&(o instanceof T.InstancedMesh||o.name.startsWith('Instance_'))){sources.push(o);const count=o instanceof T.InstancedMesh?o.count:1;
-   const tile=(o.material as T.Material).name==='Spectator0'?60:180;
-   for(let i=0;i<count;i++){const matrix=new T.Matrix4();if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);matrix.premultiply(o.matrixWorld);const p=new T.Vector3().setFromMatrixPosition(matrix),key=`${o.geometry.uuid}:${(o.material as T.Material).uuid}:${Math.floor(p.x/tile)}:${Math.floor(p.z/tile)}`;const group=buckets.get(key)??[];group.push({mesh:o,matrix});buckets.set(key,group);}
+   const name=(o.material as T.Material).name,tile=name==='Spectator0'?60:180;
+   const singleBatch=/^(SpareNoseRack|TyreBlanketRack|Photographer|GrandstandFlag|SafetyBoard)$/.test(name);
+   for(let i=0;i<count;i++){const matrix=new T.Matrix4();if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);matrix.premultiply(o.matrixWorld);const p=new T.Vector3().setFromMatrixPosition(matrix),key=`${o.geometry.uuid}:${(o.material as T.Material).uuid}:${singleBatch?0:Math.floor(p.x/tile)}:${singleBatch?0:Math.floor(p.z/tile)}`;const group=buckets.get(key)??[];group.push({mesh:o,matrix});buckets.set(key,group);}
   }});
   for(const o of sources){let parent=o.parent;o.removeFromParent();while(parent&&parent!==gltf.scene&&parent.children.length===0){const next=parent.parent;parent.removeFromParent();parent=next;}}
   const garages=(Object.keys(constructors) as Constructor[]).map(team=>({
@@ -172,13 +175,18 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     lod.addLevel(batch,0);lod.addLevel(far,staff?40:spectator?45:100,.15);
     if(spectator){lod.userData.spectator=true;spectatorLods.push(lod);}
     if(horizon){horizon.name=first.name+'_horizon';horizon.computeBoundingSphere();lod.addLevel(horizon,290,.12);}
-    lod.addLevel(new T.Group(),staff?360:spectator?550:950,.1);gltf.scene.add(lod);circuitLods.push(lod);
+    lod.addLevel(new T.Group(),staff?360:spectator?550:950,.1);lod.autoUpdate=!manualDetail;gltf.scene.add(lod);circuitLods.push(lod);
    }else{
     objects.forEach((o,i)=>{
      batch.setMatrixAt(i,o.matrix);
+     if(materialName==='GrandstandFlag')batch.setColorAt(i,new T.Color(!track.night&&i%5<3?'#db1732':constructors[(Object.keys(constructors) as Constructor[])[i%11]][0]));
      if(materialName==='PitWallEngineer')batch.setColorAt(i,garageColor(o.matrix));
     });
     batch.computeBoundingSphere();gltf.scene.add(batch);
+    if(materialName==='Photographer'||materialName.endsWith('Rack')||(materialName==='GrandstandFlag'&&import.meta.env.MCP_APP==='true')){
+     const colors=batch.instanceColor?objects.map((_,i)=>{const color=new T.Color();batch.getColorAt(i,color);return color;}):null;
+     detailProps.push({mesh:batch,stations:objects,colors,range:materialName==='GrandstandFlag'?105:materialName==='Photographer'?150:120});
+    }
    }
   }
   gltf.scene.updateMatrixWorld(true);
@@ -202,6 +210,8 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     configured.add(m);
     m.side=/^(Canopy|Fence|Sign$|Brake[0-9]|ParkHorizon|Marquee|GarageFascia|WorkshopBack|DistantRidge|Impact|Balustrade|Armco$)/.test(m.name)?T.DoubleSide:T.FrontSide;
     people.bind(m);signals.bind(m);
+    if(m.name==='GarageFloor'){m.roughness=.22;m.envMapIntensity=1.2;}
+    if(m.name==='TimingScreen'||m.name==='GrandstandFlag'||m.name==='SafetyBoard')m.side=T.DoubleSide;
     if(m.name==='PaddockBanner'||m.name.startsWith('ItalianFlag'))m.side=T.DoubleSide;
     if(m.name==='Trunk'){
      m.onBeforeCompile=shader=>{
@@ -538,23 +548,45 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
  }).catch(e=>{draco?.dispose();if(disposed)return;error=String(e);console.error('Blender circuit asset failed',e);});
  return {setReflectionCadence(ms:number){reflectionMs=ms;},loaded,heightAt,spherePosition,people,signals,puddles,get sphereShow(){return sphereShow;},get ready(){return ready;},get error(){return error;},viewDetail(camera:T.Camera|null,detail=1,drawDistance=1){
   if(!camera&&!manualDetail)return;
-  manualDetail=!!camera;
-  if(camera){detailCamera.matrixWorld.copy(camera.matrixWorld);detailCamera.zoom=detail;}
-  for(const lod of circuitLods){
-   lod.autoUpdate=!camera;
-   if(camera){
-    // Lower silhouette detail while preserving the venue's draw distance.
-    const end=lod.levels[lod.levels.length-1],range=end.distance;
-    end.distance=range*drawDistance/detail;
-    const near=lod.levels[1],switchDistance=near.distance;
-    if(lod.userData.spectator&&camera.name==='Race camera')near.distance=switchDistance/detail;
-    lod.update(detailCamera);near.distance=switchDistance;end.distance=range;
+  if(manualDetail!==!!camera){
+   manualDetail=!!camera;
+   for(const lod of circuitLods)lod.autoUpdate=!manualDetail;
+  }
+  if(camera){
+   // Survey LODs are fixed. Use the camera origin once for the whole venue.
+   // Apply the same transition hysteresis without modifying authored ranges.
+   const view=camera.matrixWorld.elements,main=camera.name==='Race camera';
+   for(const lod of circuitLods){
+    const m=lod.matrixWorld.elements,dx=view[12]-m[12],dy=view[13]-m[13],dz=view[14]-m[14];
+    const distanceSq=dx*dx+dy*dy+dz*dz,levels=lod.levels,end=levels.length-1;
+    let selected=0;
+    for(let i=1;i<=end;i++){
+     const level=levels[i],scale=i===end?drawDistance:i===1&&main&&lod.userData.spectator?1:detail;
+     const range=level.distance*scale*(level.object.visible?1-level.hysteresis:1);
+     if(distanceSq<range*range)break;
+     selected=i;
+    }
+    for(let i=0;i<=end;i++)levels[i].object.visible=i===selected;
    }
   }
   distantInstances?.(camera);
  },update(time:number,focus:T.Vector3,camera:T.Vector3,shadowExtent:number,balanced:boolean){
-  const range=balanced||import.meta.env.MCP_APP==='true'?45:75;
+  const range=import.meta.env.MCP_APP==='true'?45:75;
   if(range!==crowdRange){for(const lod of spectatorLods)lod.levels[1].distance=range;crowdRange=range;}
+  if(lastPropCamera.distanceToSquared(camera)>36){
+   lastPropCamera.copy(camera);
+   for(const prop of detailProps){
+    const batch=prop.mesh;batch.count=0;
+    for(let i=0;i<prop.stations.length;i++){
+     const matrix=prop.stations[i].matrix,m=matrix.elements;
+     if((m[12]-camera.x)**2+(m[13]-camera.y)**2+(m[14]-camera.z)**2>=prop.range**2)continue;
+     if(prop.colors)batch.setColorAt(batch.count,prop.colors[i]);
+     batch.setMatrixAt(batch.count++,matrix);
+    }
+    batch.visible=batch.count>0;batch.instanceMatrix.needsUpdate=true;
+    if(batch.instanceColor)batch.instanceColor.needsUpdate=true;
+   }
+  }
   animation.value=time;shadowPatch.value.set(focus.x,focus.z,balanced?0:shadowExtent);
   if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;
   function near(mesh:T.Mesh,range:number){

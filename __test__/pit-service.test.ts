@@ -111,18 +111,24 @@ describe('pit service',()=>{
    const jack=frontJackPose(t);expect(jack.withdraw).toBe(1);
    // The outer caster is .245 m from centre. Clear the car's full metre of half-span.
    expect(jack.x-.245).toBeGreaterThan(1.05);
-   expect(jackLift({distance:0,pit:'stopped',pitTime:t})).toBe(0);
+   expect(jackLift({distance:0,pit:'stopped',pitTime:t})).toMatchObject({front:0,rear:0});
    for(let i=0;i<4;i++)expect(cornerService(t,i)).toEqual({off:false,remove:1,fit:1,gun:0});
   }
   expect(releaseGreen(2.55)).toBe(false);
   expect(releaseGreen(2.57)).toBe(true);
  });
+ it('pitches nose-up during loading and settles after the drop',()=>{
+  const car={distance:0,pit:'stopped',pitTime:.20};
+  const lift=jackLift(car);expect(lift.front).toBeGreaterThan(lift.rear);
+  car.pitTime=2.43;expect(jackLift(car).dropBounce).toBeLessThan(0);
+  car.pitTime=2.65;expect(jackLift(car).dropBounce).toBe(0);
+ });
  it('holds the jack and release signal throughout a damage repair',()=>{
   const car={distance:0,pit:'stopped',pitTime:5,totalStop:8.6};
-  expect(jackLift(car)).toBeCloseTo(.086);
+  expect(jackLift(car)).toEqual({front:.086,rear:.086,dropBounce:0});
   expect(releaseGreen(serviceClock(car))).toBe(false);
   car.pitTime=8.57;
-  expect(jackLift(car)).toBe(0);
+  expect(jackLift(car)).toMatchObject({front:0,rear:0});
   expect(canRelease(car)).toBe(false);
   car.pitTime=8.6;expect(canRelease(car)).toBe(true);
  });
@@ -133,10 +139,10 @@ describe('pit service',()=>{
    expect(cornerService(1.9,i).off).toBe(false);
    for(let tick=0;tick<=312;tick++){
     const t=tick/120,c=cornerService(t,i);
-    if(c.off)expect(jackLift({distance:0,pit:'stopped',pitTime:t})).toBeCloseTo(.086);
+    if(c.off)expect(jackLift({distance:0,pit:'stopped',pitTime:t})).toEqual({front:.086,rear:.086,dropBounce:0});
    }
    expect(cornerService(2.6,i)).toEqual({off:false,remove:1,fit:1,gun:0});
   }
-  expect(jackLift({distance:0,pit:'exit',pitTime:2.6})).toBe(0);
+  expect(jackLift({distance:0,pit:'exit',pitTime:2.6})).toEqual({front:0,rear:0,dropBounce:0});
  });
 });

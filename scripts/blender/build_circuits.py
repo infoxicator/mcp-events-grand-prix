@@ -8,6 +8,7 @@ from mathutils import Vector
 from mathutils.kdtree import KDTree
 sys.path.insert(0,str(Path(__file__).parent))
 from pack_glb import pack
+from pit_props import prototype
 from grandstand_people import spectator_mesh
 from check_monza_clearance import barrier_distance,check as check_monza
 from track_people import staff_mesh,staff_material
@@ -51,10 +52,10 @@ def build(cid):
  staff_material(mats['Spectator0'],bpy.data.images.load(str(ROOT/'scripts/blender/textures/spectators.jpg'),check_existing=True),'Wardrobe')
  mat('WorkshopBack',(.8,.8,.8),.85,tex=cid+'-garage',emission=.38 if night else .12)
  mat('GarageInterior',(.105,.103,.097),.92)
- mat('TimingScreen',(.72,.85,.92),.32,.08,tex=cid+'-timing',emission=1.3 if night else .54)
+ mat('TimingScreen',(1,1,1),.58,emission=.68)
  mat('GantryCarbon',(.027,.033,.037),.35,.46)
  mat('WarmerFabric',(.055,.060,.065),.87)
- mat('GarageFloor',(.18,.18,.17),.69)
+ mat('GarageFloor',(.21,.22,.22),.22)
  mat('ServiceRed',(.27,.026,.029),.56,.16)
  mat('GarageFascia',(.45,.45,.43),.62,emission=.45 if night else 0)
  mat('RoofSheet',(.36,.395,.43),.54,.35)
@@ -66,6 +67,15 @@ def build(cid):
  mat('RepairCourse',(.15,.15,.16),.73,tex='asphalt-color');mat('TarSeam',(.045,.040,.037),.52)
  if not night:mat('GravelMargin',(.62,.58,.49),tex='gravel-margin',alpha=True)
  for i in range(4):mat('Sponsor'+str(i),(.8,.8,.8),.56,tex='sponsor-'+str(i),emission=.22 if night else 0)
+ mat('BayAccent',(1,1,1),.42)
+ accent_nodes=mats['BayAccent'].node_tree.nodes;attr=accent_nodes.new('ShaderNodeVertexColor');attr.layer_name='Team paint'
+ mats['BayAccent'].node_tree.links.new(attr.outputs['Color'],accent_nodes.get('Principled BSDF').inputs['Base Color'])
+ mat('PitTarget',(.95,.71,.024),.61)
+ for name in ('GrandstandFlag','SafetyBoard','Photographer','SpareNoseRack','TyreBlanketRack'):
+  mat(name,(1,1,1),.70)
+  material=mats[name];nodes=material.node_tree.nodes;attribute=nodes.new('ShaderNodeVertexColor');attribute.layer_name='Equipment colour'
+  material.node_tree.links.new(attribute.outputs['Color'],nodes.get('Principled BSDF').inputs['Base Color'])
+ for name,col in [('Stop',(.85,.018,.009)),('Go',(.012,.85,.12)),('Blue',(.02,.20,.94))]:mat('PitExit'+name,col,.29,emission=.7)
  for i in range(5):mat('GridLens'+str(i),(.11,.004,.003),.22,.16)
  mat('MarshalLED',(.03,.12,.04),.45,emission=.8)
  mat('SignalLens',(.084,.012,.009),.28,.15)
@@ -95,7 +105,7 @@ def build(cid):
  mat('PitWallEngineer',(1,1,1),.78)
  uniform=mats['PitWallEngineer'];colour=uniform.node_tree.nodes.new('ShaderNodeVertexColor');colour.layer_name='Wardrobe'
  uniform.node_tree.links.new(colour.outputs['Color'],uniform.node_tree.nodes.get('Principled BSDF').inputs['Base Color'])
- mat('Hospitality',(.09,.16,.19),.12,.46)
+ mat('Hospitality',(.09,.16,.19) if night else (.34,.23,.16),.12,.46,emission=0 if night else .20)
  mat('LoungeLeather',(.22,.16,.097),.62)
  mat('LoungeWall',(.19,.22,.23),.64,emission=.18 if night else 0)
  mat('Balustrade',(.49,.60,.62),.17,.12)
@@ -113,13 +123,16 @@ def build(cid):
 
  if not night:
   mats['Armco']=mats['Steel'].copy();mats['Armco'].name='Armco'
- for number in [150,100,50]:mat('Brake'+str(number),(.8,.8,.8),tex='brake-'+str(number))
- batches={}
+ for number in [150,100,80,50]:mat('Brake'+str(number),(.8,.8,.8),tex='brake-'+str(number))
+ batches={};accent_colors={}
  tile_size=520
  tile_prefix=""
  def face(points,material,uv=None,special=None,top=False):
   size=1200 if material in ('Grass','CityGround','DistantRidge','ParkHorizon') else tile_size
   centre=tuple(sum(p[i] for p in points)/len(points) for i in range(3));key=(special or f'{tile_prefix}{int(centre[0]//size)}_{int(centre[2]//size)}',material)
+  if material.startswith('BayAccent'):
+   bay=int(material[9:]);key=(key[0],'BayAccent')
+   accent_colors.setdefault(key,[]).extend([(*uniforms[bay],1)]*len(points))
   # Road strips can run in either lateral direction. The upper surface faces the sky.
   if top:
    a,b,c=map(Vector,points[:3])
@@ -222,6 +235,16 @@ def build(cid):
      co=mesh.vertices[mesh.loops[li].vertex_index].co;uv.data[li].uv=(math.atan2(co.y,co.x)/math.tau+.5,math.acos(max(-1,min(1,co.z)))/math.pi)
    prototypes[key]=mesh
   o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(p[0],-p[2],p[1]);o.scale=(scale[0],scale[2],scale[1]);o.rotation_euler.z=(seed*2.39996 if m.startswith('Canopy') else 0);instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+ def prop(name,p,yaw,scale=1):
+  nonlocal instance_triangles
+  if name not in prototypes:prototypes[name]=prototype(name,mats[name])
+  mesh=prototypes[name];obj=bpy.data.objects.new('Instance_'+name,mesh);bpy.context.collection.objects.link(obj)
+  obj.parent=instanceRoot;x,y,z=p;obj.location=(x,-z,y);obj.rotation_euler.z=yaw;obj.scale=(scale,scale,scale)
+  instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+ def monitor_face(d,off,h,w,tall,quadrant):
+  u=(quadrant%2)*.5;v=(1-quadrant//2)*.5
+  face([pt(d+a,off,h+b) for a,b in [(-w/2,-tall/2),(w/2,-tall/2),(w/2,tall/2),(-w/2,tall/2)]],
+       'TimingScreen',[(u,v),(u+.5,v),(u+.5,v+.5),(u,v+.5)])
  def staff(role,p,yaw,kit=(.031,.09,.14),uniform=None,alternate=False):
   nonlocal instance_triangles
   key=(role,kit,alternate)
@@ -486,8 +509,20 @@ def build(cid):
   atbox(st-2.65,off,4.32,(1.81,.07,.46),'RoofSheet')
   face([pt(st-2.60,off+x,3.76+y) for x,y in [(.79,-.46),(.79,.46),(-.79,.46),(-.79,-.46)]],
        'MarshalLED',[(0,0),(0,1),(1,1),(1,0)])
-  staff('marshal',pt(st-.54,off,.24),yaw)
-  staff('observer',pt(st+.78,off+.28*side,.24),yaw+.36,(.55,.12,.015))
+  alternate=int(st)%3==0
+  staff('marshal',pt(st-.54,off,.24),yaw,alternate=alternate)
+  prop('SafetyBoard',pt(st+.78,off+.28*side,.24),yaw+.36)
+  staff('observer',pt(st+.78,off+.28*side,.24),yaw+.36,(.55,.12,.015),alternate=not alternate)
+ for j in range(14):
+  corner=data['corners'][j%len(data['corners'])];st=corner['d']+18+(j//len(data['corners']))*65
+  off=edge(st)+4.3;heading=sample(st);yaw=math.atan2(heading['tx'],heading['tz'])+math.pi/2
+  prop('Photographer',pt(st,off,.03),yaw)
+  if not night and j<7:
+   st+=45;off=edge(st)+3.2
+   atbox(st,off,.12,(2.1,.24,3.4),'Concrete')
+   atbox(st,off+1.1,1.42,(.12,2.4,3.4),'Cabinet')
+   atbox(st,off,2.72,(2.3,.12,3.6),'RoofSheet')
+   staff('marshal',pt(st,off,.24),yaw,alternate=bool(j%2))
  # Finish official stands behind the pit wall, level with the timing line.
  atbox(-2,-14.4,.62,(1.6,1.24,2.2),'Concrete')
  v=sample(-2);staff('finish',pt(-2,-14.4,1.24),math.atan2(v['tx'],v['tz'])-math.pi/2)
@@ -539,6 +574,12 @@ def build(cid):
    atbox(d+11,-42,heightB*.45,(5,heightB*.9,4),'Glass')
    for step in range(14):atbox(d+11,-41-step*.2,.3+step*.43,(4,.18,.6),'Steel')
   if i in uniforms:
+   accent='BayAccent'+str(i);yaw=math.atan2(sample(d)['tx'],sample(d)['tz'])
+   prop('SpareNoseRack',pt(d-5.4,-28.4,.106),yaw)
+   prop('TyreBlanketRack',pt(d+3,-28.6,.106),yaw)
+   atbox(d,-33.68,2.92,(.04,.19,27.5),accent)
+   for seam in (-9,-4.5,0,4.5,9):
+    strip(d+seam-.012,d+seam+.012,-34.8,-25.2,'TarSeam',.105)
    # Cantilevered triangulated boom. Both lower rails and the upper chord
    # terminate over the stopped car without a column in the working rectangle.
    for dz in (-.24,.24):
@@ -560,12 +601,8 @@ def build(cid):
      outlet=-23-side*.90
      rod(pt(d+dz,-23,3.03),pt(d+dz,outlet,3.03),.027,'GantryCarbon')
      rod(pt(d+dz,outlet,3.05),pt(d+dz,outlet,2.97),.036,'Steel',10)
-   # Cylindrical tyre blankets on a garage trolley, straps and insulated leads.
-   atbox(d+3.0,-28.6,.29,(1.30,.13,2.25),'Cabinet')
-   for k in range(3):
-    st=d+2.31+k*.69
-    rod(pt(st-.22,-28.6,.69),pt(st+.22,-28.6,.69),.35,'WarmerFabric',18)
-    rod(pt(st-.022,-28.6,.69),pt(st+.022,-28.6,.69),.36,'Dark',18)
+   atbox(d,-20.94,3.05,(.16,.20,.22),'GantryCarbon')
+   atbox(d,-20.94,2.9,(.12,.55,1.40),'GantryCarbon')
   # Raised timing islands between the apron and the racing surface.
   if i in uniforms:
    atbox(d,-13.02,.58,(1.76,1.08,7.6),'Concrete')
@@ -577,11 +614,11 @@ def build(cid):
     v=sample(station);yaw=math.atan2(v['tx'],v['tz'])+math.pi/2
     spectator(pt(station,-12.89,1.40),1.05,yaw,'PitWallEngineer',(i+monitor)%4,uniforms[i])
     atbox(station,-13.65,1.94,(.11,.50,1.26),'Dark')
-    atbox(station,-13.58,1.94,(.025,.43,1.18),'TimingScreen')
+    monitor_face(station,-13.58,1.94,1.18,.43,monitor)
    for j in [-3.32,3.32]:
     rod(pt(d+j,-13.79,1.15),pt(d+j,-13.79,3.03),.049,'Steel')
     rod(pt(d+j,-13.79,3.0),pt(d+j,-12.13,2.89),.046,'Steel')
-   atbox(d,-13.15,3.05,(1.9,.11,7.63),'Red' if i%4 else 'Dark')
+   atbox(d,-13.15,3.05,(1.9,.11,7.63),accent)
    atbox(d,-13.35,2.98,(.09,.034,7.0),'LoungeLight')
    # The fine guard mesh continues between timing stands on the concrete wall.
    for segment in range(4):
@@ -604,6 +641,7 @@ def build(cid):
     for shelf in [.38,.59,.80]:atbox(d+j+2.6,-25.70,shelf,(.05,.035,1.18),'Steel')
     rod(pt(d+j+2.6,-26.1,1.02),pt(d+j+2.6,-26.1,1.62),.045,'Steel')
     atbox(d+j+2.6,-26.1,1.58,(.12,.48,.81),'Dark')
+    monitor_face(d+j+2.6,-26.032,1.58,.74,.42,(i+j)%4)
    row=(i+int(j/9))%4
    face([pt(d+j-3.82,-24.53,3.96),pt(d+j+3.82,-24.53,3.96),
          pt(d+j+3.82,-24.53,4.65),pt(d+j-3.82,-24.53,4.65)],'GarageFascia',
@@ -637,6 +675,7 @@ def build(cid):
    for deck in range(2):
     h=7.7+deck*3.35
     lounge(d,-26.8,h+.15)
+    atbox(d,-24.18,h+.10,(.09,.045,27.8),'LoungeLight')
     atbox(d,-26.8,h+1.47,(.10,2.94,27.95),'Hospitality')
     atbox(d,-26.23,h,(4.0,.26,27.95),'Concrete')
     atbox(d,-24.22,h+.72,(.08,1.0,27.85),'Balustrade')
@@ -654,6 +693,11 @@ def build(cid):
   if night:atbox(d,-24.6,10.7,(.15,.12,27),'Pink')
  for stall in data['pitBoxes']:
   d=stall['distance'];off=stall['offset']
+  strip(d-3.5,d+3.5,off-1.89,off+1.89,'GantryCarbon',.047)
+  strip(d-3.5,d+3.5,off-1.89,off-1.77,'BayAccent'+str(stall['bay']),.052)
+  strip(d+1.46,d+1.62,off-1.55,off+1.55,'PitTarget',.057)
+  for j in range(-12,14,2):
+   face([pt(d+j+a,-20+b,.054) for a,b in [(0,0),(.13,0),(1.13,.69),(1,.69)]],'White',top=True)
   for side in (-1,1):
    stripe=off+side*1.16
    strip(d-3,d+3,stripe-.055,stripe+.055,'White',.052)
@@ -661,6 +705,19 @@ def build(cid):
   for sign in (-1,1):
    a=d+4*sign;b=d+6*sign
    strip(min(a,b),max(a,b),lambda q:off+1.16+(q-a)*sign*.65,lambda q:off+1.28+(q-a)*sign*.65,'White',.052)
+ for st in [data['pitEntry']+29,data['pitExit']-30]:
+  off=sample(st)['pit']
+  strip(st-.11,st+.11,off-1.6,off+1.6,'White',.056)
+  # Outside the drive corridor, the cantilevered speed board spans the lane at 4.4 m.
+  post=min(off-3,-edge(st)-2)
+  atbox(st,post,2.4,(.11,4.8,.11),'Steel')
+  rod(pt(st,post,4.78),pt(st,off,4.78),.044,'Steel')
+  face([pt(st,off+x,4.43+y) for x,y in [(-.50,-.34),(-.50,.34),(.50,.34),(.50,-.34)]],'Brake80',[(0,0),(0,1),(1,1),(1,0)])
+  face([pt(st+a,off+b,.059) for a,b in [(0,-.75),(0,.75),(1.12,.75),(1.12,-.75)]],'Brake80',[(0,0),(1,0),(1,1),(0,1)],top=True)
+  if st<data['length']/2:
+   atbox(st,post,2.80,(.44,1.04,.26),'Dark')
+   for j,lens in enumerate(['Blue','Go','Stop']):
+    rod(pt(st-.14,post,2.47+.32*j),pt(st-.17,post,2.47+.32*j),.126,'PitExit'+lens,14)
  if not night:
   # The podium balcony projects out of the pit building at the finish.
   # Three stacked decks, a viewing gallery and a cantilevered steel gallery.
@@ -707,6 +764,7 @@ def build(cid):
      pool=[p for p in range(12) if p not in previous and (p not in (6,7,10) or rng.random()<.26)]
      pose=rng.choice(pool);previous=(previous+[pose])[-4:]
      spectator(person,h,heading,cloth,pose)
+     if (j*7+row*13+block)%20==0:prop('GrandstandFlag',person,heading,h)
    # Folded sheet canopy with a pitched face, purlins and exposed triangular trusses.
    for rib in range(16):
     start=d-15.98+rib*2
@@ -1267,6 +1325,9 @@ def build(cid):
  triangles=instance_triangles
  for (tile,m),(verts,faces,uvs) in batches.items():
   mesh=bpy.data.meshes.new(f'{tile}_{m}');mesh.from_pydata(verts,[],faces);mesh.update();uv=mesh.uv_layers.new(name='UVMap')
+  if m=='BayAccent':
+   colour=mesh.color_attributes.new(name='Team paint',type='BYTE_COLOR',domain='POINT')
+   for index,c in enumerate(accent_colors[(tile,m)]):colour.data[index].color=c
   for poly in mesh.polygons:
    for li in poly.loop_indices:uv.data[li].uv=uvs[mesh.loops[li].vertex_index]
   obj=bpy.data.objects.new(f'{tile}_{m}',mesh);bpy.context.collection.objects.link(obj);obj.data.materials.append(mats[m]);

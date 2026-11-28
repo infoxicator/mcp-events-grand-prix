@@ -320,7 +320,8 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    tier.palettes.push(palette);root.add(batch);tier.batches.push(batch);
   });sources.dispose(new MeshResources().collect(root));ready=true;
  }).catch(e=>{error=String(e);});
- return {root,signage,loaded,get ready(){return ready;},get error(){return error;},update(field:readonly FieldCar[]|undefined,camera:T.PerspectiveCamera,focus:T.Vector3,shadowExtent:number,mirror=false,balanced=false,drawShadows=true,viewHeight=0,time=0){
+ const lift={front:0,rear:0,dropBounce:0},service={distance:0,pit:'stopped',pitTime:0};
+ return {root,signage,inkMap,loaded,get ready(){return ready;},get error(){return error;},update(field:readonly FieldCar[]|undefined,camera:T.PerspectiveCamera,focus:T.Vector3,shadowExtent:number,mirror=false,balanced=false,drawShadows=true,viewHeight=0,time=0){
   tails.count=0;
   root.visible=!!field?.length;if(!ready||!field)return;
   camera.updateMatrixWorld();frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
@@ -367,13 +368,15 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
     removedWheels.setX(slot,off);
    }
    const module=modules.get(near?profiles[i]:farModules[i])!,contact=modules.get('Contact')!;
-   contact.setMatrixAt(contact.count++,pose.matrix);
+   service.pitTime=seconds;
+   if(stopped)jackLift(service,lift);
+   if(!stopped||Math.max(lift.front,lift.rear)<.025)contact.setMatrixAt(contact.count++,pose.matrix);
    if(!mirror&&!balanced&&near&&!stopped){
     pose.rotation.x+=heat[i]*.018;
     const edge=kerbHeight(track,c.distance,c.offset+Math.sign(c.offset)*.82);
     pose.rotation.z+=Math.sign(c.offset)*edge*.33;pose.updateMatrix();
    }
-   if(stopped){pose.position.y+=jackLift({distance:c.distance,pit:c.pit,pitTime:seconds});pose.updateMatrix();}
+   if(stopped){pose.position.y+=(lift.front+lift.rear)*.5+lift.dropBounce;pose.rotation.x+=(lift.rear-lift.front)/3.6;pose.updateMatrix();}
    const harvesting=c.harvesting??false;
    if(inCamera&&(surfaceWater.value>.07||heat[i]>.16||c.pit&&c.pit!=='none'||harvesting)&&(time*4+i*.373)%1<.46){
     tails.setMatrixAt(tails.count++,pose.matrix);

@@ -164,7 +164,16 @@ try{
      const r=script[Math.min(f,script.length-1)],a=r.cars.a,b=r.cars.b;
      brakingProof=name==='brake-dust';brakeDust=0;
      lock=null;
-     if(name==='safety-review'){
+     if(name==='grandstand'){
+      const d=track.LENGTH-(id==='monza'?160:110),off=id==='monza'?35:22;
+      r.phase='finished';mode('detail');lock=[pt(d+5,off-9,4),pt(d,off+3,3.5),45];
+     }else if(name==='marshal-post'){
+      const st=track.CORNERS[0].d+63;mode('detail');
+      const off=24+8*Math.cos(Math.PI*63/144)+3.2;
+      r.control={...r.control,marshalSignal:'BLUE'};lock=[pt(st+2.8,off-2.3,2.17),pt(st,off,1.71),48];
+     }else if(name==='giant-tv'){
+      mode('detail');lock=[pt(1520+3,-26,6.7),pt(1520,-40,6.9),41];
+     }else if(name==='safety-review'){
       const sc=r.control.safetyCar,d=sc.distance;
       mode('detail');lock=[pt(d+5.4,sc.offset-4.1,1.42),pt(d,sc.offset,.64),37];
      }else if(name==='finish-wall'){
@@ -364,6 +373,14 @@ try{
     await writeFile(out+'/hero-a-'+angle+'.jpg',Buffer.from(bytes,'base64'));
    }
   };
+  if(process.env.REVIEW_PIT_TRACKSIDE){
+   for(const name of circuit==='monza'?['grandstand','marshal-post']:['grandstand','giant-tv']){
+    await start(name);await still(circuit+'-'+name);
+   }
+   if(circuit==='monza'){await start('steer','b');await still('steer-b-centre');}
+   await writeFile(out+'/trackside-shots.json',JSON.stringify(manifest,null,2));
+   await page.close();if(errors.length)throw Error(errors.join('\n'));continue;
+  }
   if(process.env.REVIEW_FINISHING){
    const shots=circuit==='monza'?{'finish-wall':'monza-pitwall-car','finish-brake':'brake-glow-gradient','finish-cockpit':'cockpit-gloves-lcd','finish-aerial':'monza-aerial-turf'}:{'finish-sphere':'vegas-sphere-led','finish-strip':'vegas-strip-night'};
    const render=async(name,angle)=>{

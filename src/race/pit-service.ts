@@ -2,7 +2,7 @@ import {grid,opponents,playerEntry,type FieldCar,type GridEntry} from './grid';
 import type {Race,Team} from './types';
 import type {Track} from './track';
 
-export interface PitTelemetry{distance:number;pit?:string;pitTime?:number;totalStop?:number;offset?:number;heading?:number;compound?:string;instruction?:{tyre?:string}}
+export interface PitTelemetry{distance:number;pit?:string;pitTime?:number;totalStop?:number;offset?:number;heading?:number;compound?:string;previousCompound?:string;instruction?:{tyre?:string}}
 export type Constructor=GridEntry['team'];
 // Indices of the 28 m garage modules authored in build_circuits.py.
 export const garageBay:Record<Constructor,number>={
@@ -71,11 +71,16 @@ export function serviceClock(car:PitTelemetry){
  return Math.min(t,Math.max(2.02,t-Math.max(0,(car.totalStop??2.6)-2.6)));
 }
 /** Service seconds are authoritative, including when the viewer joins mid-stop or scrubs a replay. */
-export function jackLift(car:PitTelemetry){
- if(car.pit!=='stopped')return 0;
- const t=serviceClock(car);return .086*ramp(t,.08,.34)*(1-ramp(t,2.13,2.40));
+export function jackLift(car:PitTelemetry,out={front:0,rear:0,dropBounce:0}){
+ const t=car.pit==='stopped'?serviceClock(car):0;
+ out.front=.086*ramp(t,.08,.34)*(1-ramp(t,2.13,2.38));
+ out.rear=.086*ramp(t,.14,.40)*(1-ramp(t,2.17,2.40));
+ const drop=t-2.40;
+ out.dropBounce=drop>0&&drop<.25?-.018*Math.sin(drop*42)*Math.exp(-drop*16)*(1-ramp(drop,.19,.25)):0;
+ return out;
 }
 const cornerOffsets=[.015,.05,.085,0];
+export function cornerLocked(seconds:number,index:number){return seconds>=1.99+cornerOffsets[index];}
 export function cornerService(seconds:number,index:number,out={off:false,remove:0,fit:0,gun:0}){
  const t=seconds-cornerOffsets[index];
  out.off=t>=.49&&t<1.66;out.remove=ramp(t,.49,.99);out.fit=ramp(t,1.00,1.66);

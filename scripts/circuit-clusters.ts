@@ -28,7 +28,7 @@ export function circuitClusters():Plugin{
   }
   const json=Buffer.from(JSON.stringify(doc)),padded=Math.ceil(json.length/4)*4,head=Buffer.alloc(20+padded,32);
   glb.copy(head,0,0,20);head.writeUInt32LE(head.length+glb.length-20-jsonSize,8);head.writeUInt32LE(padded,12);json.copy(head,20);
-  const source=gzipSync(Buffer.concat([head,glb.subarray(20+jsonSize)]));
+  const source=gzipSync(Buffer.concat([head,glb.subarray(20+jsonSize)]),{level:9,memLevel:5});
   const ref=this.emitFile({type:'asset',name:path.split('/').at(-1),source});
   return 'export default import.meta.ROLLUP_FILE_URL_'+ref;
  }};

@@ -154,8 +154,19 @@ function drawTelemetry(ctx:CanvasRenderingContext2D,c:CarTelemetry,studio:boolea
  }
 }
 export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMorph:(source:T.BufferGeometry)=>T.BufferGeometry,surfaceWater={value:0},reviewPose?:string,progress=1){
+ const lift={front:0,rear:0,dropBounce:0};
  const suspension=new Suspension(),inverseBody=new T.Quaternion();
  const root=new T.Group(),chassis=new T.Group(),lod=new T.LOD();root.add(chassis);chassis.add(lod);
+ if(import.meta.env.MCP_APP==='true'){
+  const selectLevel=lod.update;
+  lod.update=function(camera){
+   selectLevel.call(this,camera);
+   // The main camera, mirror and lake reflection can select different rigs
+   // in one frame. Refresh the newly selected rig before Three submits it.
+   const selected=this.levels[this.getCurrentLevel()]?.object;
+   if(selected?.userData.deferredPose)selected.updateMatrixWorld(true);
+  };
+ }
  let shell:InspectionShell|undefined,poses:InspectionPoses|undefined,posed=false;
  let contact:T.Mesh<T.PlaneGeometry,T.ShaderMaterial>|undefined;
  if(import.meta.env.MCP_APP!=='true'){
@@ -403,7 +414,7 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
    if(p.name==='Carbon'||p.name==='FloorFence'){p.color.set('#3d4145');p.roughness=.55;p.metalness=.085;p.clearcoat=.055;p.specularIntensity=.46;p.envMapIntensity=.78;}
    if(p.name==='VisorInk'&&team==='b'){
     if(!wheelBrand){const plate=document.createElement('canvas');plate.width=1024;plate.height=240;const ink=plate.getContext('2d')!;
-     ink.font='italic bold 130px Arial';ink.textAlign='center';ink.fillStyle='#dce4e5';ink.fillText('AMG PETRONAS',512,169,965);
+     ink.font='italic bold 130px Arial';ink.textAlign='center';ink.fillStyle='#dce4e5';ink.fillText('AMG PETRONAS',512,166,965);
      wheelBrand=new T.CanvasTexture(plate);wheelBrand.colorSpace=T.SRGBColorSpace;wheelBrand.anisotropy=import.meta.env.MCP_APP==='true'?4:8;}
     p.map=wheelBrand;p.transparent=true;p.alphaTest=.04;
    }
@@ -744,6 +755,12 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
     if(radius<.12||/Glove|Stitch|Knuckle|Caliper|Centrelock|Button|VisorInk|Number[A-B]/.test(o.name))o.layers.set(1);
    });
    rigidUpdates.push(rigidCarParts(model,changing));
+   const updatePose=model.updateMatrixWorld;
+   model.updateMatrixWorld=function(force){
+    if(!this.visible){this.userData.deferredPose=true;return;}
+    updatePose.call(this,force||this.userData.deferredPose);
+    this.userData.deferredPose=false;
+   };
   }
   rigs.push(model);lod.addLevel(model,index===0?0:32);
   rigNodes.push({
@@ -785,7 +802,9 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
  let dashKey='',lastDash=-1,lastLodLevel=-1,lastCockpitDetail:boolean|undefined;
  return {root,chassis,loaded,setLodRange(range:number){if(lod.levels[1])lod.levels[1].distance=range;},get ready(){return ready;},get error(){return error;},setFinish,setMirrorVisible(visible:boolean){for(const mirror of mirrorFaces)mirror.visible=visible;},setMirror(texture:T.Texture|null){for(const m of mirrors){const map=texture??mirrorFallback;if(m.map!==map){const recompile=!!m.map!==!!map;m.map=map;m.emissiveMap=map;m.emissive.set(texture?'#ffffff':'#000000');m.emissiveIntensity=.7;m.roughness=texture?.16:.08;m.metalness=texture?.40:.9;m.clearcoat=.72;m.ior=1.47;if(recompile)m.needsUpdate=true;}}},
  update(c:CarTelemetry,onboard=false,studio=false,now=performance.now(),showDash=onboard||studio,flag=c.flag,highQuality=true){
-  if(contact){contact.visible=!studio&&highQuality;contact.material.uniforms.strength.value=.57*(1.-T.MathUtils.clamp(jackLift(c)/.12,0,1));}
+  jackLift(c,lift);
+  const liftHeight=(lift.front+lift.rear)*.5;
+  if(contact){contact.visible=!studio&&highQuality;contact.material.uniforms.strength.value=.57*(1.-T.MathUtils.clamp(liftHeight/.12,0,1));}
   setInspection(studio);
   const damage=c.damage,damaged=!!damage&&(damage[0]>0||damage[1]>0||damage[2]>0||damage[3]>0);
   for(const update of rigidUpdates)update(studio,damaged);
@@ -809,7 +828,7 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
   }
   const showInstruments=showDash;
   for(const mesh of instruments)mesh.visible=showInstruments;
-  if(tyreContacts)tyreContacts.visible=!studio&&jackLift(c)<.025;
+  if(tyreContacts)tyreContacts.visible=!studio&&liftHeight<.025;
   const panels=studio?intact:c.damage??intact;
   if(ready&&panels!==previousPanels&&panels.some((value,index)=>value!==previousPanels[index])){
    for(const deform of deformations)deform(panels);
@@ -821,7 +840,7 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
   const ink=studio?'#b7b4a9':(compoundColors[compound??'hard']??compoundColors[compound?.toLowerCase()??'hard']??compoundColors.hard);
   if(ink!==lastInk){compoundInk.value.set(ink);lastInk=ink;}
   suspension.update(track,c,now,studio);
-  chassis.rotation.set(suspension.pitch,0,suspension.roll);chassis.position.y=suspension.heave+(studio?0:jackLift(c));
+  chassis.rotation.set(suspension.pitch+(studio?0:(lift.rear-lift.front)/3.6),0,suspension.roll);chassis.position.y=suspension.heave+(studio?0:liftHeight+lift.dropBounce);
   for(const ram of rams)ram.morphTargetInfluences![0]=suspension.flap/-.43;
   const bodyPitch=Math.sin(suspension.pitch),bodyRoll=Math.sin(suspension.roll),steerYaw=studio?0:Math.sin(c.steering??0);
   for(const node of linkageMeshes){

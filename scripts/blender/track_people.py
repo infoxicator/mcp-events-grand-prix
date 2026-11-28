@@ -112,6 +112,8 @@ def staff_mesh(role, material, kit, alternate=False):
               (side*.092,.91,0,.098,.102)],suit)
         limb((x,.30,z+.01),(x,.35,z+.012),.079,.081,silver if signaller else navy)
     coverall()
+    if role in ('marshal','observer'):
+        loft([(0,1.22,0,.211,.155),(0,1.254,0,.216,.16)],silver)
     loft([(0,1.10,-.006,.18,.117),(0,1.149,-.006,.187,.123)],silver if signaller else navy)
     loft([(0,1.463,0,.073,.071),(0,1.531,.01,.067,.061)],skin,1/3)
     face_projection()
@@ -152,7 +154,7 @@ def staff_mesh(role, material, kit, alternate=False):
         elbow=(side*.32,1.28,.07) if side==1 and signaller else (side*.239,1.14,.075)
         hand=(.48,1.50,.14) if side==1 and signaller else ((side*.13,1.17,.242) if side==1 else (side*.166,1.305,.25))
         if role=='crew' and side<0:hand=(-.027,1.241,.328);elbow=(-.242,1.151,.088)
-        if alternate:
+        if alternate and role=='crew':
             elbow=(side*.258,1.17,.018) if side<0 else (.28,1.40,.13)
             hand=(-.155,1.05,.106) if side<0 else (.115,1.616,.068)
         group=arm if side==1 else 0

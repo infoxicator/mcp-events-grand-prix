@@ -89,7 +89,6 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const darkBlue=new T.Color(0x7b9bea),flagWhite=new T.Color(0xd9e1ff);
  const surfaceWater={value:0};
  const circuit=loadCircuit(scene,track,anisotropy,surfaceWater,embedded&&renderer.extensions.has('WEBGL_multi_draw')),vegas=night?circuit:null;
- let crew=embedded?undefined:pitCrew(scene,track);
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
  const dryFog=scene.fog.color.clone(),rainFog=new T.Color(night?'#495365':'#a0abb3');
  const dryDensity=scene.fog.density,drySun=sun.intensity;
@@ -150,6 +149,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  let studioSeat:'a'|'b'=params.get('subject')==='b'?'b':'a';
  let studio:ReturnType<typeof createShowroom>|undefined;let finish:Finish='colour',turntable=true;
  const field=createField(track,circuit.heightAt,paintSheet,surfaceWater);scene.add(field.root,field.signage);
+ let crew=embedded?undefined:pitCrew(scene,track,field.inkMap);
  const loading=document.createElement('div');loading.className='model-loading';loading.setAttribute('elementtiming','race-loading');loading.textContent='LOADING MCP GP';if(!embedded)container.append(loading);
  let assetsLoaded=false,presentationReady=false,mirrorMs=0,mainMs=0,contextLost=false;
  let warmStep=0,warmSubmitted=false,warmFence:WebGLSync|null=null;
@@ -355,11 +355,10 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
      slice=performance.now();
     }
     if(generation!==warmGeneration||disposed||contextLost||gl.isContextLost())return;
-    // After a successful onboard link, skip the three synchronous compiler-log
+    // After a successful link, skip the three synchronous compiler-log
     // queries Three otherwise issues per program. Failed links keep full diagnostics.
     const check=renderer.debug.checkShaderErrors;
-    const onboard=selectedMode.startsWith('cockpit')||selectedMode.startsWith('tcam');
-    if(onboard&&check&&!cameraDebug&&gl.getProgramParameter(entry.program as WebGLProgram,gl.LINK_STATUS))renderer.debug.checkShaderErrors=false;
+    if(check&&!cameraDebug&&gl.getProgramParameter(entry.program as WebGLProgram,gl.LINK_STATUS))renderer.debug.checkShaderErrors=false;
     try{entry.getUniforms();entry.getAttributes();}finally{renderer.debug.checkShaderErrors=check;}
     if(performance.now()-slice>5){await nextWarmFrame();slice=performance.now();}
    }
@@ -375,7 +374,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   if(!presentationReady||dt<=0||dt>(embedded?500:160))return;
   frameMs+=.08*((embedded?Math.min(dt,80):dt)-frameMs);
   if(embedded){
-   pressure=frameMs>20?pressure+dt:Math.max(0,pressure-dt);
+   pressure=frameMs>18.5?pressure+dt:Math.max(0,pressure-dt);
    recovery=frameMs<17.4?recovery+dt:0;
    const tier=pressure>900?Math.min(2,embeddedTier+1):recovery>6500?Math.max(0,embeddedTier-1):embeddedTier;
    if(tier!==embeddedTier){
@@ -425,7 +424,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
     renderer.domElement.style.visibility='';
    }else if(!crew){
     // The pit equipment can finish loading after the first race frame.
-    crew=pitCrew(scene,track);
+    crew=pitCrew(scene,track,field.inkMap);
    }else if(selectedMode==='broadcast'||activeMode.startsWith('tcam')||activeMode.startsWith('cockpit'))warmMirror();
    return;
   }
@@ -458,6 +457,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const seats=['a','b'] as const;
  const recentImpact=(car:RenderCar,time:number)=>car.lastImpact&&time>=car.lastImpact.time&&time-car.lastImpact.time<.45;
  function drawFrame(race:RenderRace,now:number,warmMode?:CameraMode,prepare=false){
+  if(presentationReady)crew?.warmNextFabric(renderer);
   const safety=race.phase==='racing'&&selectedMode!=='showroom'?race.control?.safetyCar:undefined;
   if(safety){
    if(!safetyCar){safetyCar=createSafetyCar(!embedded&&night);scene.add(safetyCar.car);}
@@ -507,8 +507,6 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    sun.shadow.radius=extent===8?2:1;
   }
   const chequered=race.phase==='finished'||(race.phase==='racing'&&race.laps!==undefined&&(Math.max(race.cars.a.distance,race.cars.b.distance)>=race.laps*track.LENGTH||!!race.field?.some(car=>car.finishTime!==null)));
-  circuit.signals.update(race);
-  circuit.people.update(elapsed,cars.a.root.position,cars.b.root.position,race.phase==='racing'&&race.cars.a.distance<track.LENGTH,race.phase==='racing'&&race.cars.b.distance<track.LENGTH,chequered,(race.control?.yellowUntil??0)>race.time||!!race.control?.safetyCar);
   circuit.sphereShow?.update(race,track,elapsed,chequered);
   if(sphereSpill&&circuit.sphereShow){const u=circuit.sphereShow.material.uniforms;sphereSpill.color.set('#ffbd62').lerp(darkBlue,u.helmetMix.value).lerp(flagWhite,u.flagMix.value);}
   sparks.update(race,p);impacts.update(race,camera);surfaceFx.update(race,renderer.domElement.height,!embedded&&!balanced);
@@ -533,13 +531,14 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
      fixtureStations[i]=d;fixtureBoxes[i]=box??-1;moved=true;
      const stripPool=T.MathUtils.smoothstep(d,3150,3420)*(1-T.MathUtils.smoothstep(d,4180,4410));
      fixtureGains[i]=1+stripPool*(.17*Math.cos(d*.026+side*1.6)-.24);
-     const housing=box!==null?pointAt(box+(i===2?-4.5:4.5),-24.5):pointAt(d,side*7.5);
+     const housing=box!==null?pointAt(box+(i===2?-4.2:4.2),-26.4):pointAt(d,side*7.5);
      const aim=box!==null?pointAt(box,BOX_OFFSET):pointAt(d,side*1.9),h=circuit.heightAt(box??d);
-     light.position.set(housing.x,h+(box!==null?4.12:12.47),housing.z);
+     light.position.set(housing.x,h+(box!==null?5.78:12.47),housing.z);
      light.target.position.set(aim.x,h+(box!==null?.65:0),aim.z);
      if(haze){lampPose.position.copy(light.position);lampPose.position.y-=2.45;lampPose.updateMatrix();haze.setMatrixAt(i,lampPose.matrix);}
     }
-    light.intensity=box!==null?190:i>=4?floodlightCandela*.46:floodlightCandela*fixtureGains[i]*(1-T.MathUtils.smoothstep(i<2?travel:1-travel,.59,1));
+    light.angle=box!==null?1.34:1.22;
+    light.intensity=box!==null?470:i>=4?floodlightCandela*.46:floodlightCandela*fixtureGains[i]*(1-T.MathUtils.smoothstep(i<2?travel:1-travel,.59,1));
    });
    if(haze){
     if(moved){haze.instanceMatrix.needsUpdate=true;haze.computeBoundingSphere();}
@@ -672,15 +671,20 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   // layers into the same depth value. Set the range for the actual shot.
   camera.near=mode==='helicopter'?8:mode==='strip'||mode==='sphere'?3:mode==='flythrough'?1:mode==='side'?.5:mode==='showroom'&&(reviewView==='steering'||params.get('angle')==='steering')?referenceCameras.steering.near:.06;
   camera.updateProjectionMatrix();camera.updateMatrixWorld();
+  const signal=circuit.signals.update(race,camera.position,now);
+  circuit.people.update(elapsed,cars.a.root.position,cars.b.root.position,race.phase==='racing'&&race.cars.a.distance<track.LENGTH,race.phase==='racing'&&race.cars.b.distance<track.LENGTH,chequered,signal);
   crewFrustum.setFromProjectionMatrix(crewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
   if(crew)for(const team of garages){
    const visit=visits.get(team),bounds=crewBounds.get(team)!;
    const visible=visit&&camera.position.distanceToSquared(bounds.center)<300**2&&crewFrustum.intersectsSphere(bounds);
-   crew.update(team,visible?visit.car:undefined,race.time);
+   crew.update(team,visible?visit.car:undefined,race.time,camera.position,visible?visit.entry.code:undefined);
   }
+  // Estimate detail from the actual framebuffer. Under sustained iframe
+  // pressure, keep fine fittings on cars that still occupy enough pixels.
+  const detailHeight=embedded?renderer.domElement.height/(1+embeddedTier*.32):0;
   if(embedded)for(const id of seats){
    const protectedView=id===focus&&(onboard||mode==='detail'||mode==='showroom'||mode==='pits');
-   const range=protectedView?Infinity:Math.min(30,Math.max(12,lastHeight/(2*Math.tan(camera.fov*Math.PI/360))*2/58));
+   const range=protectedView?Infinity:Math.min(30/(1+embeddedTier*.23),Math.max(12,detailHeight/(2*Math.tan(camera.fov*Math.PI/360))*2/58));
    cars[id].setLodRange(range);
   }
   const rainfall=weather.update(race,camera,mode,elapsed,reducedMotion.matches,renderer.domElement.height);
@@ -740,9 +744,9 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    cars[id].setMirror(rearTarget!.texture);
    if(cameraDebug)mirrorMs=performance.now()-mirrorStart;
   }
-  circuit.viewDetail(limitDetail?camera:null,.54,.8);
+  circuit.viewDetail(limitDetail?camera:null,.54/(1+embeddedTier*.20),.8);
   if(mode==='showroom'){cars.a.setMirror(null);cars.b.setMirror(null);}
-  else field.update(race.field,camera,p,extent,false,limitDetail,!embedded||renderer.shadowMap.autoUpdate,embedded?lastHeight:0,race.time);
+  else field.update(race.field,camera,p,extent,false,limitDetail,!embedded||renderer.shadowMap.autoUpdate,detailHeight,race.time);
   if(prepare){lastShadow=-Infinity;return;}
   const mainStart=cameraDebug?performance.now():0;
   if(racingLine){if(racingLineMode!=='off'&&mode!=='showroom')racingLine.update(race.cars[racingLineSeat] as any,racingLineMode,race.control?.wetness??0);else racingLine.mesh.visible=false;}

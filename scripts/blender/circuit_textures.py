@@ -27,7 +27,7 @@ for x in range(128):
  alpha=int(37*math.sin(math.pi*x/127)**2)
  for y in range(128):d.point((x,y),fill=(9,10,12,int(alpha*(.65+random.random()*.35))))
 save(im,'rubber')
-for number in [150,100,50]:
+for number in [150,100,80,50]:
  im=Image.new('RGB',(576,400),(250,249,243));d=ImageDraw.Draw(im)
  d.rectangle((6,6,569,393),outline=(20,23,24),width=12)
  for left in (21,495):d.rectangle((left,22,left+59,37),fill=(181,38,31))
