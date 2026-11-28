@@ -79,6 +79,7 @@ function lakeReflection(bounds:T.Box3,cadence:()=>number){
 }
 /** All geometry is authored/exported by Blender. This loader only configures PBR and culling. */
 export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceWater={value:0},multiDraw=false){
+ const embedded=import.meta.env.MCP_APP==='true';
  let ready=false,error:string|undefined,disposed=false;
  const loadingAssets=new AbortController();
  const heightAt=(d:number)=>circuitHeight(track.id,d);
@@ -101,6 +102,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
  let circuitRoot:T.Group|undefined;
  let batches:T.BatchedMesh[]=[];
  let distantInstances:ReturnType<typeof batchDistantInstances>|undefined;
+ const wetMaterials:{material:T.MeshStandardMaterial;dry:number}[]=[];let lastWet=-1;
  const lakeBounds=new T.Box3();let reflection:Reflector|undefined;
  const distant:T.Mesh[]=[],casters:T.Mesh[]=[],highCasters:T.Mesh[]=[],receivers:T.Mesh[]=[];
  const detailProps:{mesh:T.InstancedMesh;stations:readonly {matrix:T.Matrix4}[];colors:T.Color[]|null;range:number}[]=[];
@@ -212,11 +214,11 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   // animate in shaders, and LOD changes only toggle visibility.
   gltf.scene.traverse(o=>{o.matrixAutoUpdate=false;o.matrixWorldAutoUpdate=false;});
   const configured=new Set<T.Material>();
-  gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;o.receiveShadow=false;o.castShadow=false;o.geometry.computeBoundingSphere();o.userData.cullCenter=(o instanceof T.InstancedMesh?o.boundingSphere!:o.geometry.boundingSphere!).center.clone().applyMatrix4(o.matrixWorld);
+  gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;o.receiveShadow=false;o.castShadow=false;if(!embedded||!o.geometry.boundingSphere)o.geometry.computeBoundingSphere();o.userData.cullCenter=(o instanceof T.InstancedMesh?o.boundingSphere!:o.geometry.boundingSphere!).center.clone().applyMatrix4(o.matrixWorld);
    const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){const m=material as T.MeshStandardMaterial;
     if(!/^(DistantRidge|CityGround|ParkHorizon|Upper|WarmWindows|Windows|Sphere|StreetLamp)/.test(m.name))o.receiveShadow=true;
     if(m.name.startsWith('Canopy')||m.name==='Trunk'||m.name==='Foliage')o.userData.foliageCaster=true;
-    if(['Concrete','White','Steel','Armco'].includes(m.name)||o.userData.foliageCaster)casters.push(o);
+    if(embedded?m.name==='Armco':['Concrete','White','Steel','Armco'].includes(m.name)||o.userData.foliageCaster)casters.push(o);
     if(import.meta.env.MCP_APP!=='true'&&/^(RoofSheet|GarageFascia|WorkshopBack|GantryCarbon|Sponsor[0-3]|ImpactRed|ImpactIvory)$/.test(m.name))highCasters.push(o);
     if(['Fence','Crowd','Foliage','Trunk','Skin'].includes(m.name)||m.name.startsWith('Spectator')||m.name.startsWith('Seated'))distant.push(o);
     if(m.name==='Sphere'){
@@ -278,7 +280,23 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
      m.roughness=m.name==='RepairCourse'?.68:track.night?.49:.88;m.metalness=.015;m.envMapIntensity=track.night?1.15:.74;
      // Physical aggregate at the original survey UV scale, plus broad,
      // non-repeating binder variation between the racing line and the verge.
-     m.onBeforeCompile=shader=>{
+     if(embedded){
+      // Read the surveyed rubber line once. The albedo and normal tiles already
+      // carry the chip bed at the scale resolved by an iframe.
+      m.onBeforeCompile=shader=>{
+       shader.uniforms.surfaceWater=surfaceWater;shader.uniforms.courseLine={value:lineMap};
+       shader.vertexShader='varying vec2 roadMetres;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nroadMetres=uv*3.;');
+       shader.fragmentShader='varying vec2 roadMetres;uniform sampler2D courseLine;uniform float surfaceWater;\n'+shader.fragmentShader
+        .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+         vec2 line=texture2D(courseLine,vec2(fract(-roadMetres.y/${track.LENGTH.toFixed(3)}),.5)).rg;
+         float lateral=abs(roadMetres.x-(line.r*32.-16.))-.77;
+         float rubber=exp(-6.*lateral*lateral)*(.30+.65*line.g);
+         diffuseColor.rgb*=1.-.23*rubber;
+         diffuseColor.rgb*=1.-.40*surfaceWater;
+         roughnessFactor=mix(roughnessFactor-.085*rubber,.19,surfaceWater);
+        `);
+      };
+     }else m.onBeforeCompile=shader=>{
       const planar=import.meta.env.MCP_APP!=='true';
       if(planar)Object.assign(shader.uniforms,{puddleMatrix:puddles.matrix,puddleMap:puddles.image,puddleVisible:puddles.visible,puddleTime:puddles.clock});
       shader.uniforms.surfaceWater=surfaceWater;shader.uniforms.courseLine={value:lineMap};
@@ -382,7 +400,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     }
     if(m.name.startsWith('Canopy')){
      const wind=m.onBeforeCompile;
-     m.onBeforeCompile=function(shader,renderer){
+     if(!embedded)m.onBeforeCompile=function(shader,renderer){
       wind.call(this,shader,renderer);
       shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
        #if NUM_DIR_LIGHTS > 0
@@ -390,10 +408,12 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
         reflectedLight.indirectDiffuse+=diffuseColor.rgb*vec3(.44,.35,.14)*wrap;
        #endif`);
      };
-     m.color.set(['#a7ad94','#98ab8a','#96a49a','#b1ac8b'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.009;m.roughness=1;m.transparent=false;m.alphaTest=.33;m.alphaToCoverage=true;m.depthWrite=true;if(m.map)m.map.repeat.set(1,1);}
+     m.color.set(['#a7ad94','#98ab8a','#96a49a','#b1ac8b'][Number(m.name.slice(-1))%4]);
+     if(!embedded){m.bumpMap=m.map;m.map?.repeat.set(1,1);}
+     m.bumpScale=.009;m.roughness=1;m.transparent=false;m.alphaTest=.33;m.alphaToCoverage=true;m.depthWrite=true;}
     if(m.name==='Windows'&&m.map){m.color.set('#acb3c2');m.emissiveIntensity=.88;}
     if(m.name==='Balustrade'){m.transparent=true;m.opacity=.23;m.depthWrite=false;}
-    if(track.night&&/^(Upper|Windows|WarmWindows|StoreGlass)/.test(m.name)&&m.map){
+    if(!embedded&&track.night&&/^(Upper|Windows|WarmWindows|StoreGlass)/.test(m.name)&&m.map){
      m.customProgramCacheKey=()=>'strip-facade-'+(m.name==='StoreGlass'?'store':'tower');
      const strip=track.pointAt(3841,0),elevation=heightAt(3841),store=m.name==='StoreGlass';
      m.onBeforeCompile=shader=>{
@@ -442,7 +462,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        totalEmissiveRadiance*=vec3(1.+.14*sweep,.93+.08*sweep,.85+.19*sweep);`);
      };
     }
-    if(track.night&&/^(Upper|Marquee|StoreGlass|Ice$|Gold$|Pink$)/.test(m.name)){
+    if(!embedded&&track.night&&/^(Upper|Marquee|StoreGlass|Ice$|Gold$|Pink$)/.test(m.name)){
      const base=m.onBeforeCompile,key=m.customProgramCacheKey();
      m.onBeforeCompile=function(shader,renderer){
       base.call(this,shader,renderer);
@@ -470,7 +490,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
      m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <alphatest_fragment>',
       'diffuseColor.a*=1.-smoothstep(.12,.29,dot(normalize(vViewPosition),viewMatrix[1].xyz));\n#include <alphatest_fragment>');};
      m.transparent=false;m.alphaTest=.40;m.alphaToCoverage=true;m.depthWrite=true;}
-    if(m.name==='Concrete'&&!track.night){
+    if(!embedded&&m.name==='Concrete'&&!track.night){
      m.onBeforeCompile=shader=>{
       shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
        if(vMapUv.x< -6.95 && vMapUv.x> -8.05 && vMapUv.y>7.95 && vMapUv.y<9.05){
@@ -524,7 +544,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     if(m.name==='LeafLitter')m.color.set('#514a35');
     if(m.name==='RoughMeadow')m.color.set('#81774d');
     if(m.name==='Gravel'){m.bumpMap=m.map;m.bumpScale=.008;}
-    if(m.name==='RunoffPaint'&&!m.userData.canopyBaked){
+    if(!embedded&&m.name==='RunoffPaint'&&!m.userData.canopyBaked){
      m.roughness=.88;
      // The slab joints run across the apron. Scuffed binder shows through
      // the paint between joints, with subpixel grit filtered at distance.
@@ -562,7 +582,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     if(m.name==='Rubber'){m.transparent=true;m.depthWrite=false;m.polygonOffset=true;m.polygonOffsetFactor=-1;}
     if(canopyLight&&['Asphalt','RepairCourse','Grass','LeafLitter','RoughMeadow','White','Red','Green','RunoffPaint','Gravel','Rubber'].includes(m.name)){
      if(m.name==='Asphalt'||m.name==='RepairCourse'||!m.userData.canopyBaked){
-      const original=m.onBeforeCompile;
+      const original=m.onBeforeCompile,program=m.customProgramCacheKey();
       m.onBeforeCompile=function(shader,renderer){
        original.call(this,shader,renderer);shader.uniforms.canopyLight={value:canopyLight};shader.uniforms.shadowPatch=shadowPatch;
        shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 canopyUV;')
@@ -570,21 +590,28 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 shadowPatch;uniform sampler2D canopyLight;varying vec2 canopyUV;')
         .replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nfloat radius=distance(canopyUV*vec2(1536.,2560.)-vec2(128.,1536.),shadowPatch.xy);float sunlight=mix(1.,texture2D(canopyLight,canopyUV).r,smoothstep(.60,1.,radius/max(1.,shadowPatch.z))); reflectedLight.directDiffuse*=sunlight;reflectedLight.directSpecular*=sunlight;');
       };
-      m.customProgramCacheKey=()=>'park-canopy-'+m.name;
+      m.customProgramCacheKey=()=>embedded?program+'-park-canopy':'park-canopy-'+m.name;
       m.userData.canopyBaked=true;
      }
     }
 
    }
-   if(import.meta.env.MCP_APP==='true'&&materials.some(m=>/^(Canopy|Trunk|Foliage|Spectator|Seated|Skin|.*Uniform|Fountain)/.test(m.name)))o.layers.set(1);
+   // Rear mirrors resolve the roadway, barriers and skyline. All survey LODs
+   // belong to the main view, so a rear render can reuse its selection.
+   if(embedded&&!materials.some(m=>/^(Asphalt|RepairCourse|White|Red|Green|Concrete|Armco|Grass|CityGround|ParkHorizon|Upper.*|Sphere|DistantRidge)$/.test(m.name)))o.layers.set(1);
    if(o.receiveShadow)receivers.push(o);
    o.userData.cullRadius=(o instanceof T.InstancedMesh?o.boundingSphere:o.geometry.boundingSphere)!.radius*o.matrixWorld.getMaxScaleOnAxis();
+   if(embedded){
+    const bounds=new T.Sphere(o.userData.cullCenter,o.userData.cullRadius);
+    o.intersectsFrustum=frustum=>frustum.intersectsSphere(bounds);
+   }
   });
   for(const material of drySurfaces){
    const concrete=material.name==='Concrete';
    const nightMatte=track.night&&material.name!=='Armco';
    if(nightMatte&&material.name==='White')material.color.set('#bcbeb9');
    if(nightMatte){material.roughness=Math.max(.91,material.roughness);material.metalness=0;material.envMapIntensity=.52;}
+   if(embedded){wetMaterials.push({material,dry:material.roughness});continue;}
    const previous=material.onBeforeCompile;
    material.onBeforeCompile=function(shader,renderer){
     previous.call(this,shader,renderer);
@@ -675,6 +702,10 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     batch.visible=batch.count>0;batch.instanceMatrix.needsUpdate=true;
     if(batch.instanceColor)batch.instanceColor.needsUpdate=true;
    }
+  }
+  if(embedded&&lastWet!==surfaceWater.value){
+   lastWet=surfaceWater.value;
+   for(const {material,dry} of wetMaterials)material.roughness=T.MathUtils.lerp(dry,.21,lastWet*.86);
   }
   animation.value=time;shadowPatch.value.set(focus.x,focus.z,balanced?0:shadowExtent);
   if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;

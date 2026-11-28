@@ -1,3 +1,4 @@
+import {packCircuitAtlases} from './circuit-atlases';
 import {readFile} from 'node:fs/promises';
 import {gzipSync,gunzipSync} from 'node:zlib';
 import type {Plugin} from 'vite';
@@ -26,9 +27,18 @@ export function circuitClusters():Plugin{
    }
    prim.extras={...prim.extras,clusterStep:step,clusterBounds:bounds};
   }
+  // Blender gives each quantized chunk an identity placement parent. Reference
+  // its positioned child directly so GLTFLoader creates only one Object3D.
+  for(const scene of doc.scenes)scene.nodes=scene.nodes.map((i:number)=>{
+   const node=doc.nodes[i];
+   if(!node.name?.endsWith('_placement')||node.children?.length!==1||Object.keys(node).length!==2)return i;
+   const [child]=node.children;delete node.children;return child;
+  });
+  const packed=await packCircuitAtlases(doc,bin);
   const json=Buffer.from(JSON.stringify(doc)),padded=Math.ceil(json.length/4)*4,head=Buffer.alloc(20+padded,32);
-  glb.copy(head,0,0,20);head.writeUInt32LE(head.length+glb.length-20-jsonSize,8);head.writeUInt32LE(padded,12);json.copy(head,20);
-  const source=gzipSync(Buffer.concat([head,glb.subarray(20+jsonSize)]),{level:9,memLevel:5});
+  glb.copy(head,0,0,20);head.writeUInt32LE(head.length+8+packed.length,8);head.writeUInt32LE(padded,12);json.copy(head,20);
+  const chunk=Buffer.alloc(8);chunk.writeUInt32LE(packed.length);chunk.writeUInt32LE(0x004e4942,4);
+  const source=gzipSync(Buffer.concat([head,chunk,packed]),{level:9,memLevel:5});
   const ref=this.emitFile({type:'asset',name:path.split('/').at(-1),source});
   return 'export default import.meta.ROLLUP_FILE_URL_'+ref;
  }};

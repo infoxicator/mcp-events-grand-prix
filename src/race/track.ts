@@ -2,6 +2,8 @@
 import monzaGeo from '../../data/monza.json' with {type:'json'};
 import vegasGeo from '../../data/las-vegas.json' with {type:'json'};
 export type CircuitId='monza'|'las-vegas';
+// Filled by the MCP production build from this same survey and solver.
+declare const __MCP_RACING_LINES__:Record<CircuitId,readonly number[]>;
 export const isCircuit=(v:unknown):v is CircuitId=>v==='monza'||v==='las-vegas';
 export const CIRCUITS={monza:{name:'Monza',grandPrix:'ITALIAN GRAND PRIX',country:'ITALY',corners:11,night:false,temperature:28,coordinates:'45.6189° N / 9.2812° E'},'las-vegas':{name:'Las Vegas',grandPrix:'LAS VEGAS GRAND PRIX',country:'NEVADA / USA',corners:17,night:true,temperature:18,coordinates:'36.1099° N / 115.1612° W'}} as const;
 function buildTrack(id:CircuitId){
@@ -63,32 +65,37 @@ function curvatureAt(d:number){return Math.abs(signedCurvatureAt(d));}
 function trackHalfWidth(d:number){const straight=Math.min(wrap(d),LENGTH-wrap(d));return 6+1.5*Math.max(0,1-straight/450);}
 // Bounded minimum-curvature line, relaxed in the local track normal. Agents choose
 // an offset from this path; the controller still has room to race side by side.
-const lineCount=Math.ceil(LENGTH/3),lineStep=LENGTH/lineCount,lineOffsets=new Float64Array(lineCount);
-const lineBase=Array.from({length:lineCount},(_,i)=>sample(i*lineStep));
-// Projected gradient of squared second differences (curvature), at several
-// spatial scales. Minimising path length instead would hug the inside and
-// tighten each apex, the opposite of a useful racing line.
-const curvatureWeights=[1,-4,6,-4,1];
-// The centreline and its normals remain fixed through all 250 relaxation passes.
-const neighbours=new Uint32Array(lineCount*5),coupling=new Float64Array(lineCount*5),baseForce=new Float64Array(lineCount);
-for(const stride of [8,4,2,1]){
- for(let i=0;i<lineCount;i++){
-  const p=lineBase[i];let gx=0,gz=0;
-  for(let k=0;k<5;k++){
-   const j=(i+(k-2)*stride+lineCount)%lineCount,q=lineBase[j],weight=curvatureWeights[k];
-   neighbours[5*i+k]=j;coupling[5*i+k]=weight*(p.tx*q.tx+p.tz*q.tz);
-   gx+=weight*q.x;gz+=weight*q.z;
+const lineCount=Math.ceil(LENGTH/3),lineStep=LENGTH/lineCount;
+function solveRacingLine(){
+ const lineOffsets=new Float64Array(lineCount);
+ const lineBase=Array.from({length:lineCount},(_,i)=>sample(i*lineStep));
+ // Projected gradient of squared second differences (curvature), at several
+ // spatial scales. Minimising path length instead would hug the inside and
+ // tighten each apex, the opposite of a useful racing line.
+ const curvatureWeights=[1,-4,6,-4,1];
+ // The centreline and its normals remain fixed through all 250 relaxation passes.
+ const neighbours=new Uint32Array(lineCount*5),coupling=new Float64Array(lineCount*5),baseForce=new Float64Array(lineCount);
+ for(const stride of [8,4,2,1]){
+  for(let i=0;i<lineCount;i++){
+   const p=lineBase[i];let gx=0,gz=0;
+   for(let k=0;k<5;k++){
+    const j=(i+(k-2)*stride+lineCount)%lineCount,q=lineBase[j],weight=curvatureWeights[k];
+    neighbours[5*i+k]=j;coupling[5*i+k]=weight*(p.tx*q.tx+p.tz*q.tz);
+    gx+=weight*q.x;gz+=weight*q.z;
+   }
+   baseForce[i]=-p.tz*gx+p.tx*gz;
   }
-  baseForce[i]=-p.tz*gx+p.tx*gz;
+  for(let pass=0;pass<250;pass++)for(let i=0;i<lineCount;i++){
+   let force=baseForce[i];
+   for(let k=5*i;k<5*i+5;k++)force+=coupling[k]*lineOffsets[neighbours[k]];
+   lineOffsets[i]=Math.max(-3.8,Math.min(3.8,lineOffsets[i]-.06*force));
+  }
  }
- for(let pass=0;pass<250;pass++)for(let i=0;i<lineCount;i++){
-  let force=baseForce[i];
-  for(let k=5*i;k<5*i+5;k++)force+=coupling[k]*lineOffsets[neighbours[k]];
-  lineOffsets[i]=Math.max(-3.8,Math.min(3.8,lineOffsets[i]-.06*force));
- }
+ // Fair the constrained path to avoid steering discontinuities at the lateral bounds.
+ const fairOffsets=new Float64Array(lineCount);for(let i=0;i<lineCount;i++){let sum=0,weight=0;for(let j=-8;j<=8;j++){const w=Math.exp(-.5*(j/3)**2);sum+=lineOffsets[(i+j+lineCount)%lineCount]*w;weight+=w;}fairOffsets[i]=sum/weight;}lineOffsets.set(fairOffsets);
+ return lineOffsets;
 }
-// Fair the constrained path to avoid steering discontinuities at the lateral bounds.
-const fairOffsets=new Float64Array(lineCount);for(let i=0;i<lineCount;i++){let sum=0,weight=0;for(let j=-8;j<=8;j++){const w=Math.exp(-.5*(j/3)**2);sum+=lineOffsets[(i+j+lineCount)%lineCount]*w;weight+=w;}fairOffsets[i]=sum/weight;}lineOffsets.set(fairOffsets);
+const lineOffsets=typeof __MCP_RACING_LINES__==='undefined'?solveRacingLine():__MCP_RACING_LINES__[id];
 function racingLineOffset(d:number){const u=wrap(d)/lineStep,i=Math.floor(u),t=u-i;return lineOffsets[i]*(1-t)+lineOffsets[(i+1)%lineCount]*t;}
 function racingCurvature(d:number){const a=pointAt(d-6,racingLineOffset(d-6)),b=pointAt(d,racingLineOffset(d)),c=pointAt(d+6,racingLineOffset(d+6));const ab=Math.hypot(b.x-a.x,b.z-a.z),bc=Math.hypot(c.x-b.x,c.z-b.z),ac=Math.hypot(c.x-a.x,c.z-a.z);return 2*((b.x-a.x)*(c.z-a.z)-(b.z-a.z)*(c.x-a.x))/Math.max(.01,ab*bc*ac);}
 // Corner/sector positions digitized against the 2025 FIA Monza map.

@@ -179,7 +179,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack(),quality
   }
   return rearTarget;
  }
- const rearCamera=new T.PerspectiveCamera(55,256/128,.1,500);let mirrorFrame=0,mirrorSide=0,mirrorSeed=0,mirrorSeat:'a'|'b'|undefined;
+ const rearCamera=new T.PerspectiveCamera(55,256/128,.1,embedded?190:500);let mirrorFrame=0,mirrorSide=0,mirrorSeed=0,mirrorSeat:'a'|'b'|undefined;
  let mirrorDeferred=false;
  let studioSeat:'a'|'b'=params.get('subject')==='b'?'b':'a';
  let studio:ReturnType<typeof createShowroom>|undefined;let finish:Finish='colour',turntable=true;
@@ -778,7 +778,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack(),quality
     // Exclude both sets of reflecting faces while writing into that texture.
     cars.a.setMirrorVisible(false);cars.b.setMirrorVisible(false);
     rearCamera.updateMatrixWorld();
-    field.update(race.field,rearCamera,p,0,true,balanced,false,0,race.time);circuit.viewDetail(rearCamera,.18);
+    field.update(race.field,rearCamera,p,0,true,balanced,false,0,race.time);if(!embedded)circuit.viewDetail(rearCamera,.18);
     const oldTarget=renderer.getRenderTarget(),oldShadow=renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate=false;renderer.setRenderTarget(rearTarget);
     if(embedded)crew?.setMirrorHidden(true);

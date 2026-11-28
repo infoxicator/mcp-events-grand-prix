@@ -1,6 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {readFileSync,statSync} from 'node:fs';
 import {gunzipSync} from 'node:zlib';
+import {packCircuitAtlases} from '../scripts/circuit-atlases';
 import {getTrack} from '../src/race/track';
 import {circuitHeight} from '../src/race/elevation';
 for(const id of ['monza','las-vegas'] as const)describe(id+' Blender circuit',()=>{
@@ -34,6 +35,33 @@ for(const id of ['monza','las-vegas'] as const)describe(id+' Blender circuit',()
   expect(instances.reduce((sum:number,n:any)=>sum+g.accessors[Object.values(n.extensions.EXT_mesh_gpu_instancing.attributes)[0] as number].count,0)).toBeGreaterThan(1000);
   for(const n of g.nodes.filter((n:any)=>n.mesh!==undefined&&n.scale&&n.name?.includes('_')&&!n.extensions?.EXT_mesh_gpu_instancing)){if(n.scale[0]===n.scale[1]&&n.scale[1]===n.scale[2])expect(2*n.scale[0]/65534).toBeLessThan(.02);}
   for(const a of g.accessors){if(a.bufferView===undefined)continue;const v=g.bufferViews[a.bufferView];expect(v.byteOffset+v.byteLength).toBeLessThanOrEqual(g.buffers[0].byteLength);if(a.componentType===5120||a.componentType===5122)expect(a.normalized).toBe(true);}
+ });
+ it('packs distinct board and canopy tiles without modifying geometry or other images',async()=>{
+  const file=new URL(`../src/race/assets/circuits/${id}-mcp.glb.gz`,import.meta.url);
+  const glb=gunzipSync(readFileSync(file)),size=glb.readUInt32LE(12);
+  const doc=JSON.parse(glb.toString('utf8',20,20+size)),binary=glb.subarray(28+size);
+  const original=structuredClone(doc),packed=await packCircuitAtlases(doc,binary);
+  const atlasViews=new Set<number>();
+  for(const pattern of [/^Brake\d+$/,...(id==='monza'?[/^Canopy\d$/]:[])]){
+   const indices=doc.materials.flatMap((m:{name:string},i:number)=>pattern.test(m.name)?[i]:[]);
+   const textures=indices.map((i:number)=>doc.materials[i].pbrMetallicRoughness.baseColorTexture);
+   expect(textures.length).toBeGreaterThan(1);
+   expect(new Set(textures.map((t:{index:number})=>t.index)).size).toBe(1);
+   const offsets=textures.map((t:{extensions:{KHR_texture_transform:{offset:number[]}}})=>t.extensions.KHR_texture_transform.offset.join(','));
+   expect(new Set(offsets).size).toBe(indices.length);
+   for(const i of indices){
+    const texture=original.materials[i].pbrMetallicRoughness.baseColorTexture.index;
+    atlasViews.add(original.images[original.textures[texture].source].bufferView);
+   }
+  }
+  expect(packed.length).toBe(doc.buffers[0].byteLength);
+  for(let i=0;i<doc.bufferViews.length;i++){
+   const a=original.bufferViews[i],b=doc.bufferViews[i];
+   expect(b.byteOffset%4).toBe(0);
+   expect(b.byteOffset+b.byteLength).toBeLessThanOrEqual(packed.length);
+   if(!atlasViews.has(i))expect(packed.subarray(b.byteOffset,b.byteOffset+b.byteLength)
+    .equals(binary.subarray(a.byteOffset,a.byteOffset+a.byteLength))).toBe(true);
+  }
  });
  it('keeps the authoritative real path and a continuous gentle terrain profile',()=>{
   const path=JSON.parse(readFileSync(new URL(`../data/${id}-render-path.json`,import.meta.url),'utf8')),track=getTrack(id);

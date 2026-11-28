@@ -35,7 +35,10 @@ export function batchCircuit(root:T.Group){
   }
  }
  for(const sources of buckets.values()){
+  // Each multi-draw batch owns matrix and draw-ID textures. Small static
+  // groups are cheaper to leave as individually frustum-culled survey tiles.
   if(sources.length<3)continue;
+  if(sources.length<8&&!sources.some(mesh=>mesh.geometry.userData.clusterBounds))continue;
   const shapes=new Set(sources.map(o=>o.geometry));
   let vertices=0,indices=0,instances=0;
   for(const g of shapes){vertices+=g.attributes.position.count;indices+=g.index?.count??0;}
@@ -51,7 +54,7 @@ export function batchCircuit(root:T.Group){
    m.customProgramCacheKey=()=>key+'-venue-batches';batchMaterials.add(m);
   }
   const batch=new T.BatchedMesh(instances,vertices,indices,m),shapeIDs=new Map<T.BufferGeometry,number>();
-  batch.name='Circuit '+m.name;batch.sortObjects=false;batch.renderOrder=sources[0].renderOrder;
+  batch.layers.mask=sources[0].layers.mask;batch.name='Circuit '+m.name;batch.sortObjects=false;batch.renderOrder=sources[0].renderOrder;
   const ranges:{mesh:T.Mesh;first:number;end:number;bounds:T.Box3|null;mask:number}[]=[];
   const clusters:{bounds:Float32Array;blocks:Float32Array;step:number}[]=[],boxes:T.Box3[]=[];
   const masks=new Int8Array(instances);
@@ -111,7 +114,7 @@ export function batchCircuit(root:T.Group){
   }
   // Source nodes still carry the venue's distance/receiver decisions. Set the
   // batch's instance visibility independently for the shadow and beauty passes.
-  batch.perObjectFrustumCulled=false;batch.castShadow=/^(Armco|Concrete|White|Steel)$/.test(m.name);batch.receiveShadow=sources.some(o=>o.receiveShadow);
+  batch.perObjectFrustumCulled=false;batch.castShadow=m.name==='Armco';batch.receiveShadow=sources.some(o=>o.receiveShadow);
   const main=batch.onBeforeRender,shadow=batch.onBeforeShadow;
   function visibility(camera:T.Camera,depth:boolean){
    updateFrustum(camera);
