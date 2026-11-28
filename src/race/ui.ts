@@ -63,7 +63,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
  <div id="waiting" class="waiting" ${room.live?'hidden':''}><span class="eyebrow">RACE CONTROL</span><h2>Race lobby</h2><p>Connecting to the race…</p><button id="start-race" hidden disabled>Start race</button><div><a href="${room.links?.a??'/?team=a'}" target="_blank">Launch Ferrari ↗</a><a href="${room.links?.b??'/?team=b'}" target="_blank">Launch Mercedes ↗</a></div></div>
  <div id="lights" class="lights" hidden><div>${'<i></i>'.repeat(5)}</div><span>HOLD YOUR BREATH.</span></div>
  <div id="battle" class="battle" hidden><span id="battle-label">⚡ PLAYER DUEL</span><b>FERRARI <i>VS</i> MERCEDES</b><strong id="battle-gap"></strong></div>
- <div class="studio-heading"><b>MCP GP</b><span>Interactive 3D explorer</span></div><div class="studio-controls"><button data-finish="colour">Colour</button><button data-finish="clay">Clay</button><button data-finish="wireframe">Wireframe</button><button id="turntable">Pause rotation</button><button id="exit-studio">Back to race</button></div>
+ <div class="studio-heading"><b>MCP GP</b><span>Interactive 3D explorer</span></div><div class="studio-controls"><button id="studio-seat" aria-label="Switch showroom car">Car ${params.get('subject')==='b'?'63':'44'}</button><button data-finish="colour">Colour</button><button data-finish="clay">Clay</button><button data-finish="wireframe">Wireframe</button><button id="turntable">Pause rotation</button><button id="exit-studio">Back to race</button></div>
  <div id="steering" class="steering" ${team?'':'hidden'}><div class="wheel-grips"></div><div class="wheel-display"><div class="rev-lights">● ● ● ● ● ● ● ●</div><div><strong id="dash-gear">1</strong><b id="dash-speed">0</b><small>KM/H</small></div><span id="dash-drs">AERO / CORNER</span><span id="dash-ers">ERS 90%</span></div><span class="wheel-logo">MCP GP / ${team?PERSONAS[team].name:'VECTOR'}</span></div>
  <details id="provisional" hidden><summary id="provisional-summary">Provisional standings</summary><div id="provisional-rows"></div></details>
  <div id="results" class="results" hidden><div class="eyebrow">▧ CHEQUERED FLAG / RACE COMPLETE</div><h2 id="winner">Race classification</h2><p>Final classification</p><div id="result-rows"></div><div class="results-actions"><button id="results-replay">↶ Replay the battle</button><button id="new-race">Race again ↗</button></div><small>MCP GRAND PRIX</small></div>
@@ -247,6 +247,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
   dot.setAttribute('r','20');dot.setAttribute('fill',paints(entry)[0]);el('map-field').append(dot);return dot;
  });
  const cameras=document.querySelectorAll<HTMLButtonElement>('[data-camera]');function setCamera(next:CameraMode){camera=next;el('viewport').dataset.camera=next;scene?.setMode(next);cameras.forEach(b=>b.classList.toggle('selected',b.dataset.camera===next));el('steering').hidden=true;}cameras.forEach(b=>b.onclick=()=>setCamera(b.dataset.camera as CameraMode));const requested=params.get('camera');setCamera(['broadcast','side','trackside','pits','helicopter','flythrough','sphere','strip','detail','showroom','chase','cockpit-a','cockpit-b','tcam-a','tcam-b'].includes(requested??'')?requested as CameraMode:camera);
+ let studioSeat:'a'|'b'=params.get('subject')==='b'?'b':'a';el('studio-seat').onclick=()=>{studioSeat=studioSeat==='a'?'b':'a';scene?.setStudioSeat(studioSeat);el('studio-seat').textContent=studioSeat==='a'?'Car 44':'Car 63';};
  document.querySelectorAll<HTMLButtonElement>('[data-finish]').forEach(b=>b.onclick=()=>{scene?.setFinish(b.dataset.finish as 'colour'|'clay'|'wireframe');document.querySelectorAll('[data-finish]').forEach(x=>x.classList.toggle('selected',x===b));});let spinning=true;el('turntable').onclick=()=>{spinning=!spinning;scene?.setTurntable(spinning);el('turntable').textContent=spinning?'Pause rotation':'Rotate';};el('exit-studio').onclick=()=>setCamera('broadcast');
  (el('circuit-select') as HTMLSelectElement).onchange=()=>c.send({type:'circuit',circuit:(el('circuit-select') as HTMLSelectElement).value as CircuitId});
  (el('matchup-select') as HTMLSelectElement).onchange=()=>c.send({type:'matchup',matchup:(el('matchup-select') as HTMLSelectElement).value as Matchup});
@@ -484,7 +485,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
     ({LENGTH,pointAt,cornerName,SECTORS,tangentAt}=track);
    }
    if(embeddedFeed){renderFailed=false;renderDeadline=now+12_000;showFeed('loading');}
-   if(!telemetryOnly)try{scene=createScene(viewport,track);}
+   if(!telemetryOnly)try{scene=createScene(viewport,track,params.get('quality')==='high'?'high':'auto');}
    catch(error){
     if(!embeddedFeed)throw error;
     renderFailed=true;

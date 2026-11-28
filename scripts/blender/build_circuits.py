@@ -8,6 +8,7 @@ from mathutils import Vector
 from mathutils.kdtree import KDTree
 sys.path.insert(0,str(Path(__file__).parent))
 from pack_glb import pack
+from pit_props import prototype
 from grandstand_people import spectator_mesh
 from check_monza_clearance import barrier_distance,check as check_monza
 from track_people import staff_mesh,staff_material
@@ -38,23 +39,23 @@ def build(cid):
   m=bpy.data.materials.new(name);m.use_nodes=True;bs=m.node_tree.nodes.get('Principled BSDF');bs.inputs['Base Color'].default_value=(*color,1);bs.inputs['Roughness'].default_value=rough;bs.inputs['Metallic'].default_value=metal
   if emission:bs.inputs['Emission Color'].default_value=(*color,1);bs.inputs['Emission Strength'].default_value=emission
   if tex:
-   p=OUT/(tex+'.png') if tex not in ('asphalt-color','grass-color') else ROOT/'src/race/assets'/(tex+'.jpg')
+   p=OUT/(tex+('.jpg' if tex=='gravel' else '.png')) if tex not in ('asphalt-color','grass-color') else ROOT/'src/race/assets'/(tex+'.jpg')
    if tex.endswith(('-timing','-garage')) or tex.startswith('upper-') or tex in ('formed-concrete','garage-backplate','resort-facade','hospitality-glass','desert-district'):p=OUT/(tex+'.jpg')
    node=m.node_tree.nodes.new('ShaderNodeTexImage');node.image=bpy.data.images.load(str(p),check_existing=True);m.node_tree.links.new(node.outputs['Color'],bs.inputs['Base Color'])
    if emission:m.node_tree.links.new(node.outputs['Color'],bs.inputs['Emission Color'])
    if alpha:m.node_tree.links.new(node.outputs['Alpha'],bs.inputs['Alpha']);m.surface_render_method='DITHERED'
   mats[name]=m;return name
  mat('Asphalt',(.19,.20,.21),.52 if night else .91,tex='asphalt-color');mat('Grass',(.23,.26,.15),tex='grass-color');mat('Gravel',(.62,.58,.49),tex='gravel');mat('White',(.76,.75,.68));mat('Red',(.46,.027,.022));mat('Green',(.10,.24,.15));mat('Steel',(.38,.42,.45),.48,.65);mat('Concrete',(.47,.48,.45),.86,tex='formed-concrete');mat('Dark',(.022,.027,.032));mat('Glass',(.10,.16,.20),.22,.45);mat('Fence',(.5,.5,.5),tex='fence',alpha=True);mat('Sign',(.6,.6,.6),tex='sign',emission=.25 if night else 0);mat('Windows',(.5,.4,.3),tex='hospitality-glass',emission=.70);mat('Gold',(.85,.52,.19),.5,emission=2);mat('Ice',(.6,.8,1),.5,emission=4);mat('Pink',(.8,.04,.3),emission=2);mat('Rubber',(.1,.1,.1),tex='rubber',alpha=True);mat('Water',(.015,.045,.06),.18,.5);mat('Trunk',(.14,.10,.07));mat('PalmFrond',(.12,.25,.085),.78);mat('Sphere',(.1,.5,.6),emission=1)
- for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex='hornbeam',alpha=True)
+ for i,c in enumerate([(.085,.14,.035),(.12,.19,.05),(.17,.22,.065),(.09,.16,.07)]):mat('Canopy'+str(i),c,.94,tex=('leaves-oak','hornbeam','leaves-poplar','leaves-pine')[i],alpha=True)
  for i,c in enumerate([(.38,.025,.025),(.04,.08,.16),(.62,.60,.55),(.12,.15,.16)]):mat('Spectator'+str(i),c,.95)
  atlas=bpy.data.images.load(str(ROOT/'scripts/blender/textures/garage-staff.jpg'),check_existing=True)
  staff_material(mats['Spectator0'],bpy.data.images.load(str(ROOT/'scripts/blender/textures/spectators.jpg'),check_existing=True),'Wardrobe')
  mat('WorkshopBack',(.8,.8,.8),.85,tex=cid+'-garage',emission=.38 if night else .12)
  mat('GarageInterior',(.105,.103,.097),.92)
- mat('TimingScreen',(.72,.85,.92),.32,.08,tex=cid+'-timing',emission=1.3 if night else .54)
+ mat('TimingScreen',(1,1,1),.58,emission=.68)
  mat('GantryCarbon',(.027,.033,.037),.35,.46)
  mat('WarmerFabric',(.055,.060,.065),.87)
- mat('GarageFloor',(.18,.18,.17),.69)
+ mat('GarageFloor',(.21,.22,.22),.22)
  mat('ServiceRed',(.27,.026,.029),.56,.16)
  mat('GarageFascia',(.45,.45,.43),.62,emission=.45 if night else 0)
  mat('RoofSheet',(.36,.395,.43),.54,.35)
@@ -66,6 +67,15 @@ def build(cid):
  mat('RepairCourse',(.15,.15,.16),.73,tex='asphalt-color');mat('TarSeam',(.045,.040,.037),.52)
  if not night:mat('GravelMargin',(.62,.58,.49),tex='gravel-margin',alpha=True)
  for i in range(4):mat('Sponsor'+str(i),(.8,.8,.8),.56,tex='sponsor-'+str(i),emission=.22 if night else 0)
+ mat('BayAccent',(1,1,1),.42)
+ accent_nodes=mats['BayAccent'].node_tree.nodes;attr=accent_nodes.new('ShaderNodeVertexColor');attr.layer_name='Team paint'
+ mats['BayAccent'].node_tree.links.new(attr.outputs['Color'],accent_nodes.get('Principled BSDF').inputs['Base Color'])
+ mat('PitTarget',(.95,.71,.024),.61)
+ for name in ('GrandstandFlag','SafetyBoard','Photographer','SpareNoseRack','TyreBlanketRack'):
+  mat(name,(1,1,1),.70)
+  material=mats[name];nodes=material.node_tree.nodes;attribute=nodes.new('ShaderNodeVertexColor');attribute.layer_name='Equipment colour'
+  material.node_tree.links.new(attribute.outputs['Color'],nodes.get('Principled BSDF').inputs['Base Color'])
+ for name,col in [('Stop',(.85,.018,.009)),('Go',(.012,.85,.12)),('Blue',(.02,.20,.94))]:mat('PitExit'+name,col,.29,emission=.7)
  for i in range(5):mat('GridLens'+str(i),(.11,.004,.003),.22,.16)
  mat('MarshalLED',(.03,.12,.04),.45,emission=.8)
  mat('SignalLens',(.084,.012,.009),.28,.15)
@@ -95,7 +105,7 @@ def build(cid):
  mat('PitWallEngineer',(1,1,1),.78)
  uniform=mats['PitWallEngineer'];colour=uniform.node_tree.nodes.new('ShaderNodeVertexColor');colour.layer_name='Wardrobe'
  uniform.node_tree.links.new(colour.outputs['Color'],uniform.node_tree.nodes.get('Principled BSDF').inputs['Base Color'])
- mat('Hospitality',(.09,.16,.19),.12,.46)
+ mat('Hospitality',(.09,.16,.19) if night else (.34,.23,.16),.12,.46,emission=0 if night else .20)
  mat('LoungeLeather',(.22,.16,.097),.62)
  mat('LoungeWall',(.19,.22,.23),.64,emission=.18 if night else 0)
  mat('Balustrade',(.49,.60,.62),.17,.12)
@@ -113,13 +123,19 @@ def build(cid):
 
  if not night:
   mats['Armco']=mats['Steel'].copy();mats['Armco'].name='Armco'
- for number in [150,100,50]:mat('Brake'+str(number),(.8,.8,.8),tex='brake-'+str(number))
- batches={}
+ mat('BarrierPrint',(1,1,1),.65,tex=cid+'-barriers',emission=.19 if night else 0)
+ mat('GridNumber',(1,1,1),.85,tex='grid-numbers',alpha=True)
+ if not night:mat('Astroturf',(.075,.27,.13),.95,tex='grass-color')
+ for number in [300,200,150,100,80,50]:mat('Brake'+str(number),(.8,.8,.8),tex='brake-'+str(number))
+ batches={};accent_colors={}
  tile_size=520
  tile_prefix=""
  def face(points,material,uv=None,special=None,top=False):
   size=1200 if material in ('Grass','CityGround','DistantRidge','ParkHorizon') else tile_size
   centre=tuple(sum(p[i] for p in points)/len(points) for i in range(3));key=(special or f'{tile_prefix}{int(centre[0]//size)}_{int(centre[2]//size)}',material)
+  if material.startswith('BayAccent'):
+   bay=int(material[9:]);key=(key[0],'BayAccent')
+   accent_colors.setdefault(key,[]).extend([(*uniforms[bay],1)]*len(points))
   # Road strips can run in either lateral direction. The upper surface faces the sky.
   if top:
    a,b,c=map(Vector,points[:3])
@@ -164,13 +180,13 @@ def build(cid):
 
  def rod(a,b,r,m,sides=5):
   nonlocal instance_triangles
-  if m=='Trunk':
+  if m=='Trunk' or (night and m=='Steel' and abs(b[1]-a[1])>=10 and a[0]==b[0] and a[2]==b[2]):
    key=(m,sides,0,0);mesh=prototypes.get(key)
    if mesh is None:
-    vv=[(math.cos(i*math.tau/sides),math.sin(i*math.tau/sides),z) for z in [-.5,.5] for i in range(sides)];ff=[(i,(i+1)%sides,(i+1)%sides+sides,i+sides) for i in range(sides)];mesh=bpy.data.meshes.new('Shared branch');mesh.from_pydata(vv,[],ff);mesh.materials.append(mats[m]);mesh.update()
+    vv=[(math.cos(i*math.tau/sides),math.sin(i*math.tau/sides),z) for z in [-.5,.5] for i in range(sides)];ff=[(i,(i+1)%sides,(i+1)%sides+sides,i+sides) for i in range(sides)];mesh=bpy.data.meshes.new('Shared '+m+' rod');mesh.from_pydata(vv,[],ff);mesh.materials.append(mats[m]);mesh.update()
     for poly in mesh.polygons:poly.use_smooth=True
     prototypes[key]=mesh
-   aa=Vector((a[0],-a[2],a[1]));bb=Vector((b[0],-b[2],b[1]));o=bpy.data.objects.new('Instance_Trunk',mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(aa+bb)/2;o.rotation_euler=(bb-aa).to_track_quat('Z','Y').to_euler();o.scale=(r,r,(bb-aa).length);instance_triangles+=sides*2;return
+   aa=Vector((a[0],-a[2],a[1]));bb=Vector((b[0],-b[2],b[1]));o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(aa+bb)/2;o.rotation_euler=(bb-aa).to_track_quat('Z','Y').to_euler();o.scale=(r,r,(bb-aa).length);instance_triangles+=sides*2;return
   av=Vector(a);bv=Vector(b);axis=(bv-av).normalized();u=axis.cross(Vector((0,1,0)))
   if u.length<.001:u=axis.cross(Vector((1,0,0)))
   u.normalize();v=axis.cross(u);rings=[[tuple(p+r*(u*math.cos(i*math.tau/sides)+v*math.sin(i*math.tau/sides))) for i in range(sides)] for p in [av,bv]]
@@ -222,6 +238,16 @@ def build(cid):
      co=mesh.vertices[mesh.loops[li].vertex_index].co;uv.data[li].uv=(math.atan2(co.y,co.x)/math.tau+.5,math.acos(max(-1,min(1,co.z)))/math.pi)
    prototypes[key]=mesh
   o=bpy.data.objects.new('Instance_'+m,mesh);bpy.context.collection.objects.link(o);o.parent=instanceRoot;o.location=(p[0],-p[2],p[1]);o.scale=(scale[0],scale[2],scale[1]);o.rotation_euler.z=(seed*2.39996 if m.startswith('Canopy') else 0);instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+ def prop(name,p,yaw,scale=1):
+  nonlocal instance_triangles
+  if name not in prototypes:prototypes[name]=prototype(name,mats[name])
+  mesh=prototypes[name];obj=bpy.data.objects.new('Instance_'+name,mesh);bpy.context.collection.objects.link(obj)
+  obj.parent=instanceRoot;x,y,z=p;obj.location=(x,-z,y);obj.rotation_euler.z=yaw;obj.scale=(scale,scale,scale)
+  instance_triangles+=sum(len(f.vertices)-2 for f in mesh.polygons)
+ def monitor_face(d,off,h,w,tall,quadrant):
+  u=(quadrant%2)*.5;v=(1-quadrant//2)*.5
+  face([pt(d+a,off,h+b) for a,b in [(-w/2,-tall/2),(w/2,-tall/2),(w/2,tall/2),(-w/2,tall/2)]],
+       'TimingScreen',[(u,v),(u+.5,v),(u+.5,v+.5),(u,v+.5)])
  def staff(role,p,yaw,kit=(.031,.09,.14),uniform=None,alternate=False):
   nonlocal instance_triangles
   key=(role,kit,alternate)
@@ -237,6 +263,7 @@ def build(cid):
  def spectator(p,h,yaw,kit,pose,engineer_colour=None):
   nonlocal instance_triangles
   kit='Spectator0' if engineer_colour is None else kit
+  if engineer_colour is not None:engineer_colour=(1,1,1)
   key=(kit,pose,engineer_colour)
   if key not in prototypes:prototypes[key]=spectator_mesh(mats[kit],pose,engineer_colour=engineer_colour)
   mesh=prototypes[key];o=bpy.data.objects.new('Instance_PitWallEngineer' if engineer_colour is not None else 'Instance_Spectator',mesh)
@@ -362,22 +389,28 @@ def build(cid):
     w=.85 if night else 1.1
     m=(('Red','White','Dark') if night else ('Red','White','Green'))[round((d-start)/1.8)%3]
     stop=min(d+1.8,end);rise=.025 if night else .07
-    strip(d,stop,lambda q:side*sample(q)['width'],lambda q:side*(sample(q)['width']+w),m,.04,step=2,ys=rise)
-    edgepts=[pt(q,side*(sample(q)['width']+w),y) for q,y in [(d,.04+rise),(stop,.04+rise),(stop,-.015),(d,-.015)]]
-    face(edgepts if side<0 else list(reversed(edgepts)),m)
-    for q,reverse in [(d,side>0),(stop,side<0)]:
-     pts=[pt(q,side*(sample(q)['width']+off),y) for off,y in [(0,.04),(w,.04+rise),(w,-.015),(0,-.015)]]
-     face(pts[::-1] if reverse else pts,m)
-    if not night:
-     for q in [d+.25,d+.85,d+1.45]:atbox(q,side*(sample(q)['width']+.54),.085,(.78,.076,.18),m)
+    # Rolled outer shoulder and sawtooth crown share edges between segments.
+    section=[(0,.032),(.22*w,.046),(.76*w,.045+rise),(w,.034)]
+    for (x,y),(xx,yy) in zip(section,section[1:]):
+     strip(d,stop,lambda q:side*(sample(q)['width']+x),lambda q:side*(sample(q)['width']+xx),m,y,ys=yy-y)
     d+=1.8
-   if not night and c['speed']<45:
-    for j in range(7):atbox(c['d']-9+j*3,side*(sample(c['d'])['width']+1.4),.105,(.3,.17,1.7),'Red')
+   if not night:
+    for a,b in clear_ranges(start,end,side):
+     strip(a,b,lambda q:side*(sample(q)['width']+1.12),lambda q:side*(sample(q)['width']+1.68),'Astroturf',.041,step=4)
+     strip(a,b,lambda q:side*(sample(q)['width']+1.68),lambda q:side*(sample(q)['width']+1.78),'TarSeam',.043,step=4)
+    if c['speed']<45:
+     for j in range(7):
+      st=c['d']-9+j*3;off=side*(sample(st)['width']+1.43)
+      for k in range(6):
+       angles=[k*math.pi/6,(k+1)*math.pi/6]
+       for q,r,qq,rr in [(-.92,.10,-.68,1),(-.68,1,.68,1),(.68,1,.92,.10)]:
+        face([pt(st+dq,off+.21*f*math.cos(a),.041+.16*f*math.sin(a)) for dq,f,a in
+              [(q,r,angles[0]),(q,r,angles[1]),(qq,rr,angles[1]),(qq,rr,angles[0])]],'Red',top=True)
   # In a sequence of turns, mark the braking approach once. Mount the
   # printed face across the driver's sightline with the lettering upright.
   if c['speed']<=70 and c['d']-last_braking_corner>210:
    last_braking_corner=c['d']
-   for delta in [150,100,50]:
+   for delta in ([200,150,100,50] if night else [300,200,150,100,50]):
     st=c['d']-delta;off=-sample(st)['width']-(1.67 if night else 2.65)
     bottom=1.24 if night else .34
     for x in [-.43,.43]:
@@ -387,9 +420,25 @@ def build(cid):
          'Brake'+str(delta),[(0,0),(1,0),(1,1),(0,1)])
 
  # Grid and painted pit stalls.
- strip(0,.35,-7.5,7.5,'White',.05)
- for i in range(20):
-  d=-8-i*8;off=3 if i%2 else -3;strip(d,d+.12,off-1.1,off+1.1,'White',.05);strip(d-4,d,off-1.1,off-1,'White',.05)
+ def paint_mark(stations,material,uv=None):
+  face([pt(d,x,.046+pavement(d,x)) for d,x in stations],material,uv,top=True)
+ width=sample(0)['width']
+ for j in range(36):
+  left=width*(j/18-1);right=left+width/18
+  for row in range(2):
+   a=row*.34
+   paint_mark([(a,left),(a+.34,left),(a+.34,right),(a,right)],'Dark' if (j+row)%2 else 'White')
+ for i in range(22):
+  d=-8-i*8;off=3 if i%2 else -3
+  for start,end,left,right,material in [(d,d+.12,-1.1,1.1,'White'),(d-4,d,-1.1,-1,'White'),(d-.06,d+.06,1.2,1.88,'PitTarget')]:
+   paint_mark([(start,off+left),(end,off+left),(end,off+right),(start,off+right)],material)
+  u=(i%8)/8;v=1-(i//8+1)/4
+  paint_mark([(d-.7,off+1.25),(d-.7,off+1.85),(d-.1,off+1.85),(d-.1,off+1.25)],'GridNumber',[(u,v),(u+.125,v),(u+.125,v+.25),(u,v+.25)])
+ merge=data['pitExit']
+ for i in range(48):
+  a=merge-52+i*2;b=a+2
+  def blend(q):return -sample(q)['width']+1.8*max(0,1-abs(q-merge)/52)
+  paint_mark([(a,blend(a)),(b,blend(b)),(b,blend(b)+.13),(a,blend(a)+.13)],'White')
  def inpit(d):return d>data['pitEntry']-8 or d<data['pitExit']+15
  def edge(d):
   if night:return sample(d)['width']+2
@@ -421,7 +470,7 @@ def build(cid):
     profile=[(.02,.34),(.19,.34),(.53,.17),(.98,.12),(1.05,.085),(1.05,-.12),(.03,-.30)]
     for start in [d,d+4]:
      barrier_section(start+.012,start+3.988,profile,'Concrete')
-     for station in (start+.012,start+3.988):
+     for station in (() if abs(length-8)<.5 else (start+.012,start+3.988)):
       joint=[pt(station,barrier_offset(station,side)-side*x,h) for h,x in profile]
       if (station<start+2)==(side>0):joint.reverse()
       for j in range(1,len(joint)-1):face([joint[0],joint[j],joint[j+1]],'Concrete')
@@ -434,11 +483,14 @@ def build(cid):
    for hh in [1.7,2.6,3.4]:rod(pt(d,off,hh),pt(d+8,barrier_offset(d+8,side),hh),.009,'Steel',4)
    rod((a[0],a[1]+3.9,a[2]),(b[0],b[1]+3.9,b[2]),.026,'Steel')
    face([(a[0],a[1]+1,a[2]),(b[0],b[1]+1,b[2]),(b[0],b[1]+3.9,b[2]),(a[0],a[1]+3.9,a[2])],'Fence',[(0,0),(8,0),(8,3),(0,3)])
+   face([pt(d,off,3.9),pt(d+8,barrier_offset(d+8,side),3.9),pt(d+8,barrier_offset(d+8,side)-side*.5,4.6),pt(d,off-side*.5,4.6)],'Fence',[(0,0),(8,0),(8,.85),(0,.85)])
    # Boards occupy groups of concrete spans. Breaks expose the formed wall
    # and give the floodlights real joints and shoulder reflectors to pick up.
    sponsored=(d//8+(4 if side>0 else 0))%17<8 if night else d%40==0
    if sponsored:
-    toward=-side*.35;aa=pt(d+.08,off+toward,.22);bb=pt(d+7.92,barrier_offset(d+7.92,side)+toward,.22);face([aa,bb,(bb[0],bb[1]+.75,bb[2]),(aa[0],aa[1]+.75,aa[2])],'Sign',[(1,0),(0,0),(0,1),(1,1)] if side>0 else None)
+    row=(d//16+(1 if side>0 else 0))%4;v=1-(row+1)/4
+    left,right=(1,0) if side>0 else (0,1)
+    toward=-side*.35;aa=pt(d+.08,off+toward,.22);bb=pt(d+7.92,barrier_offset(d+7.92,side)+toward,.22);face([aa,bb,(bb[0],bb[1]+.75,bb[2]),(aa[0],aa[1]+.75,aa[2])],'BarrierPrint',[(left,v),(right,v),(right,v+.25),(left,v+.25)])
    elif night and d%24==0:
     street_hardware(d+1,off-side*.18,.78,(.06,.25,.15),'Dark')
     street_hardware(d+1,off-side*.218,.79,(.025,.15,.095),'Gold')
@@ -480,9 +532,25 @@ def build(cid):
   atbox(st,off+side,1.04,(.09,1.6,3.7),'Cabinet')
   atbox(st-1.25,off-side*.20,.78,(.45,1.08,.66),'ServiceRed')
   heading=sample(st);yaw=math.atan2(heading['tx'],heading['tz'])+side*math.pi/2
-  atbox(st-2.5,off,3.48,(.20,1.08,1.68),'MarshalLED')
-  staff('marshal',pt(st-.54,off,.24),yaw)
-  staff('observer',pt(st+.78,off+.28*side,.24),yaw+.36,(.55,.12,.015))
+  atbox(st-2.50,off,3.05,(.11,1.46,.11),'Steel')
+  atbox(st-2.50,off,3.76,(1.70,1.08,.16),'Dark')
+  atbox(st-2.65,off,4.32,(1.81,.07,.46),'RoofSheet')
+  face([pt(st-2.60,off+x,3.76+y) for x,y in [(.79,-.46),(.79,.46),(-.79,.46),(-.79,-.46)]],
+       'MarshalLED',[(0,0),(0,1),(1,1),(1,0)])
+  alternate=int(st)%3==0
+  staff('marshal',pt(st-.54,off,.24),yaw,alternate=alternate)
+  prop('SafetyBoard',pt(st+.78,off+.28*side,.24),yaw+.36)
+  staff('observer',pt(st+.78,off+.28*side,.24),yaw+.36,(.55,.12,.015),alternate=not alternate)
+ for j in range(14):
+  corner=data['corners'][j%len(data['corners'])];st=corner['d']+18+(j//len(data['corners']))*65
+  off=edge(st)+4.3;heading=sample(st);yaw=math.atan2(heading['tx'],heading['tz'])+math.pi/2
+  prop('Photographer',pt(st,off,.03),yaw)
+  if not night and j<7:
+   st+=45;off=edge(st)+3.2
+   atbox(st,off,.12,(2.1,.24,3.4),'Concrete')
+   atbox(st,off+1.1,1.42,(.12,2.4,3.4),'Cabinet')
+   atbox(st,off,2.72,(2.3,.12,3.6),'RoofSheet')
+   staff('marshal',pt(st,off,.24),yaw,alternate=bool(j%2))
  # Finish official stands behind the pit wall, level with the timing line.
  atbox(-2,-14.4,.62,(1.6,1.24,2.2),'Concrete')
  v=sample(-2);staff('finish',pt(-2,-14.4,1.24),math.atan2(v['tx'],v['tz'])-math.pi/2)
@@ -509,9 +577,8 @@ def build(cid):
   value=stall['colour'].lstrip('#')
   srgb=[int(value[k:k+2],16)/255 for k in (0,2,4)]
   linear=tuple(c/12.92 if c<=.04045 else ((c+.055)/1.055)**2.4 for c in srgb)
-  name=f"Garage{stall['bay']}Uniform"
-  mats[name]=mats['PitCrewUniform'].copy();mats[name].name=name
-  uniforms[stall['bay']]=(linear,name)
+  uniforms[stall['bay']]=linear
+ mats['GarageUniform']=mats['PitCrewUniform'].copy();mats['GarageUniform'].name='GarageUniform'
  def lounge(d,front,h):
   # Place seating, cafe tables and continuous lighting behind the glazing.
   atbox(d,front-3.7,h+1.16,(.16,2.32,27.7),'LoungeWall')
@@ -535,6 +602,12 @@ def build(cid):
    atbox(d+11,-42,heightB*.45,(5,heightB*.9,4),'Glass')
    for step in range(14):atbox(d+11,-41-step*.2,.3+step*.43,(4,.18,.6),'Steel')
   if i in uniforms:
+   accent='BayAccent'+str(i);yaw=math.atan2(sample(d)['tx'],sample(d)['tz'])
+   prop('SpareNoseRack',pt(d-5.4,-28.4,.106),yaw)
+   prop('TyreBlanketRack',pt(d+3,-28.6,.106),yaw)
+   atbox(d,-33.68,2.92,(.04,.19,27.5),accent)
+   for seam in (-9,-4.5,0,4.5,9):
+    strip(d+seam-.012,d+seam+.012,-34.8,-25.2,'TarSeam',.105)
    # Cantilevered triangulated boom. Both lower rails and the upper chord
    # terminate over the stopped car without a column in the working rectangle.
    for dz in (-.24,.24):
@@ -556,28 +629,24 @@ def build(cid):
      outlet=-23-side*.90
      rod(pt(d+dz,-23,3.03),pt(d+dz,outlet,3.03),.027,'GantryCarbon')
      rod(pt(d+dz,outlet,3.05),pt(d+dz,outlet,2.97),.036,'Steel',10)
-   # Cylindrical tyre blankets on a garage trolley, straps and insulated leads.
-   atbox(d+3.0,-28.6,.29,(1.30,.13,2.25),'Cabinet')
-   for k in range(3):
-    st=d+2.31+k*.69
-    rod(pt(st-.22,-28.6,.69),pt(st+.22,-28.6,.69),.35,'WarmerFabric',18)
-    rod(pt(st-.022,-28.6,.69),pt(st+.022,-28.6,.69),.36,'Dark',18)
+   atbox(d,-20.94,3.05,(.16,.20,.22),'GantryCarbon')
+   atbox(d,-20.94,2.9,(.12,.55,1.40),'GantryCarbon')
   # Raised timing islands between the apron and the racing surface.
   if i in uniforms:
    atbox(d,-13.02,.58,(1.76,1.08,7.6),'Concrete')
    atbox(d,-13.57,1.62,(.72,.12,7.15),'Cabinet')
-   for jj in [-2.7,-.9,.9,2.7]:
+   for monitor,jj in enumerate([-2.7,-.9,.9,2.7]):
     station=d+jj
     atbox(station,-12.87,1.36,(.52,.12,.50),'Cabinet')
     atbox(station,-12.64,1.49,(.08,.24,.46),'Dark')
     v=sample(station);yaw=math.atan2(v['tx'],v['tz'])+math.pi/2
-    spectator(pt(station,-12.89,1.40),1.05,yaw,'PitWallEngineer',1,uniforms[i][0])
+    spectator(pt(station,-12.89,1.40),1.05,yaw,'PitWallEngineer',(i+monitor)%4,uniforms[i])
     atbox(station,-13.65,1.94,(.11,.50,1.26),'Dark')
-    atbox(station,-13.58,1.94,(.025,.43,1.18),'TimingScreen')
+    monitor_face(station,-13.58,1.94,1.18,.43,monitor)
    for j in [-3.32,3.32]:
     rod(pt(d+j,-13.79,1.15),pt(d+j,-13.79,3.03),.049,'Steel')
     rod(pt(d+j,-13.79,3.0),pt(d+j,-12.13,2.89),.046,'Steel')
-   atbox(d,-13.15,3.05,(1.9,.11,7.63),'Red' if i%4 else 'Dark')
+   atbox(d,-13.15,3.05,(1.9,.11,7.63),accent)
    atbox(d,-13.35,2.98,(.09,.034,7.0),'LoungeLight')
    # The fine guard mesh continues between timing stands on the concrete wall.
    for segment in range(4):
@@ -600,6 +669,7 @@ def build(cid):
     for shelf in [.38,.59,.80]:atbox(d+j+2.6,-25.70,shelf,(.05,.035,1.18),'Steel')
     rod(pt(d+j+2.6,-26.1,1.02),pt(d+j+2.6,-26.1,1.62),.045,'Steel')
     atbox(d+j+2.6,-26.1,1.58,(.12,.48,.81),'Dark')
+    monitor_face(d+j+2.6,-26.032,1.58,.74,.42,(i+j)%4)
    row=(i+int(j/9))%4
    face([pt(d+j-3.82,-24.53,3.96),pt(d+j+3.82,-24.53,3.96),
          pt(d+j+3.82,-24.53,4.65),pt(d+j-3.82,-24.53,4.65)],'GarageFascia',
@@ -611,9 +681,9 @@ def build(cid):
    atbox(d+j,-24.65,.12,(.5,.16,7.2),'Concrete')
    for k in [-4.2,4.2]:atbox(d+j+k,-24.9,2.2,(.25,4.4,.22),'White')
   heading=sample(d);yaw=math.atan2(heading['tx'],heading['tz'])-math.pi/2
-  kit,uniform=uniforms.get(i,((.031,.09,.14),'PitCrewUniform'))
-  staff('crew',pt(d,-26.3,.104),yaw+.24,kit,uniform)
-  staff('crew',pt(d+1.25,-27.1,.104),yaw-.59,kit,uniform,alternate=True)
+  kit,uniform=((1,1,1),'GarageUniform') if i in uniforms else ((.031,.09,.14),'PitCrewUniform')
+  staff('crew',pt(d,-31.4,.104),yaw+.24,kit,uniform)
+  staff('crew',pt(d+1.25,-31.9,.104),yaw-.59,kit,uniform,alternate=True)
   lounge(d,-24.9,4.72)
   atbox(d,-24.9,5.8,(.1,2.1,27),'Hospitality')
   for j in range(-13,14,3):atbox(d+j,-24.75,5.8,(.17,2.2,.1),'Steel')
@@ -633,6 +703,7 @@ def build(cid):
    for deck in range(2):
     h=7.7+deck*3.35
     lounge(d,-26.8,h+.15)
+    atbox(d,-24.18,h+.10,(.09,.045,27.8),'LoungeLight')
     atbox(d,-26.8,h+1.47,(.10,2.94,27.95),'Hospitality')
     atbox(d,-26.23,h,(4.0,.26,27.95),'Concrete')
     atbox(d,-24.22,h+.72,(.08,1.0,27.85),'Balustrade')
@@ -650,6 +721,11 @@ def build(cid):
   if night:atbox(d,-24.6,10.7,(.15,.12,27),'Pink')
  for stall in data['pitBoxes']:
   d=stall['distance'];off=stall['offset']
+  strip(d-3.5,d+3.5,off-1.89,off+1.89,'GantryCarbon',.047)
+  strip(d-3.5,d+3.5,off-1.89,off-1.77,'BayAccent'+str(stall['bay']),.052)
+  strip(d+1.46,d+1.62,off-1.55,off+1.55,'PitTarget',.057)
+  for j in range(-12,14,2):
+   face([pt(d+j+a,-20+b,.054) for a,b in [(0,0),(.13,0),(1.13,.69),(1,.69)]],'White',top=True)
   for side in (-1,1):
    stripe=off+side*1.16
    strip(d-3,d+3,stripe-.055,stripe+.055,'White',.052)
@@ -657,6 +733,19 @@ def build(cid):
   for sign in (-1,1):
    a=d+4*sign;b=d+6*sign
    strip(min(a,b),max(a,b),lambda q:off+1.16+(q-a)*sign*.65,lambda q:off+1.28+(q-a)*sign*.65,'White',.052)
+ for st in [data['pitEntry']+29,data['pitExit']-30]:
+  off=sample(st)['pit']
+  strip(st-.11,st+.11,off-1.6,off+1.6,'White',.056)
+  # Outside the drive corridor, the cantilevered speed board spans the lane at 4.4 m.
+  post=min(off-3,-edge(st)-2)
+  atbox(st,post,2.4,(.11,4.8,.11),'Steel')
+  rod(pt(st,post,4.78),pt(st,off,4.78),.044,'Steel')
+  face([pt(st,off+x,4.43+y) for x,y in [(-.50,-.34),(-.50,.34),(.50,.34),(.50,-.34)]],'Brake80',[(0,0),(0,1),(1,1),(1,0)])
+  face([pt(st+a,off+b,.059) for a,b in [(0,-.75),(0,.75),(1.12,.75),(1.12,-.75)]],'Brake80',[(0,0),(1,0),(1,1),(0,1)],top=True)
+  if st<data['length']/2:
+   atbox(st,post,2.80,(.44,1.04,.26),'Dark')
+   for j,lens in enumerate(['Blue','Go','Stop']):
+    rod(pt(st-.14,post,2.47+.32*j),pt(st-.17,post,2.47+.32*j),.126,'PitExit'+lens,14)
  if not night:
   # The podium balcony projects out of the pit building at the finish.
   # Three stacked decks, a viewing gallery and a cantilevered steel gallery.
@@ -676,13 +765,15 @@ def build(cid):
    rod(pt(station,-25,10.2),pt(station,-5.65,10.2),.054,'Steel')
   for j,mat_name in enumerate(['Green','White','Red']):atbox(-45+j*5,-5.66,9.13,(.10,.91,4.93),mat_name)
   # Wind bends consecutive cloth strips into a changing three-dimensional silhouette.
+  for colour in ('Green','White','Red'):
+   name='ItalianFlag'+colour;mats[name]=mats[colour].copy();mats[name].name=name
   for flag in range(19):
    d=L-282+flag*13.4;off=49.1
    rod(pt(d,off,8.7),pt(d,off,16.3),.061,'Steel')
    for seg in range(12):
     def flagpoint(k,v):
      t=k/12;return pt(d+3.65*t,off+.53*math.sin(t*8+flag*.9)*t,16.15-1.92*v-.35*t+.31*math.sin(t*7+flag)*t)
-    face([flagpoint(seg,0),flagpoint(seg+1,0),flagpoint(seg+1,1),flagpoint(seg,1)],['Green','White','Red'][seg//4])
+    face([flagpoint(seg,0),flagpoint(seg+1,0),flagpoint(seg+1,1),flagpoint(seg,1)],['ItalianFlagGreen','ItalianFlagWhite','ItalianFlagRed'][seg//4])
  # Grandstands: rake, seat rows, people cards, roof trusses and exposed frame.
  stations=[L-270,L-160,L-50] if not night else [L-230,L-110,1500,1620,2120,4370]
  for station in stations:
@@ -701,6 +792,7 @@ def build(cid):
      pool=[p for p in range(12) if p not in previous and (p not in (6,7,10) or rng.random()<.26)]
      pose=rng.choice(pool);previous=(previous+[pose])[-4:]
      spectator(person,h,heading,cloth,pose)
+     if (j*7+row*13+block)%20==0:prop('GrandstandFlag',person,heading,h)
    # Folded sheet canopy with a pitched face, purlins and exposed triangular trusses.
    for rib in range(16):
     start=d-15.98+rib*2
@@ -727,15 +819,47 @@ def build(cid):
    for h in [6.5,7.7]:rod(pt(d,-edge(d)-2,h),pt(d,edge(d)+2,h),.11,'Steel',8)
    for off in range(-int(edge(d)),int(edge(d)),2):rod(pt(d,off,6.5),pt(d,off+2,7.7),.074,'Steel')
    for direction in (-1,1):
-    station=d+direction*.20;left=direction*edge(d)
+    station=d+direction*.78;left=direction*edge(d)
     face([pt(station,left,6.35),pt(station,-left,6.35),pt(station,-left,7.78),pt(station,left,7.78)],'Sponsor'+str(j))
-  for station in [1010,4180,L-840]:
+   atbox(d,0,7.84,(edge(d)*2,.14,1.8),'RoofSheet')
+   for lateral in range(-int(edge(d)),int(edge(d)),6):
+    rod(pt(d-.74,lateral,6.4),pt(d+.74,lateral+4,7.7),.09,'Steel')
+    atbox(d,lateral,6.4,(1.1,.10,.47),'LoungeLight')
+  # The old oval crosses the Serraglio on a skew with a steep bank,
+  # elevated concrete deck, guard rail and abutments outside both verges.
+  for j in range(-10,10):
+   x=j*5;xx=x+5
+   def bank(lateral,v,y):return pt(3520+lateral*.45+v,lateral,6.8+y+v*.27+.0008*lateral*lateral)
+   face([bank(x,-4,0),bank(xx,-4,0),bank(xx,5,0),bank(x,5,0)],'RepairCourse',[(x/3,0),(xx/3,0),(xx/3,3),(x/3,3)],top=True)
+   for v in [-4,5]:
+    face([bank(x,v,-.8),bank(xx,v,-.8),bank(xx,v,0),bank(x,v,0)],'Concrete')
+    rod(bank(x,v,.7),bank(xx,v,.7),.075,'Steel')
+    rod(bank(x,v,0),bank(x,v,.7),.055,'Steel')
+   if abs(x)>16 and j%2==0:atbox(3520+x*.45,x,3.5,(1.4,8,8),'Concrete')
+  for station in [1010,4180,5320]:
+   # Reuse the unit casting for recovery vehicle wheels/chassis and camera towers.
+   apron=edge(station)+9
+   street_hardware(station,apron,1.1,(2.4,1.3,4.6),'PitTarget')
+   street_hardware(station+1,apron,2.18,(1.7,1.35,1.62),'Glass')
+   for x in [-1.2,1.2]:
+    for z in [-1.55,1.55]:blob(pt(station+z,apron+x,.64),(.38,.64,.64),'Dark',10,5)
+   rod(pt(station-1.6,apron,1.45),pt(station+4,apron,5.4),.22,'PitTarget',4)
+   rod(pt(station+4,apron,5.4),pt(station+4.6,apron,4.6),.09,'Dark')
+   camera_off=apron+8
+   for x in [-1.25,1.25]:
+    for z in [-1.25,1.25]:
+     rod(pt(station+z,camera_off+x),pt(station+z,camera_off+x,6),.09,'Steel')
+     rod(pt(station-z,camera_off+x,.3),pt(station+z,camera_off+x,5.8),.06,'Steel')
+   atbox(station,camera_off,6,(3,.23,3),'RoofSheet')
+   rod(pt(station,camera_off,6),pt(station,camera_off,7.2),.13,'Steel')
+   atbox(station,camera_off,7.35,(1.15,.47,.48),'Dark')
+
    off=edge(station)+12
    for row in range(5):
     atbox(station,off+row*.8,.8+row*.48,(.84,.28,28),'Concrete')
     for seat in range(-13,14,2):
      bearing=sample(station+seat)
-     spectator(pt(station+seat,off+row*.8,.94+row*.48),1.,math.atan2(bearing['tx'],bearing['tz'])-math.pi/2,'Spectator0',row%3)
+     spectator(pt(station+seat,off+row*.8,.94+row*.48),1.,math.atan2(bearing['tx'],bearing['tz'])+math.pi/2,'Spectator0',row%3)
    atbox(station,off+2.0,1.32,(4.1,2.55,28),'Dark')
    for j in range(-14,15,7):rod(pt(station+j,off+3.6),pt(station+j,off+3.6,4.5),.09,'Steel')
    atbox(station,off+3.6,4.48,(.08,.08,28),'Steel')
@@ -814,8 +938,8 @@ def build(cid):
   mat('RoughMeadow',(.30,.245,.14),.98,tex='grass-color')
   mat('LeafLitter',(.18,.135,.083),1,tex='gravel')
   for side in [-1,1]:
-   for j in range(20):
-    station=550+j*31;near=edge(station)+1.8
+   for j in range(math.ceil(L/31)):
+    station=j*31;near=edge(station)+1.8
     broad=2.4+2*math.sin(j*1.73+side)**2
     for offset,span,material in [(near,broad,'RoughMeadow'),(near+broad,5.,'LeafLitter')]:
      points=[pt(station+d,side*(offset+w),-.047) for d,w in
@@ -836,23 +960,36 @@ def build(cid):
   for d in range(0,int(L),45):
    for side in [-1,1]:
     if side<0 and (d>L-422 or d<30):continue  # The pit building carries the apron lights.
-    rod(pt(d,side*10.5),pt(d,side*10.5,13),.08,'Steel');rod(pt(d,side*10.5,12.8),pt(d,side*7.5,12.8),.06,'Steel');atbox(d,side*7.5,12.7,(2.6,.15,.7),'Ice')
+    rod(pt(d,side*10.5),pt(d,side*10.5,13),.08,'Steel');rod(pt(d,side*10.5,12.8),pt(d,side*7.5,12.8),.06,'Steel');atbox(d,side*7.5,12.76,(2.6,.24,.77),'Dark')
+    for shift in [-.86,0,.86]:atbox(d,side*7.5+shift,12.62,(.69,.12,.63),'Ice')
   # Curbside date palms break up the lamp rhythm and give the boulevard a
   # street-level silhouette beneath the resort skyline.
   for d in range(2550,4300,26):
    for side in [-1,1]:
     off=side*(25+4*math.sin(d));x,g,z=pt(d,off);h=7.8+2.7*math.sin(d*1.37)
     tip=(x+.65,g+h,z+.38);rod((x,g,z),tip,.19,'Trunk',7)
-    for j in range(8):
-     a=j*math.tau/8+d;width=.37;reach=3.1+.55*math.sin(d+j)
-     def blade(t,w):
-      return (tip[0]+reach*t*math.cos(a)-w*math.sin(a),tip[1]+1.1*math.sin(t*math.pi)-1.05*t*t,tip[2]+reach*t*math.sin(a)+w*math.cos(a))
-     for k in range(9):
-      t=k/9;u=(k+1)/9
-      face([blade(t,-.036),blade(u,-.024),blade(u,.024),blade(t,.036)],'PalmFrond')
-      for wing in [-1,1]:
-       width=.57*math.sin(math.pi*(t+.09))**.7
-       face([blade(t,0),blade(min(1,u+.13),width*wing),blade(u,.03*wing)],'PalmFrond')
+    key=('PalmFrond',)
+    if key not in prototypes:
+     verts=[];polys=[]
+     for j in range(8):
+      angle=j*math.tau/8;reach=3.1+.55*math.sin(j)
+      def blade(t,w):
+       dx=reach*t*math.cos(angle)-w*math.sin(angle)
+       dz=reach*t*math.sin(angle)+w*math.cos(angle)
+       verts.append((dx,-dz,1.1*math.sin(t*math.pi)-1.05*t*t))
+       return len(verts)-1
+      for k in range(9):
+       t=k/9;u=(k+1)/9
+       polys.append((blade(t,-.036),blade(u,-.024),blade(u,.024),blade(t,.036)))
+       for wing in (-1,1):
+        width=.57*math.sin(math.pi*(t+.09))**.7
+        polys.append((blade(t,0),blade(min(1,u+.13),width*wing),blade(u,.03*wing)))
+     crown=bpy.data.meshes.new('Date palm crown');crown.from_pydata(verts,[],polys)
+     crown.materials.append(mats['PalmFrond']);crown.update();prototypes[key]=crown
+    crown=prototypes[key];palm=bpy.data.objects.new('Instance_PalmFrond',crown)
+    bpy.context.collection.objects.link(palm);palm.parent=instanceRoot
+    palm.location=(tip[0],-tip[2],tip[1]);palm.rotation_euler.z=-d
+    instance_triangles+=sum(len(poly.vertices)-2 for poly in crown.polygons)
   # A distant basin rim frames the low-rise city. Use broad folds, with
   # independent lower foothills and upper ridges to preserve depth at night.
   for layer in range(2):
@@ -894,6 +1031,16 @@ def build(cid):
     gap=math.hypot(max(0,along-length*.5-1),max(0,across-12))
     if gap<q['width']+4: return False
    return True
+  for a,b in [(260,630),(1080,1290),(1480,2180),(5350,5680)]:
+   for side in (-1,1):
+    for q in range(a,b-10,10):
+     if frontage_fits(q+5,side,20,10):
+      strip(q,q+10,side*16,side*28,'Concrete',.10,step=10)
+      strip(q,q+10,side*15.8,side*16,'Concrete',.025,step=10,ys=.075)
+  # A level pedestrian terrace carries the Sphere timing screen and its footings.
+  for st in range(1480,1558,3):
+   strip(st,st+3,-64,-29,'Concrete',.09,step=3)
+   strip(st,st+3,-29,-28.7,'Concrete',.09,step=3,ys=-.08)
   frontage=random.Random(947)
   for side in [-1,1]:
    for block in range(3040,5200,62):
@@ -910,7 +1057,7 @@ def build(cid):
       atbox(d+bay*length,side*(inset+2.51),.51,(.58,.20,.23*length),'CopperRoof')
       atbox(d+bay*length,side*(inset+2.61),2.68,(.32,.08,.23*length),'CopperRoof')
      for bay in [-.39,-.13,.13,.39]:
-      atbox(d+bay*length,side*(inset+1.65),h*.5,(4.5,h,1.35),'Travertine')
+      atbox(d+bay*length,side*(inset+1.65),h*.5,(4.5,h,1.35),'CopperRoof')
      atbox(d,side*(inset+1.8),h-.5,(5.1,.92,length),'CopperRoof')
     else:atbox(d,roof,h*.5,(16,h,length),'StoreGlass')
     atbox(d,roof,h+.24,(18.2,.47,length+1.3),'CopperRoof')
@@ -919,10 +1066,17 @@ def build(cid):
     atbox(d,side*(inset-2.3),3.62,(5.9,.37,length+1.4),'CopperRoof')
     atbox(d,side*(inset-5.26),3.68,(.16,.24,length+1.4),'Gold' if block%3 else 'Ice')
     row=(block//62+(side+1))%4
-    a=d-length*.39;b=d+length*.39;off=side*(inset-.42)
+    a=d-length*.39;b=d+length*.39;off=side*(inset-3.45)
+    atbox(d,side*(inset-3.18),h-1.38,(.43,2.28,length*.80),'RecessGlass')
     u=(row+1)/4;v=row/4
     points=[pt(a,off,h-2.4),pt(b,off,h-2.4),pt(b,off,h-.36),pt(a,off,h-.36)]
     face(points,'Marquee',[(0 if side<0 else 1,v),(1 if side<0 else 0,v),(1 if side<0 else 0,u),(0 if side<0 else 1,u)])
+    if block%5==0:
+     # Slim, recessed portrait LED blade anchored to the entrance canopy.
+     blade=d+side*length*.45;front=side*(inset-2.5)
+     atbox(blade,front,h+.3,(.58,8.6,2.6),'CopperRoof')
+     face([pt(blade+along,front-side*.32,h+up) for along,up in [(-1.17,-3.85),(1.17,-3.85),(1.17,4.45),(-1.17,4.45)]],
+          'Marquee',[(.02,v),(.31,v),(.31,u),(.02,u)])
     for vent in [-.27,.29]:atbox(d+vent*length,roof,h+1.0,(3.8,1.25,4.3),'Cabinet')
   origin=data['origin'];lat0=origin[1]*math.pi/180
   def project(lon,lat):return ((lon-origin[0])*111320*math.cos(lat0),-(lat-origin[1])*111320)
@@ -972,7 +1126,7 @@ def build(cid):
     # Art-deco setbacks and a lit spire distinguish the south skyline.
     for tier in range(6):
      hh=h*(1-tier*.12);ww=w*(1-tier*.13);zz=z+tier*5
-     box((x,g+hh/2+tier*11,zz),(ww,hh,dep*(1-tier*.11)),'Windows')
+     box((x,g+hh/2+tier*11,zz),(ww,hh,dep*(1-tier*.11)),'UpperCurtain')
      box((x,g+hh+tier*11,zz),(ww+1,1.1,dep*(1-tier*.11)+1),'Ice')
     rod((x,g+h,z),(x,g+h+38,z),1.3,'Steel',8)
     box((x,g+10,z),(w*1.8,20,dep*1.6),'Travertine')
@@ -1000,6 +1154,9 @@ def build(cid):
     corners=[(tx+dx,g+94,tz+dz) for dx,dz in [(-12,-12),(12,-12),(12,12),(-12,12)]]
     for j in range(4):face([corners[j],corners[(j+1)%4],apex],'CopperRoof',[(0,0),(1,0),(.5,1)])
    if name=='IMPERIAL':
+    for j in range(-4,5):
+     rod((x+j*6,g,z+dep*.5+10),(x+j*6,g+13,z+dep*.5+10),1,'Travertine',12)
+    box((x,g+13.6,z+dep*.5+10),(57,1.4,9),'Travertine')
     for side in [-1,1]:
      xx=x+side*w*.44;box((xx,g+h+7,z),(30,14,dep+8),'Travertine')
      blob((xx,g+h+15,z),(18,8,dep*.56),'CopperRoof',24,10)
@@ -1010,7 +1167,7 @@ def build(cid):
    if ROUND>=2:
     for side in [-1,1]:
      angle={'AURORA':.22,'IMPERIAL':-.25,'SERENISSIMA':0,'PALATIAL':.13,'EDEN':-.35,'LUMIERE':.32,'METROPOLIS':0}[name]*side
-     box((x+side*w*.38,g+h*.39,z-dep*.55),(w*.23,h*.78,dep*1.5),'Windows',angle)
+     box((x+side*w*.38,g+h*.39,z-dep*.55),(w*.23,h*.78,dep*1.5),'UpperRibbon',angle)
     roof_x=x+(tiers[-1][3]*w if cut<1 else 0)
     roof_z=z-2 if cut<1 else z
     span,depth=(tiers[-1][1],tiers[-1][2]) if cut<1 else (1,1)
@@ -1045,28 +1202,22 @@ def build(cid):
     else:
      box((x,g+podium+band+upper*.5,z),(w,upper,dep),'UpperStone' if style==1 else 'UpperCurtain',angle)
      if style==1:
-      for j in range(3):box((x+j*w*.055,g+h+3+j*5,z),(w*(.78-j*.18),6,dep*(.83-j*.17)),'Windows',angle)
+      for j in range(3):box((x+j*w*.055,g+h+3+j*5,z),(w*(.78-j*.18),6,dep*(.83-j*.17)),'UpperRibbon',angle)
      else:
       box((x+w*.28,g+h+4,z),(w*.25,8,dep*.85),'Steel',angle)
       # A separate glazed shoulder and a dark plant deck step away from the boulevard.
       box((x-w*.16,g+h+5,z),(w*.48,10,dep*.69),'UpperRibbon',angle)
       box((x-w*.19,g+h+12,z),(w*.34,4,dep*.56),'RecessGlass',angle)
    else:
-    surface=('UpperCurtain','UpperStone','UpperRibbon')[i%3] if h>65 and 2550<d<5200 else ('WarmWindows' if i%4==0 else 'Windows')
+    surface=('UpperCurtain','UpperStone','UpperRibbon')[i%3]
     box((p[0],p[1]+h/2,p[2]),(w,h,dep),surface,angle)
    box((p[0],p[1]+3,p[2]),(w+12,6,dep+10),'Concrete',angle)
    for level in range(random.randint(1,3)):
     box((p[0],p[1]+h+level*4+2,p[2]),(w*(.8-level*.16),4,dep*(.8-level*.16)),'Glass',angle)
    accent=['Gold','Ice','Pink'][i%3]
-   if i%3==0:box((p[0],p[1]+h*.83,p[2]+dep/2+.2),(w*.8,2,.4),accent)
+   if i%3==0:box((p[0]+math.sin(angle)*(dep/2+.2),p[1]+h*.83,p[2]+math.cos(angle)*(dep/2+.2)),(w*.8,2,.4),accent,angle)
    if i%5==0:
-    box((p[0]+w/2+.25,p[1]+h*.6,p[2]),(.5,h*.6,1),accent)
-    width=min(w*.70,64);panel_h=width/8
-    sn,cs=math.sin(angle),math.cos(angle)
-    cx=p[0]+sn*(dep/2+.30);cz=p[2]+cs*(dep/2+.30);cy=p[1]+h*.65
-    box((cx,cy,cz),(width+.20,panel_h+.20,.46),'Dark',angle)
-    face([(cx+dx*cs+.24*sn,cy+dy,cz-dx*sn+.24*cs)
-          for dx,dy in [(-width/2,-panel_h/2),(width/2,-panel_h/2),(width/2,panel_h/2),(-width/2,panel_h/2)]],'Sign')
+    box((p[0]+math.cos(angle)*(w/2+.25),p[1]+h*.6,p[2]-math.sin(angle)*(w/2+.25)),(.5,h*.6,1),accent,angle)
   # An internally lit Montgolfier-style boulevard marquee, including its
   # tapered lower skirt, gold meridians and a suspended basket.
   x,z=project(-115.17173,36.11211);g=ground(x,z)
@@ -1160,6 +1311,10 @@ def build(cid):
    for side in [-1,1]:rod(pt(d,side*11),pt(d,side*11,7),.15,'Steel')
    for h in [6,7]:rod(pt(d,-11,h),pt(d,11,h),.1,'Steel')
    for j in range(-11,11,2):rod(pt(d,j,6),pt(d,j+2,7),.08,'Steel')
+   atbox(d,0,6.02,(22,.25,3.8),'RoofSheet')
+   for dz in [-1.9,1.9]:
+    atbox(d+dz,0,7.14,(22,1.94,.13),'RecessGlass')
+    atbox(d+dz,0,8.16,(22,.09,.17),'Gold')
   # Low-rise neighbourhoods and their lit arterial roads continue past the
   # race venue. Keep this illustrative skyline outside the circuit footprint
   # and the mapped Strip landmarks, clear of the actual racing surface.
@@ -1177,7 +1332,7 @@ def build(cid):
     h=ground(x,z)-2
     for lot in range(3):
      dx=town.uniform(-79,80);dz=-63+lot*61;w=town.uniform(26,90);depth=town.uniform(18,42);bh=town.choice([8,10,15,18,24,34])
-     box((x+dx,h+bh/2,z+dz),(w,bh,depth),'Windows')
+     box((x+dx,h+bh/2,z+dz),(w,bh,depth),('UpperStone','UpperRibbon','UpperCurtain')[(row+col+lot)%3])
      box((x+dx,h+bh+.3,z+dz),(w+1.1,.66,depth+1.1),'DistrictStone')
     for lamp in range(6):
      lx=x-90+lamp*35
@@ -1209,6 +1364,8 @@ def build(cid):
  else:
   for i in range(14):
    d=L-380+i*28;atbox(d,-24.9,9.15,(.1,1.7,27),'Glass');atbox(d,-27,11.35,(6,.18,27),'Dark')
+   atbox(d,-24.78,10.48,(.36,.40,27.9),'RubyGlass')
+   atbox(d,-24.55,10.79,(.28,.12,27.9),'Ice')
    for j in [-12,0,12]:atbox(d+j,-24.6,9.3,(.12,2,.12),'Steel')
    atbox(d,-36,11.7,(10,.5,23),'Dark');atbox(d,-36,12.05,(9,.1,22),'Pink')
  if not night:
@@ -1227,11 +1384,11 @@ def build(cid):
   bpy.context.collection.objects.link(obj)
  # Garage staff and track officials keep their uniforms and flag at distance.
  # The close meshes retain their complete equipment and faces.
- for material in ['PitCrewUniform','MarshalUniform','FinishUniform',*[name for _,name in uniforms.values()]]:
+ for material in ['PitCrewUniform','MarshalUniform','FinishUniform','GarageUniform']:
   mesh=next(mesh for key,mesh in prototypes.items() if key[0] in ('crew','marshal','finish') and mesh.materials[0].name==material)
   obj=bpy.data.objects.new('LOD_Staff'+material,mesh.copy());bpy.context.collection.objects.link(obj)
   bpy.context.view_layer.objects.active=obj
-  mod=obj.modifiers.new('Distant staff silhouette','DECIMATE');mod.ratio=.035
+  mod=obj.modifiers.new('Distant staff silhouette','DECIMATE');mod.ratio=min(1,330/max(1,sum(len(f.vertices)-2 for f in obj.data.polygons)))
   bpy.ops.object.modifier_apply(modifier=mod.name)
  # Authored distant crown LODs; runtime uses these meshes, never generated substitutes.
  if not night:
@@ -1249,6 +1406,9 @@ def build(cid):
  triangles=instance_triangles
  for (tile,m),(verts,faces,uvs) in batches.items():
   mesh=bpy.data.meshes.new(f'{tile}_{m}');mesh.from_pydata(verts,[],faces);mesh.update();uv=mesh.uv_layers.new(name='UVMap')
+  if m=='BayAccent':
+   colour=mesh.color_attributes.new(name='Team paint',type='BYTE_COLOR',domain='POINT')
+   for index,c in enumerate(accent_colors[(tile,m)]):colour.data[index].color=c
   for poly in mesh.polygons:
    for li in poly.loop_indices:uv.data[li].uv=uvs[mesh.loops[li].vertex_index]
   obj=bpy.data.objects.new(f'{tile}_{m}',mesh);bpy.context.collection.objects.link(obj);obj.data.materials.append(mats[m]);

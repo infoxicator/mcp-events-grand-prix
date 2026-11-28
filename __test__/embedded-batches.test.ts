@@ -1,6 +1,6 @@
 import {expect,it} from 'vitest';
 import * as T from 'three';
-import {batchCircuit,batchDistantInstances} from '../src/race/embedded-batches';
+import {batchCircuit,batchDistantInstances,rigidCarParts} from '../src/race/embedded-batches';
 
 it('submits only intersecting authored index ranges and keeps independent caster visibility',()=>{
  const root=new T.Group(),material=new T.MeshStandardMaterial();material.name='Steel';
@@ -48,4 +48,22 @@ it('batches visible far instances in world space and restores tiles receiving sh
  sources[0].receiveShadow=true;update(cam);expect(batch.visible).toBe(false);expect(sources[0].layers.mask).toBe(2);
  update(null);expect(sources.every(tile=>tile.layers.mask===2)).toBe(true);
  for(const tile of [...sources,batch])tile.dispose();geometry.dispose();material.dispose();
+});
+
+it('merges rigid body sections only when their UV storage agrees',()=>{
+ const root=new T.Group(),chassis=new T.Group(),material=new T.MeshStandardMaterial();
+ chassis.name='Chassis';root.add(chassis);
+ const parts=[0,1,2,3].map(i=>{
+  const geometry=new T.BoxGeometry(),uv=geometry.getAttribute('uv');
+  if(i<2)geometry.setAttribute('uv',new T.Uint16BufferAttribute(uv.array.map(x=>x*65535),2,true));
+  const mesh=new T.Mesh(geometry,material);chassis.add(mesh);return mesh;
+ });
+ root.updateMatrixWorld(true);
+ const switchPose=rigidCarParts(root,new Set());switchPose(false,false);
+ expect(parts.every(part=>!part.visible)).toBe(true);
+ const batches=root.children.filter((node):node is T.Mesh=>node instanceof T.Mesh);
+ expect(batches).toHaveLength(2);
+ expect(new Set(batches.map(o=>o.geometry.getAttribute('uv').array.constructor))).toEqual(new Set([Float32Array,Uint16Array]));
+ switchPose(true,false);expect(parts.every(part=>part.visible)).toBe(true);
+ batches.forEach(o=>o.geometry.dispose());parts.forEach(o=>o.geometry.dispose());material.dispose();
 });

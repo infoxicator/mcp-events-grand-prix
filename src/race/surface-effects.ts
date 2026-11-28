@@ -7,7 +7,7 @@ import {wheelStations} from './suspension';
 
 type Puff={d:number;x:number;time:number;vx:number;vz:number;size:number;dust:number;seed:number};
 export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>number){
- const capacity=180,puffs:Puff[]=[],positions=new Float32Array(capacity*3),parameters=new Float32Array(capacity*4);
+ const capacity=180,puffs:Puff[]=Array.from({length:capacity},(_,i)=>({d:0,x:0,time:-Infinity,vx:0,vz:0,size:0,dust:0,seed:(i*17.73)%91})),positions=new Float32Array(capacity*3),parameters=new Float32Array(capacity*4);
  const geo=new T.BufferGeometry(),pos=new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage),attrib=new T.BufferAttribute(parameters,4).setUsage(T.DynamicDrawUsage);
  geo.setAttribute('position',pos);geo.setAttribute('puff',attrib);
  const material=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{pixelHeight:{value:850}},vertexShader:`
@@ -25,31 +25,62 @@ export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>nu
   float billow=.68*noise(q)+.32*noise(q*2.28);
   float density=1.-smoothstep(.16,.98,length(p)+(.51-billow)*.70);
   if(density<.008)discard;
-  vec3 tint=mix(vec3(.59,.61,.63),vec3(.37,.285,.19),vPuff.y)*(.72+.44*billow);
+  vec3 tint=mix(mix(vec3(.59,.61,.63),vec3(.37,.285,.19),clamp(vPuff.y,0.,1.)),vec3(.115,.112,.106),step(1.5,vPuff.y))*(.72+.44*billow);
+  if(vPuff.y>2.5)tint=vec3(.85,.93,1.);
   gl_FragColor=vec4(tint,density*(.30+.70*billow)*vPuff.x);
  #include <tonemapping_fragment>
  #include <colorspace_fragment>
  }`});
  const mesh=new T.Points(geo,material);mesh.frustumCulled=false;scene.add(mesh);
  const marks=new T.InstancedMesh(new T.PlaneGeometry(.27,1),new T.MeshBasicMaterial({color:'#111212',transparent:true,opacity:.31,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}),384);
+ marks.material.onBeforeCompile=shader=>{
+  shader.vertexShader='varying vec2 markUV;\n'+shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nmarkUV=uv;');
+  shader.fragmentShader='varying vec2 markUV;\n'+shader.fragmentShader.replace('#include <alphamap_fragment>','#include <alphamap_fragment>\ndiffuseColor.a*=smoothstep(0.,.19,min(markUV.x,1.-markUV.x))*smoothstep(0.,.055,min(markUV.y,1.-markUV.y));');
+ };
  marks.count=0;marks.frustumCulled=false;marks.instanceMatrix.setUsage(T.DynamicDrawUsage);scene.add(marks);
  const pose=new T.Object3D(),trail=new Float64Array(22).fill(NaN);let markIndex=0;
- const previous:string[]=[],last=new Float64Array(22).fill(-100);let before=-1,index=0;
+ const impactTime=new Float64Array(22).fill(-1);
+ const ribbons=new T.InstancedMesh(new T.PlaneGeometry(1,1,1,6),new T.MeshBasicMaterial({color:'#dce7ef',transparent:true,opacity:.15,depthWrite:false,side:T.DoubleSide}),44);
+ ribbons.count=0;ribbons.frustumCulled=false;scene.add(ribbons);
+ ribbons.material.onBeforeCompile=shader=>{
+  shader.vertexShader='varying vec2 st;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nst=uv;transformed.x+=.32*sin(uv.y*5.);transformed.z=.15*uv.y*uv.y;');
+  shader.fragmentShader='varying vec2 st;\n'+shader.fragmentShader.replace('#include <alphamap_fragment>','#include <alphamap_fragment>\ndiffuseColor.a*=sin(st.y*3.14159)*smoothstep(0.,.5,min(st.x,1.-st.x));');
+ };
+ const launchStation=new Float64Array(22).fill(NaN),corner=cornerService(0,0);
+ const previous:string[]=[],last=new Float64Array(22).fill(-100);let before=-1,index=0,used=0;
  function emit(d:number,x:number,time:number,vx:number,vz:number,size:number,dust:number){
-  puffs[index]={d,x,time,vx,vz,size,dust,seed:(index*17.73)%91};index=(index+1)%capacity;
+  used=Math.min(capacity,used+1);const puff=puffs[index];puff.d=d;puff.x=x;puff.time=time;puff.vx=vx;puff.vz=vz;puff.size=size;puff.dust=dust;index=(index+1)%capacity;
  }
- return {update(r:RenderRace,height:number){
-  if(before>r.time||r.time-before>2){puffs.length=0;index=0;last.fill(-100);previous.length=0;trail.fill(NaN);marks.count=0;markIndex=0;}
+ return {update(r:RenderRace,height:number,highQuality=true){
+  ribbons.count=0;
+  if(before>r.time||r.time-before>2){used=0;index=0;launchStation.fill(NaN);last.fill(-100);previous.length=0;trail.fill(NaN);marks.count=0;markIndex=0;}
   before=r.time;material.uniforms.pixelHeight.value=height;
   for(let i=0;i<2+(r.field?.length??0);i++){
    const car=i===0?r.cars.a:i===1?r.cars.b:r.field![i-2];
    const pit=car.pit??'none',exit=pit==='exit'&&previous[i]==='stopped';previous[i]=pit;
+   if(pit==='stopped')launchStation[i]=car.distance;
+   const launch=pit==='exit'&&Math.abs(car.distance-launchStation[i])<3;
    const velocity=car.speed,lateral='lateralVelocity' in car?car.lateralVelocity??0:0;
    const slip=pit==='none'&&(('lockup' in car&&(car.lockup??0)>.12)||Math.abs(lateral)>3.3||('throttle' in car&&(car.throttle??0)>.85&&velocity>3&&velocity<14));
    const dirt=pit==='none'&&Math.abs(car.offset)>track.trackHalfWidth(car.distance)+.6;
-   if((slip||dirt)&&velocity>2){
+   if(highQuality&&car.lastImpact?.source==='BARRIER'&&r.time-car.lastImpact.time<.32&&impactTime[i]!==car.lastImpact.time){
+    impactTime[i]=car.lastImpact.time;
+    for(let j=0;j<10;j++)emit(car.distance-j*.13,car.offset,r.time,Math.sin(j)*.7,velocity*.15,.31+j*.036,.27);
+   }
+   if(highQuality&&'acceleration' in car&&(car.acceleration??0)<-18&&!slip&&r.time-last[i]>.12){
+    for(const side of [-1,1])emit(car.distance+1.55,car.offset+side*.81,r.time,side*.4,velocity*.46,.14,2);
+    last[i]=r.time;
+   }
+   if(highQuality&&velocity>48&&(r.control?.wetness??0)>.32){
+    for(const side of [-1,1]){
+     const d=car.distance-3.8,p=track.pointAt(d,car.offset+side*.77),t=track.tangentAt(d);
+     pose.position.set(p.x,heightAt(d)+.89,p.z);pose.rotation.set(-Math.PI/2,Math.atan2(t.x,t.z),0,'YXZ');
+     pose.scale.set(.065,2.6,1);pose.updateMatrix();ribbons.setMatrixAt(ribbons.count++,pose.matrix);
+    }
+   }
+   if((slip||dirt||launch)&&velocity>(launch?.1:2)){
     const axle='lockup' in car&&(car.lockup??0)>.12?1.55:-2.05;
-    if(r.time-last[i]>.068){
+    if(!launch&&r.time-last[i]>.068){
      for(const side of [-1,1])for(let lobe=0;lobe<3;lobe++){
       const wobble=Math.sin(r.time*17+lobe*2+i);
       emit(car.distance+axle-lobe*.19,car.offset+side*(.81+.043*wobble),r.time,
@@ -72,18 +103,20 @@ export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>nu
    const seconds='pitTime' in car?(car.pitTime??0):2.6-('service' in car?car.service??0:0);
    const clock=serviceClock({distance:car.distance,pitTime:seconds,totalStop:'totalStop' in car?car.totalStop:2.6});
    for(const [j,w] of wheelStations.entries()){
-    const stage=cornerService(clock,j);
+    const stage=cornerService(clock,j,corner);
     if(stage.gun>.62&&((clock>.2&&clock<.67)||(clock>1.62&&clock<2.04))){
-     emit(car.distance+w.z,car.offset-w.x,r.time,-Math.sign(w.x)*.78,.2,.18,.23);last[i]=r.time;
+     emit(car.distance+w.z,car.offset-w.x,r.time,-Math.sign(w.x)*2.1,.18,.12,3);
+     emit(car.distance+w.z,car.offset-w.x,r.time,-Math.sign(w.x)*.66,.07,.085,2);last[i]=r.time;
     }
    }
   }
   let n=0;
-  for(const puff of puffs){const age=r.time-puff.time;if(age<0||age>1.25)continue;
+  for(let i=0;i<used;i++){const puff=puffs[i],age=r.time-puff.time;const life=puff.dust===3?.23:puff.dust===2?.58:1.25;if(age<0||age>life)continue;
    const d=puff.d+puff.vz*(-Math.expm1(-age*2.4)/2.4),p=track.pointAt(d,puff.x+puff.vx*age);
-   pos.setXYZ(n,p.x,heightAt(d)+.16+age*(.58+.004*puff.seed),p.z);
-   attrib.setXYZW(n++,puff.size+age*.98,.46*(.25+.75*Math.min(1,age/.044))*(1-age/1.25)**1.4,puff.dust,puff.seed+age*.29);
+   pos.setXYZ(n,p.x,heightAt(d)+(puff.dust>=2?.36:.16)+age*(.58+.004*puff.seed),p.z);
+   attrib.setXYZW(n++,puff.size+age*.98,.46*(.25+.75*Math.min(1,age/.044))*(1-age/life)**1.4,puff.dust,puff.seed+age*.29);
   }
+  ribbons.visible=ribbons.count>0;if(ribbons.count)ribbons.instanceMatrix.needsUpdate=true;
   geo.setDrawRange(0,n);mesh.visible=n>0;if(n){pos.needsUpdate=true;attrib.needsUpdate=true;}
- },dispose(){marks.removeFromParent();marks.material.dispose();marks.geometry.dispose();marks.dispose();mesh.removeFromParent();geo.dispose();material.dispose();}};
+ },dispose(){ribbons.removeFromParent();ribbons.geometry.dispose();ribbons.material.dispose();ribbons.dispose();marks.removeFromParent();marks.material.dispose();marks.geometry.dispose();marks.dispose();mesh.removeFromParent();geo.dispose();material.dispose();}};
 }

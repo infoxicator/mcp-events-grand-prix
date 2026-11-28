@@ -1,5 +1,6 @@
 // Compare two Vite checkouts with identical state, camera, exposure and frame times.
 // Run with node scripts/visual-acceptance.mjs <origin> <output-directory>.
+import sharp from 'sharp';
 import {captureOptics} from './capture-optics.mjs';
 import {installStripMeter} from './strip-photometry.mjs';
 import {chromium} from '@playwright/test';
@@ -20,7 +21,8 @@ try{
   if(process.env.REVIEW_METER)await page.addInitScript(installStripMeter);
   if((process.env.OPTICS_SEAT??process.env.REVIEW_POOL_SEAT)==='b')await page.addInitScript(()=>history.replaceState(null,'','?subject=b'));
   await page.goto(origin+'/visual-review');
-  await page.evaluate(async id=>{
+  if(process.env.REVIEW_PHASE4)await page.evaluate(()=>history.replaceState(null,'','?cameraDebug'));
+  await page.evaluate(async ([id,quality])=>{
    const mod=n=>import('/src/race/'+n+'.ts');
    const source=await fetch('/src/race/scene.ts').then(r=>r.text());
    const T=await import(source.match(/from ["']([^"']*\/three\.js[^"']*)["']/)[1]);
@@ -28,8 +30,16 @@ try{
    const {opponents}=await mod('grid');
    const {applyHazard}=await mod('race-control');
    const {kerbHeight,wheelStations}=await mod('suspension');
-   const track=getTrack(id),v=document.querySelector('#v'),scene=createScene(v,track);
+   const track=getTrack(id),v=document.querySelector('#v'),scene=createScene(v,track,quality);
    window.prepareStripMeter?.(T);
+   let brakingProof=false,brakeDust=0;
+   const pointsDrawn=T.Points.prototype.onAfterRender;
+   T.Points.prototype.onAfterRender=function(renderer,world,camera,...args){
+    pointsDrawn.call(this,renderer,world,camera,...args);
+    if(!brakingProof||camera.name!=='Race camera')return;
+    const puff=this.geometry.getAttribute('puff');
+    if(puff)for(let i=0;i<this.geometry.drawRange.count;i++)if(puff.getZ(i)===2)brakeDust++;
+   };
    const after=T.Scene.prototype.onAfterRender;
    T.Scene.prototype.onAfterRender=function(renderer,world,camera){
     after.apply(this,arguments);
@@ -73,7 +83,11 @@ try{
      }else state.field=[];
      if(name==='finish-brake')Object.assign(state.cars.a,{acceleration:-24,brake:1});
     }
-    if(name==='skid-sparks'){base(4300,92);state.field=[];state.cars.b.distance-=48;}
+    if(name==='safety-review'){
+     base(3500,38);applyHazard(state,track,{kind:'safety-car',when:'now'});
+     state.field=[];
+    }
+    if(name==='skid-sparks'){base(id==='las-vegas'?3110:4300,92);state.field=[];state.cars.b.distance-=48;}
     if(name.startsWith('flank-')||name==='wing-print'){
      base(800,0);state.field[0].distance=840;state.field[0].offset=0;
     }
@@ -86,12 +100,15 @@ try{
      const i=Number(name.split('-')[1]);state.field[i].distance=840;state.field[i].offset=0;
     }
     if(name==='wet-reflections'){
-     base(3510,54);state.cars.b.distance+=27;
+     base(id==='monza'?735:3510,54);state.cars.b.distance+=27;
      applyHazard(state,track,{kind:'rain',level:'heavy'});
      Object.assign(state.control,{wetness:.94,sectorWetness:[.94,.94,.94]});
     }
+    const scenic={banking:3520,'recovery-stand':1010,plaza:track.LENGTH-200,aggregate:765,'kerb-edge':962,gridline:0};
+    if(name in scenic)base(scenic[name],0);
     if(name==='lap')base(0,73);
     if(name==='approach'||name==='braking-smoke'||name.startsWith('load-'))base(779,73);
+    if(name==='brake-dust'){base(779,73);state.field=[];state.cars.b.distance=500;}
     if(name.startsWith('load-')){
      state.field=[];Object.assign(state.cars[seat],{distance:779,offset:0});
      state.cars[seat==='a'?'b':'a'].distance=400;
@@ -148,8 +165,27 @@ try{
     }
     window.drawShot=(f,steering=0)=>{
      const r=script[Math.min(f,script.length-1)],a=r.cars.a,b=r.cars.b;
+     brakingProof=name==='brake-dust';brakeDust=0;
      lock=null;
-     if(name==='finish-wall'){
+     if(name==='banking'){mode('detail');lock=[pt(3490,3,2.2),pt(3520,1,6.2),60];}
+     else if(name==='recovery-stand'){mode('detail');lock=[pt(992,18,3.0),pt(1010,43,2.6),52];}
+     else if(name==='kerb-edge'){mode('detail');lock=[pt(958,7,1.9),pt(967,10.2,.08),60];}
+     else if(name==='plaza'){mode('detail');lock=[pt(a.distance+70,-4,7),pt(a.distance,-27,8),54];}
+     else if(name==='gridline'){mode('detail');lock=[pt(-18,5,4),pt(1,0,.2),56];}
+     else if(name==='aggregate'){mode('detail');lock=[pt(765,6.2,.69),pt(766.3,6.4,.015),55];}
+     else if(name==='grandstand'){
+      const d=track.LENGTH-(id==='monza'?160:110),off=id==='monza'?35:22;
+      r.phase='finished';mode('detail');lock=[pt(d+5,off-9,4),pt(d,off+3,3.5),45];
+     }else if(name==='marshal-post'){
+      const st=track.CORNERS[0].d+63;mode('detail');
+      const off=24+8*Math.cos(Math.PI*63/144)+3.2;
+      r.control={...r.control,marshalSignal:'BLUE'};lock=[pt(st+2.8,off-2.3,2.17),pt(st,off,1.71),48];
+     }else if(name==='giant-tv'){
+      mode('detail');lock=[pt(1520+3,-26,6.7),pt(1520,-40,6.9),41];
+     }else if(name==='safety-review'){
+      const sc=r.control.safetyCar,d=sc.distance;
+      mode('detail');lock=[pt(d+5.4,sc.offset-4.1,1.42),pt(d,sc.offset,.64),37];
+     }else if(name==='finish-wall'){
       mode('detail');lock=[pt(a.distance+3.9,a.offset+4.7,1.05),pt(a.distance,a.offset,.52),39];
      }else if(name==='finish-brake'){
       mode('detail');lock=[pt(a.distance+2.19,a.offset-2.74,.65),pt(a.distance+1.55,a.offset-.85,.36),27];
@@ -192,7 +228,9 @@ try{
      }else if(name==='steer'||name==='steer-flag'){r.cars[seat].steering=steering;mode('cockpit-'+seat);}
      else if(name==='rettifilo'||name==='lap'||name==='onboard')mode(name==='onboard'?'cockpit-b':'tcam-'+seat);
      else if(name==='helmet'){mode('detail');lock=[pt(a.distance+1.6,a.offset+.7,1.38),pt(a.distance-.27,a.offset,.79),32];}
-     else if(name==='braking-smoke'){
+     else if(name==='brake-dust'){
+      mode('detail');lock=[pt(a.distance+3.5,a.offset+4.3,.78),pt(a.distance+.5,a.offset,.36),34];
+     }else if(name==='braking-smoke'){
       mode('chase');lock=[pt(a.distance-14,a.offset+4.8,1.62),pt(a.distance-3,a.offset,.54),46];
      }else if(name==='approach'){
       mode('chase');lock=[pt(a.distance-7,a.offset+1.5,2.8),pt(a.distance+23,a.offset,.8),59];
@@ -246,7 +284,7 @@ try{
      }
      const driver=r.cars[seat],cs=Math.cos(driver.heading),sn=Math.sin(driver.heading);
      const kerb=name.startsWith('load-')?Math.max(...wheelStations.map(w=>kerbHeight(track,driver.distance+w.z*cs-w.x*sn,driver.offset-w.x*cs-w.z*sn))):undefined;
-     return {projected,kerb,driverStation:driver.distance,brake:driver.brake,lateralG:driver.lateralG,offset:driver.offset,tick:r.tick,station:a.distance,steering:driver.steering,damage:a.damage??[0,0,0,0],service:a.pit,gear:driver.gear,ready:scene.info.modelsReady,error:scene.info.modelError};
+     return {projected,kerb,...(brakingProof?{brakeDust}:{}),reflectionWidth:scene.info.reflectionWidth,bloomWidth:scene.info.bloomWidth,stormSky:scene.info.stormSkyActive,spray:scene.info.sprayPackets,driverStation:driver.distance,brake:driver.brake,lateralG:driver.lateralG,offset:driver.offset,tick:r.tick,station:a.distance,steering:driver.steering,damage:a.damage??[0,0,0,0],service:a.pit,gear:driver.gear,ready:scene.info.modelsReady,safetyReady:scene.info.safetyCarReady,error:scene.info.modelError};
     };
     return script.length;
    };
@@ -285,7 +323,8 @@ try{
    window.studio=async()=>{
     scene.dispose();v.replaceChildren();const renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(1920,1080);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;renderer.shadowMap.enabled=true;v.appendChild(renderer.domElement);
     const [{createShowroom},{createCar},{liveryAtlas}]=await Promise.all(['showroom','car-model','liveries'].map(mod));
-    const room=createShowroom(renderer),atlas=liveryAtlas(),cars={a:createCar('a',track,atlas),b:createCar('b',track,atlas)};
+    const studioMorph=source=>{const geometry=source.clone();geometry.userData.shared=false;return geometry;};
+    const room=createShowroom(renderer),atlas=liveryAtlas(),cars={a:createCar('a',track,atlas,studioMorph),b:createCar('b',track,atlas,studioMorph)};
     await Promise.all(Object.values(cars).map(c=>c.loaded));
     if(!await room.contactReady)throw Error('Could not load the studio floor contact map');
     const camera=new T.PerspectiveCamera(36,16/9,.06,100);
@@ -309,7 +348,7 @@ try{
      renderer.render(room.scene,camera);
     };
    };
-  },circuit);
+  },[circuit,process.env.REVIEW_PHASE4?'high':'auto']);
   const start=(name,seat,angle)=>page.evaluate(([n,s,a])=>window.startShot(n,s,a),[name,seat,angle]);
   const capture=(frame,steering=0,quality=.90)=>page.evaluate(([f,s,q])=>{
    const meta=window.drawShot(f,s);
@@ -343,6 +382,24 @@ try{
     await writeFile(out+'/hero-a-'+angle+'.jpg',Buffer.from(bytes,'base64'));
    }
   };
+  if(process.env.REVIEW_PHASE4){
+   const names=circuit==='monza'?['front','rettifilo','aggregate','kerb-edge','gridline','banking','recovery-stand','wet-reflections']:['strip','plaza','finish-sphere','giant-tv','wet-reflections'];
+   for(const name of names){
+    await start(name);
+    if(name==='wet-reflections')await page.evaluate(()=>{for(let f=0;f<60;f+=2)window.drawShot(f);});
+    await still(circuit+'-'+name,name==='wet-reflections'?60:['front','rettifilo','strip'].includes(name)?110:0);
+   }
+   await writeFile(out+'/shots.json',JSON.stringify(manifest,null,2));
+   await page.close();if(errors.length)throw Error(errors.join('\n'));continue;
+  }
+  if(process.env.REVIEW_PIT_TRACKSIDE){
+   for(const name of circuit==='monza'?['grandstand','marshal-post']:['grandstand','giant-tv']){
+    await start(name);await still(circuit+'-'+name);
+   }
+   if(circuit==='monza'){await start('steer','b');await still('steer-b-centre');}
+   await writeFile(out+'/trackside-shots.json',JSON.stringify(manifest,null,2));
+   await page.close();if(errors.length)throw Error(errors.join('\n'));continue;
+  }
   if(process.env.REVIEW_FINISHING){
    const shots=circuit==='monza'?{'finish-wall':'monza-pitwall-car','finish-brake':'brake-glow-gradient','finish-cockpit':'cockpit-gloves-lcd','finish-aerial':'monza-aerial-turf'}:{'finish-sphere':'vegas-sphere-led','finish-strip':'vegas-strip-night'};
    const render=async(name,angle)=>{
@@ -400,6 +457,42 @@ try{
     await clip('steer-'+seat,181,f=>capture(f,.42*Math.sin(f*Math.PI/90)));
     await start('steer-flag',seat);await still('steer-'+seat+'-yellow',0);
    }
+  }
+  if(process.env.REVIEW_CAR_STILLS){
+   if(circuit==='monza'){
+    await start('brake-dust');await page.evaluate(()=>{for(let f=23;f<36;f++)window.drawShot(f);});await still('brake-dust',36);
+    if(!manifest.stills['brake-dust'].brakeDust)throw Error('No brake dust rendered during controlled braking');
+    for(const seat of ['a','b']){
+     await start('steer',seat);await still('steer-'+seat+'-centre');
+     // At this fixed lens the lower third of each glass sees asphalt.
+     const sample=sharp(out+'/steer-'+seat+'-centre.jpg');
+     for(const x of [46,1824]){
+      const sky=await sample.clone().extract({left:x,top:409,width:35,height:5}).raw().toBuffer();
+      const road=await sample.clone().extract({left:x,top:438,width:35,height:7}).raw().toBuffer();
+      const mean=data=>data.reduce((sum,value)=>sum+value,0)/data.length;
+      if(mean(sky)-mean(road)<15)throw Error('Missing road/horizon in mirror at '+x+' for '+seat);
+     }
+     await still('steer-'+seat+'-left',0,-.42);
+    }
+    for(const side of ['left','right']){await start('flank-'+side);await still('field-'+side);}
+    for(const name of ['front','rettifilo']){await start(name);await still('monza-'+name,110);}
+    await start('wing-print');await still('field-wing-print');
+    await start('impact-left');await still('impact-left',57);
+    await start('finish-brake');await page.evaluate(()=>{for(let f=0;f<28;f++)window.drawShot(f);});await still('brake-rotor',28);
+    await page.evaluate(()=>window.studio());
+    for(const [seat,angle] of [['a','diffuser'],['a','halo'],['a','front'],['b','front']]){
+     const bytes=await page.evaluate(([s,a])=>{window.hero(s,a,'colour');return window.pixels('image/jpeg',.96);},[seat,angle]);
+     await writeFile(out+'/hero-'+seat+'-'+angle+'.jpg',Buffer.from(bytes,'base64'));
+    }
+   }else{
+    await start('safety-review');await page.waitForFunction(()=>{const frame=window.drawShot(0);if(frame.error)throw Error(frame.error);return frame.safetyReady;});await still('safety-car',4);
+    await start('skid-sparks');await still('bottoming-sparks');
+    await start('strip');await still('las-vegas-strip',110);
+    await start('wet-reflections');await page.evaluate(()=>{for(let f=0;f<60;f+=2)window.drawShot(f);});
+    await still('las-vegas-wet-reflections',60);
+   }
+   await writeFile(out+'/shots.json',JSON.stringify(manifest,null,2));
+   await page.close();if(errors.length)throw Error(errors.join('\n'));continue;
   }
   if(process.env.REVIEW_TRACK_POLISH){
    await start('pack');await still(circuit+'-pack');

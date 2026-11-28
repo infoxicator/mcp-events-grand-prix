@@ -265,27 +265,55 @@ interface Packet {
 }
 interface Source {x:number;y:number;z:number;yaw:number;remainder:number[]}
 
-function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,night:boolean,budget:number){
- const sheets=treadSheets(scene,night);
+// Each flashing rain lamp paints one elongated additive footprint on the wet film.
+function rainLightReflections(scene:T.Scene){
+ const geometry=new T.PlaneGeometry(1,1);
+ geometry.rotateX(-Math.PI/2);
+ const material=new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,
+  uniforms:{water:{value:0}},
+  vertexShader:'varying vec2 glowUV;void main(){glowUV=uv;gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.);}',
+  fragmentShader:`varying vec2 glowUV;uniform float water;void main(){
+   float width=.08+.42*glowUV.y;
+   float core=exp(-4.*pow((glowUV.x-.5)/width,2.));
+   float fade=sin(glowUV.y*3.14159)*exp(-2.*glowUV.y);
+   gl_FragColor=vec4(1.,.014,.006,core*fade*water*.84);
+  }`});
+ const mesh=new T.InstancedMesh(geometry,material,24),pose=new T.Object3D();
+ mesh.frustumCulled=false;mesh.visible=false;mesh.count=0;scene.add(mesh);
+ return {begin(water:number){mesh.count=0;mesh.visible=false;material.uniforms.water.value=water;},
+  add(x:number,y:number,z:number,yaw:number){
+   if(mesh.count>=24)return;
+   pose.position.set(x,y+.064,z);pose.rotation.y=yaw;pose.scale.set(.96,1,3.5);
+   pose.updateMatrix();mesh.setMatrixAt(mesh.count++,pose.matrix);
+   mesh.visible=true;mesh.instanceMatrix.needsUpdate=true;
+  },dispose(){mesh.dispose();mesh.removeFromParent();material.dispose();geometry.dispose();}};
+}
+
+function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,night:boolean,budget:number,lights:readonly T.SpotLight[]){
+ const sheets=treadSheets(scene,night),glows=rainLightReflections(scene);
+ const diffuser={x:0,z:-2.38};
  const geometry=billboards();
  const centers=new T.InstancedBufferAttribute(new Float32Array(budget*4),4).setUsage(T.DynamicDrawUsage);
  const profiles=new T.InstancedBufferAttribute(new Float32Array(budget*4),4).setUsage(T.DynamicDrawUsage);
  geometry.setAttribute('centreRadius',centers);geometry.setAttribute('profile',profiles);
- const material=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{mist:{value:new T.Color(night?'#a4b3c6':'#d0d4d5')}},
+ const material=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{mist:{value:new T.Color(night?'#a4b3c6':'#d0d4d5')},lamp:{value:lights[0]?.position??new T.Vector3()}},
   vertexShader:`
    attribute vec4 centreRadius,profile;
+   varying float scatter;uniform vec3 lamp;
    varying vec2 patchUV;
    varying vec3 density;
    void main(){
     vec4 eye=viewMatrix*vec4(centreRadius.xyz,1.);
     float fade=smoothstep(.25,1.3,-eye.z);
+    vec3 lightDir=${night?'normalize(lamp-centreRadius.xyz)':'normalize(vec3(-80.,89.,-50.))'};
+    scatter=pow(max(0.,dot(normalize(centreRadius.xyz-cameraPosition),lightDir)),3.);
     eye.xy+=position.xy*centreRadius.w*vec2(1.,profile.x);
     gl_Position=projectionMatrix*eye;
     patchUV=position.xy;
     density=vec3(profile.y*fade,profile.zw);
    }`,
   fragmentShader:`
-   uniform vec3 mist;
+   uniform vec3 mist;varying float scatter;
    varying vec2 patchUV;
    varying vec3 density;
    float hash(vec2 p){return fract(sin(dot(p,vec2(71.17,39.73)))*4375.54);}
@@ -299,7 +327,7 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
     float falloff=max(0.,1.-dot(patchUV,patchUV));
     float alpha=density.x*falloff*smoothstep(.12,.84,billow+falloff*.25);
     float glow=max(0.,-density.z);
-    gl_FragColor=vec4(mist*(.82+.26*billow)+vec3(.62,.009,.004)*glow,alpha);
+    gl_FragColor=vec4(mist*(.82+.26*billow)+vec3(.49,.39,.22)*scatter+vec3(.29,.009,.004)*glow,alpha*smoothstep(-1.,-.24,patchUV.y));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
    }`});
@@ -307,8 +335,8 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
  const live:Packet[]=[],free:Packet[]=[],sources=new Map<number,Source>(),random=randomSequence();
  let lastTime:number|undefined;
  let immersion=0;
- function clear(){immersion=0;sheets.begin(0,0);while(live.length)free.push(live.pop()!);sources.clear();geometry.instanceCount=0;mesh.visible=false;}
- function update(race:RenderRace,camera:T.Vector3,water:number){
+ function clear(){immersion=0;sheets.begin(0,0);glows.begin(0);while(live.length)free.push(live.pop()!);sources.clear();geometry.instanceCount=0;mesh.visible=false;}
+ function update(race:RenderRace,camera:T.Vector3,water:number,seconds:number){
   const time=race.time,dt=time-(lastTime??time);
   lastTime=time;
   if(dt<0||dt>2||race.phase!=='racing'||water<=0){clear();if(race.phase!=='racing'||water<=0)return;}
@@ -317,11 +345,16 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
    if(time-live[i].born<live[i].life)continue;
    const expired=live[i],last=live.pop()!;if(i<live.length)live[i]=last;free.push(expired);
   }
-  sheets.begin(time,water);
+  sheets.begin(time,water);glows.begin(water);
   function emit(id:number,car:{distance:number;speed:number;offset:number;finishTime?:number|null;pit?:string;steering?:number},heading:number,stations:readonly {x:number;z:number}[]=wheelStations){
    const p=track.pointAt(car.distance,car.offset),y=heightAt(car.distance);
-   if(car.finishTime!=null||car.pit==='stopped'||car.speed<2||Math.hypot(camera.x-p.x,camera.z-p.z)>235){sources.delete(id);return;}
+   if(car.finishTime!=null||Math.hypot(camera.x-p.x,camera.z-p.z)>235){sources.delete(id);return;}
    const tangent=track.tangentAt(car.distance),yaw=Math.atan2(tangent.x,tangent.z)+heading;
+   const flashing=id<0?seconds%.25<.115:(time*4+id*.373)%1<.46;
+   if(stations===wheelStations&&water>.08&&flashing){
+    glows.add(p.x-4.14*Math.sin(yaw),heightAt(car.distance-4.14),p.z-4.14*Math.cos(yaw),yaw);
+   }
+   if(car.speed<2||car.pit==='stopped'){sources.delete(id);return;}
    if(stations===wheelStations&&Math.hypot(camera.x-p.x,camera.z-p.z)<55){
     const sn=Math.sin(yaw),cs=Math.cos(yaw);
     for(const [index,w] of wheelStations.entries()){
@@ -331,13 +364,13 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
     }
    }
    let prev=sources.get(id);
-   if(!prev){prev={x:p.x,y,z:p.z,yaw,remainder:wheelStations.map(()=>random())};sources.set(id,prev);return;}
+   if(!prev){prev={x:p.x,y,z:p.z,yaw,remainder:[random(),random(),random(),random(),random()]};sources.set(id,prev);return;}
    const drive=clamp((car.speed-2)/68,0,1.35);
    const turn=Math.atan2(Math.sin(yaw-prev.yaw),Math.cos(yaw-prev.yaw));
    const teleport=Math.hypot(p.x-prev.x,p.z-prev.z)>Math.max(8,dt*125);
-   for(let i=0;i<4&&!teleport;i++){
-    const w=stations[i],rear=w.z<0;
-    const rate=(rear?55:44)*Math.sqrt(water)*drive;
+   for(let i=0;i<(stations===wheelStations?5:4)&&!teleport;i++){
+    const central=i===4,w=central?diffuser:stations[i],rear=w.z<0;
+    const rate=(central?70:rear?48:40)*Math.sqrt(water)*drive;
     const amount=rate*dt+prev.remainder[i],count=Math.floor(amount);
     for(let j=0;j<count&&live.length<budget;j++){
      const age=(amount-1-j)/rate;
@@ -352,10 +385,10 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
      packet.forwardX=sn;packet.forwardZ=cs;
      packet.kick=car.speed*(.36+.30*random());
      packet.out=side*(rear?.55:1.15)*(1+drive)*(random()+.65);
-     packet.lift=(rear?2.25:1.15)*(.65+drive)*(.52+random())*(.65+.65*water);
-     packet.born=time-age;packet.life=life;packet.width=.075+.08*random();
+     packet.lift=(central?4.5:rear?2.25:1.15)*(.65+drive)*(.52+random())*(.65+.65*water);
+     packet.born=time-age;packet.life=life;packet.width=(central?.26:.075)+.08*random();
      packet.spread=(rear?1.72:.60)*(.62+random())*(.65+water)*(.6+.5*drive);
-     packet.alpha=(rear?.34:.44)*(.38+.62*water)*(.65+random()*.5);
+     packet.alpha=(central?.28:rear?.29:.38)*(.38+.62*water)*(.65+random()*.5);
      packet.seed=random()*94;
      if(rear&&Math.floor((time-age)*4)%2===0)packet.seed=-packet.seed;
      live.push(packet);
@@ -386,14 +419,14 @@ function tyreSpray(scene:T.Scene,track:Track,heightAt:(station:number)=>number,n
    for(const a of [centers,profiles]){a.clearUpdateRanges();a.addUpdateRange(0,live.length*4);a.needsUpdate=true;}
   }
  }
- return {update,clear,get immersion(){return immersion;},get count(){return geometry.instanceCount;},dispose(){sheets.dispose();mesh.removeFromParent();geometry.dispose();material.dispose();}};
+ return {update,clear,get immersion(){return immersion;},get count(){return geometry.instanceCount;},dispose(){glows.dispose();sheets.dispose();mesh.removeFromParent();geometry.dispose();material.dispose();}};
 }
 
 export function createRaceWeather(scene:T.Scene,track:Track,heightAt:(d:number)=>number,embedded:boolean,lights:readonly T.SpotLight[]){
  const rainBudget=embedded?4200:8000;
  const beads=onboardBeads();
  const drops=rainfall(scene,rainBudget,track.night);
- const spray=tyreSpray(scene,track,heightAt,track.night,embedded?3600:6200);
+ const spray=tyreSpray(scene,track,heightAt,track.night,embedded?3600:6200,lights);
  const previous=new T.Vector3(),velocity=new T.Vector3();
  let lastWall=-1,previousShot='',rainTime=0;
  return {update(race:RenderRace,camera:T.PerspectiveCamera,mode:string,seconds:number,reducedMotion:boolean,pixelsHigh:number){
@@ -418,7 +451,7 @@ export function createRaceWeather(scene:T.Scene,track:Track,heightAt:(d:number)=
   if(drops.mesh.visible)lights.forEach((lamp,i)=>{
    drops.uniforms.lamps.value[i].set(lamp.position.x,lamp.position.y,lamp.position.z,lamp.intensity/1050);
   });
-  if(mode==='showroom')spray.clear();else spray.update(race,camera.position,water);
+  if(mode==='showroom')spray.clear();else spray.update(race,camera.position,water,seconds);
   beads.update(onboard,cut,rain*.72+spray.immersion*.8,car.speed,clamp(dt,0,.2),camera.aspect,reducedMotion?rain:null);
   return rain;
  },renderLens:beads.render,get beads(){return beads.count;},get drops(){return drops.geometry.instanceCount;},get spray(){return spray.count;},dispose(){beads.dispose();drops.dispose();spray.dispose();}};

@@ -114,7 +114,7 @@ it('carries the tyre print through every pose and releases the outer cover in th
    }
    const tyre=transforms('Rubber');
    expect(tyre).toHaveLength(1);
-   expect(transforms('CompoundInk')).toEqual(tyre);
+   expect(gltf.nodes.some(node=>node.name===wheel+'_CompoundInk')).toBe(false);
    // The dish has a rotated local frame. Compare how far each part travels.
    const distance=(m:number[])=>Math.hypot(m[3],m[7],m[11]);
    const coverTravel=transforms('WheelDish').map(distance).sort((a,b)=>a-b);

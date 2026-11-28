@@ -12,14 +12,17 @@ export function pitHoses(){
  }
  const geometry=new T.BufferGeometry().setAttribute('position',position).setAttribute('normal',normal);
  geometry.setIndex(indices);
- const material=new T.MeshLambertMaterial({color:'#282a2b'});
- const mesh=new T.Mesh(geometry,material);mesh.name='Wheel gun air lines';mesh.frustumCulled=false;
+ const material=new T.MeshStandardMaterial({color:'#282a2b',roughness:.52,metalness:.15});
+ const mesh=new T.Mesh(geometry,material);mesh.name='Wheel gun air lines';mesh.frustumCulled=false;mesh.castShadow=import.meta.env.MCP_APP!=='true';
  const curve=new T.CubicBezierCurve3(),centre=new T.Vector3(),axis=new T.Vector3(),u=new T.Vector3(),v=new T.Vector3();
  const before=new T.Vector3();
  const angles=Array.from({length:sides},(_,j)=>[Math.cos(j*2*Math.PI/sides),Math.sin(j*2*Math.PI/sides)]);
- return {mesh,connect(index:number,outlet:T.Vector3,gun:T.Vector3,side:number){
+ const trailing=Array.from({length:4},()=>new T.Vector3()),times=new Float64Array(4).fill(-Infinity);
+ return {mesh,connect(index:number,outlet:T.Vector3,gun:T.Vector3,side:number,time:number){
   curve.v0.copy(outlet);curve.v1.copy(outlet);curve.v1.y-=1.22;
-  curve.v2.copy(gun);curve.v2.x+=side*.53;curve.v2.y-=.34;curve.v2.z-=.14;curve.v3.copy(gun);
+  const dt=time-times[index],follow=trailing[index];times[index]=time;
+  if(dt<0||dt>.3)follow.copy(gun);else follow.lerp(gun,-Math.expm1(-dt*13));
+  curve.v2.copy(follow);curve.v2.x+=side*.53;curve.v2.y-=.34;curve.v2.z-=.14;curve.v3.copy(gun);
   for(let row=0;row<=steps;row++){
    const t=row/steps;curve.getPoint(t,centre);
    curve.getPoint(Math.max(0,t-.0001),before);

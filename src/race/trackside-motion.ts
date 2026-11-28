@@ -2,20 +2,33 @@ import * as T from 'three';
 
 /** Skin the Blender instances in the vertex shader. All parts of a seated
  * person have the same instance origin, so skin, clothes and cap share a pose. */
-export function tracksideMotion(){
+export function tracksideMotion(night:boolean){
  const clock={value:0},carA={value:new T.Vector2()},carB={value:new T.Vector2()};
- const green={value:new T.Vector2()},finish={value:0},yellow={value:0};
+ const green={value:new T.Vector2()},finish={value:0},flag={value:new T.Color()},waveFlag={value:0},safetyBoard={value:0};
  function bind(material:T.MeshStandardMaterial){
-  const name=material.name,seated=name.startsWith('Spectator')||name.startsWith('Seated');
+  const name=material.name,seated=name==='PitWallEngineer'||name.startsWith('Spectator')||name.startsWith('Seated');
   const marshal=name==='MarshalUniform'||name==='FinishUniform';
+  if(['SafetyBoard','GrandstandFlag'].includes(name)){
+   material.onBeforeCompile=shader=>{
+    Object.assign(shader.uniforms,{actorTime:clock,safetyBoard});
+    shader.vertexShader='uniform float actorTime,safetyBoard;\n'+shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+     #ifdef USE_INSTANCING
+      vec3 origin=(modelMatrix*instanceMatrix[3]).xyz;
+      ${name==='GrandstandFlag'?'transformed.z+=uv.x*.12*sin(actorTime*4.9+origin.x+uv.x*6.);':'transformed*=safetyBoard;'}
+     #endif`);
+   };
+   material.customProgramCacheKey=()=>'track-prop-'+name;return;
+  }
   if(!seated&&!name.endsWith('Uniform'))return;
   if(material.userData.articulated)return;
   material.userData.articulated=true;
   material.onBeforeCompile=shader=>{
-   Object.assign(shader.uniforms,{actorTime:clock,actorCarA:carA,actorCarB:carB,greenLaps:green,finishSignal:finish,yellowFlag:yellow});
+   Object.assign(shader.uniforms,{actorTime:clock,actorCarA:carA,actorCarB:carB,greenLaps:green,finishSignal:finish,marshalFlag:flag,waveFlag});
    const deform=seated?`
     float torso=smoothstep(.19,.55,p.y);
-    float cheer=nearby*smoothstep(.88,.98,sin(actorTime*.93+seed*47.));p.y+=.071*torso*cheer;
+    float pass=min(distance(origin.xz,actorCarA),distance(origin.xz,actorCarB));
+    float cheer=max(finishSignal,(1.-smoothstep(15.,90.,pass))*(.5+.5*sin(pass*.09-actorTime*4.)));
+    ${name==='PitWallEngineer'?'':'p.y+=nearby*torso*(.19*cheer+.20*finishSignal);p.z-=.085*torso*cheer;'}
     yawPart(p,n,vec3(0.,.52,.018),nod*.31*torso+headTurn*uv.y);
     lean(p,n,vec3(0.,.20,0.),nod*torso);
    `:`
@@ -57,12 +70,35 @@ export function tracksideMotion(){
      vec3 actorPosition=position;tracksidePose(actorPosition,objectNormal);`)
     .replace('#include <begin_vertex>','vec3 transformed=actorPosition;');
    if(marshal&&name!=='FinishUniform'){
-    shader.vertexShader='uniform float yellowFlag;\n'+shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+    shader.vertexShader='uniform vec3 marshalFlag;uniform float waveFlag;\n'+shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
     #ifdef USE_COLOR
-    if(uv.x>.86){vColor.rgb=mix(vColor.rgb,vec3(.98,.71,.035),yellowFlag);}
-    #endif`).replace('float swing=mix','signal=max(signal,yellowFlag);float swing=mix');
+    if(uv.x>.86){vColor.rgb=marshalFlag;}
+    #endif`).replace('float swing=mix','signal=max(signal,waveFlag);float swing=mix');
    }
-   if(seated)shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+   if(night&&(name==='MarshalUniform'||name==='PitCrewUniform')){
+    shader.vertexShader='varying float reflectiveTape;\n'+shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+     reflectiveTape=0.;
+     #ifdef USE_COLOR
+      if(color.g>color.r && color.g>.52 && position.y<1.29)reflectiveTape=1.;
+     #endif`);
+    shader.fragmentShader='varying float reflectiveTape;\n'+shader.fragmentShader.replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
+     #if NUM_SPOT_LIGHTS > 0
+      if(reflectiveTape>.01){
+       vec3 eye=normalize(vViewPosition);
+       float retro=0.;
+       for(int i=0;i<NUM_SPOT_LIGHTS;i++){
+        vec3 lightDir=normalize(spotLights[i].position+vViewPosition);
+        retro=max(retro,pow(max(0.,dot(eye,lightDir)),16.));
+       }
+       reflectedLight.directDiffuse*=1.+reflectiveTape*retro*2.8;
+      }
+     #endif`);
+   }
+   if(name==='GarageUniform'||name==='PitWallEngineer')shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+    #if defined(USE_INSTANCING_COLOR) && defined(USE_COLOR)
+     if(${name==='PitWallEngineer'?'uv.x>.1':'uv.y<.5'})vColor.rgb=color.rgb;
+    #endif`);
+   if(seated&&name!=='PitWallEngineer')shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
     #if defined(USE_INSTANCING) && defined(USE_COLOR)
      vec2 seat=(modelMatrix*instanceMatrix[3]).xz;
      float hue=fract(sin(dot(seat,vec2(.861,1.97)))*4375.8);
@@ -80,13 +116,14 @@ export function tracksideMotion(){
      }
      else if(region<2.5)vColor.rgb*=mix(vec3(.22,.18,.16),vec3(2.7,2.3,1.85),hue);
      else if(region>3.5)vColor.rgb*=mix(vec3(.18,.22,.3),vec3(.66,.84,1.),hue);
-     if(region<.5&&tone>.95){float flash=smoothstep(.996,.999,sin(actorTime*1.71+tone*85.));vColor.rgb+=vec3(2.8)*flash;}
+     if(region>2.5&&region<3.5&&tone>.95){float flash=smoothstep(.996,.999,sin(actorTime*1.71+tone*85.));vColor.rgb+=vec3(2.8)*flash;}
     #endif`);
   };
   material.customProgramCacheKey=()=>'trackside-'+(marshal?name:seated?'spectator':'crew');
  }
- return {bind,update(time:number,a:T.Vector3,b:T.Vector3,openingA:boolean,openingB:boolean,finished:boolean,caution=false){
+ return {bind,update(time:number,a:T.Vector3,b:T.Vector3,openingA:boolean,openingB:boolean,finished:boolean,signal:string){
   clock.value=time;carA.value.set(a.x,a.z);carB.value.set(b.x,b.z);
-  green.value.set(+openingA,+openingB);finish.value=+finished;yellow.value=+caution;
+  green.value.set(+openingA,+openingB);finish.value=+finished;waveFlag.value=Number(signal!=='GREEN');safetyBoard.value=Number(signal==='SC'||signal==='VSC');
+  flag.value.setHex(signal==='GREEN'?0x18bd55:signal==='BLUE'?0x347bff:signal==='RED'?0xfe3324:signal==='WHITE'?0xffffff:0xffd02b);
  }};
 }

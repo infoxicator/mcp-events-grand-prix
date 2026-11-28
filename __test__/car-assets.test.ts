@@ -187,3 +187,23 @@ it('prints the near and distant AI rear flaps upright from behind on both faces'
  });
  expect(teams).toEqual({Field:11,Far:11});
 });
+
+it('ships sidewall markings on the tyre surface and metric cowling UVs at both LODs',async()=>{
+ for(const level of ['high','low']){
+  const {scene}=await loadCar(readFileSync(new URL('../src/race/assets/jgp26-'+level+'.glb',import.meta.url)));
+  for(const corner of ['FrontL','FrontR','RearL','RearR']){
+   expect(scene.getObjectByName(corner+'_CompoundInk')).toBeUndefined();
+   expect(scene.getObjectByName(corner+'_Rubber')).toBeTruthy();
+  }
+  const cover=scene.getObjectByName('Chassis_TwoToneCover')!;
+  let outside=0;
+  cover.traverse(node=>{
+   if(!(node instanceof Mesh))return;
+   const uv=node.geometry.getAttribute('uv');
+   for(let i=0;i<uv.count;i++){
+    if(uv.getX(i)<-.01||uv.getX(i)>1.01||uv.getY(i)<-.01||uv.getY(i)>1.01)outside++;
+   }
+  });
+  expect(outside).toBeGreaterThan(100);
+ }
+});

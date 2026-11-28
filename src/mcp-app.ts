@@ -1,6 +1,6 @@
 import {STRATEGY_EVENT} from './race/strategy-events';
 import {App,applyDocumentTheme,applyHostStyleVariables,applyHostFonts,type McpUiHostContext} from '@modelcontextprotocol/ext-apps';
-import {prepareDriveCircuit,cancelPreparedCircuit} from './race/circuit-model';
+import {prepareRaceCircuit,cancelPreparedCircuit} from './race/circuit-model';
 import {prepareEmbeddedRace} from './race/scene';
 import {mountRace} from './race/ui';
 import type {SendDriverQuestion} from './race/driver-radio';
@@ -473,7 +473,7 @@ function structuredFromText(result:Result):Result['structuredContent']{
 async function applyResult(result:Result,options:{collapseMenu?:boolean;autoStart?:boolean}={}){
  if(disposed)return;
  if(result.isError)throw new Error(result.content?.filter(c=>c.type==='text').map(c=>c.text).join(' ')||'Unable to join race');
- if(result._meta?.['jev-grand-prix/telemetry']===true)telemetry=true;
+ if(result._meta?.['jev-grand-prix/telemetry']===true){telemetry=true;cancelPreparedCircuit();}
  // Hosts that drop structuredContent may still pass it as the JSON text block the model saw.
  if(!result.structuredContent)result={...result,structuredContent:structuredFromText(result)};
  syncFormFromStructuredContent(result.structuredContent);
@@ -565,8 +565,8 @@ async function openLink(url:string){
 app.onhostcontextchanged=context;
 app.ontoolinput=input=>{
  if(!hosted)status.textContent='MCP connected · Preparing race setup…';
- if(!hosted&&input.arguments?.driver==='human'&&!document.hidden){
-  const night=input.arguments.circuit==='las-vegas';prepareEmbeddedRace(night);prepareDriveCircuit(night);
+ if(!hosted&&(input.arguments?.driver==='human'||input.arguments?.driver==='autopilot')&&!document.hidden){
+  const night=input.arguments.circuit==='las-vegas';prepareEmbeddedRace(night);prepareRaceCircuit(night);
  }
 };
 // Which parts of a tool result reached the view (key names only), shown when setup can't unlock.

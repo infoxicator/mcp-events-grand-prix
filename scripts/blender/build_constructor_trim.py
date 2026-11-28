@@ -274,6 +274,11 @@ for left,right,low,high,support in [(-.58,.58,.75,1.43,False),(-.41,-.37,0,.78,T
         v.append((x,y,.016 if support else 0));uv.append((.02,.98) if support else (1-u,t))
         colors.append((.19,.19,.19,1) if support else (1,1,1,1))
     faces.append(tuple(range(start,start+4)))
+# Blank reverse face sits behind the driver-facing print.
+start=len(v)
+for x,y in [(-.58,.75),(.58,.75),(.58,1.43),(-.58,1.43)]:
+    v.append((x,y,.018));colors.append((.20,.21,.20,1));uv.append((.02,.98))
+faces.append(tuple(range(start,start+4)))
 part('RulesBoard',v,faces,colors);geo=bpy.data.meshes['RulesBoard'];art=geo.uv_layers.new(name='Board')
 for loop in geo.loops:art.data[loop.index].uv=uv[loop.vertex_index]
 with tempfile.TemporaryDirectory() as tmp:

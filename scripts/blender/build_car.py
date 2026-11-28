@@ -94,6 +94,8 @@ def wing(name,span,z,y,chord,m,parent=body,sweep=.15,lift=.05,side=0,root_width=
  v=[];f=[];nx,n=(28 if side else 48),12
  if name.startswith('Front'):
   nx,n=(30 if side else 54),17
+ elif name.startswith('Beam wing'):
+  nx,n=8,5
  elif name in ('Rear main plane','DRS flap'):
   nx,n=42,10
  section=[]
@@ -145,7 +147,7 @@ def text(label,pos,size,m=silver,rotation=(0,0,0),parent=body):
  cu=bpy.data.curves.new('Mark '+label,'FONT');cu.body=reference_lettering.get(label,label);cu.font=brandfont;cu.align_x='CENTER';cu.align_y='CENTER';cu.size=size;cu.shear=.14 if label in ['44','63','NEXUS'] else 0;cu.extrude=0;cu.fill_mode='FRONT';cu.offset=.0006 if len(label)==1 else 0;cu.resolution_u=2
  o=bpy.data.objects.new('Mark '+label,cu);bpy.context.collection.objects.link(o);o.location=pos;o.rotation_euler=rotation;o.data.materials.append(m);o.parent=parent;return o
 dish=mat('WheelDish','1a1e20',.185,.43);brake=mat('BrakeDisc','565859',.63,.45);sleeve=mat('Sleeve','60212b',.9)
-secondary=mat('DeepLivery','56091f',.33,.17);tyreink=mat('CompoundInk','b6b2a4',.78)
+secondary=mat('DeepLivery','56091f',.33,.17)
 mirror=mat('Mirror','b8c4cc',.08,.9)
 # Thin floor and sculpted venturi channels, curled edge rails, rear diffuser.
 floor=group('Floor');floor.parent=body
@@ -444,8 +446,21 @@ for s in [-1,1]:
  text('ION',(s*.38,.61,-.2),.058,black,(0,s*math.pi/2,0))
 # Halo carbon arch, centre pillar, camera pod.
 build_halo(mesh, interp, carbon, metal, black, rod)
-box('T camera',(0,1.15,-.72),(.28,.042,.058),carbon,r=.012)
-rod('Camera pedestal',(0,1.09,-.72),(0,1.14,-.72),.022)
+box('T camera',(0,1.15,-.72),(.28,.042,.058),mat('Camera ID','181921',.46),r=.012)
+panel('Camera pedestal',[(0,1.087,-.766),(0,1.142,-.745),(0,1.145,-.695),(0,1.089,-.684)],.025,carbon)
+rod('Pitot probe',(0,.39,2.08),(0,.476,2.09),.005,metal,vertices=8)
+rod('Pitot inlet',(0,.476,2.085),(0,.476,2.15),.003,metal,vertices=8)
+for side in [-1,1]:
+ pod=ellipsoid('FOM nose camera',(side*.173,.399,1.43),(.077,.027,.081),carbon,seg=14,rings=8)
+ rod('Camera lens',(side*.201,.399,1.495),(side*.201,.399,1.503),.012,black,vertices=12)
+ panel('Mirror aero vane',[(side*.731,.681,.302),(side*.756,.685,.332),(side*.741,.699,.407),(side*.719,.690,.391)],.009,carbon)
+ rod('Floor edge stay',(side*.48,.346,-1.42),(side*.862,.129,-1.54),.005,metal,vertices=8)
+ for z in [.30,.395]:
+  rod('Flush mirror screw',(side*.657,.731,z),(side*.657,.732,z),.0026,metal,vertices=8)
+ rod('Bib stay',(side*.134,.25,1.04),(side*.255,.100,.79),.006,carbon,vertices=8)
+ for z,y in [(2.54,.227),(2.37,.246)]:
+  mesh('Endplate outer diveplane',[(side*.810,y,z+.084),(side*.855,y+.014,z+.060),(side*.842,y+.039,z-.090),(side*.810,y+.032,z-.109)],[(0,1,2,3)],carbon)
+
 # Mainplane and two slotted flaps on either side of the nose.
 aero=mat('AeroLaminate','191e25',.52,.05)
 front_fence=mat('FrontFenceLaminate','15181f',.52,.05)
@@ -636,6 +651,8 @@ scale=shot['width']/shot['distance']
 stamp_flap(upper_foils[-1],(580,296,628,324),0)
 stamp_flap(lower_foils[-1],(672,311,724,351),1)
 # Rear wing, twin swan necks and active-aero actuator.
+wing('Beam wing lower',1.29,-2.32,.370,.216,carbon,sweep=.041,lift=.035)
+wing('Beam wing upper',1.31,-2.48,.437,.154,carbon,sweep=.025,lift=.033)
 wing('Rear main plane',1.58,-2.395,.762,.390,carbon,sweep=.026,lift=.041)
 wing('DRS flap',1.57,-.114,-.021,.283,carbon,flap,sweep=.021,lift=.036)
 rear_flap=bpy.data.objects['DRS flap']
@@ -989,6 +1006,10 @@ helmet_shell()
 helmet_band('Lower carbon binding',[.624,.638],carbon)
 helmet_band('Visor elastomer seal',[.737,.757,.80,.838],black,-1.51,1.51,.0016)
 helmet_band('Curved iridium glazing',[.746,.765,.795,.826],visor,-1.46,1.46,.0038)
+box('Visor lock tab',helmet_point(.748,0,.007),(.022,.014,.008),black,helmet,r=.002)
+for side in [-1,1]:
+ tab=ellipsoid('Tear-off pull tab',helmet_point(.794,side*1.22,.012),(.023,.008,.002),silver,helmet,12,6)
+ tab.rotation_euler.y=side*1.22
 helmet_band('Zylon brow reinforcement',[.825,.832,.843],carbon,-1.46,1.46,.0048)
 helmet_band('Rear aero stabiliser',[.808,.818],helmetink,1.9,math.tau-1.9,.019)
 helmet_band('Rear aero stabiliser root',[.819,.829],helmetink,1.9,math.tau-1.9,.009)
@@ -1173,6 +1194,11 @@ verts=[(x,y,z-0.00441*max(0.,min(1.,(.012-z)/.037))*(1-min(1.,abs(x-.019)/.24)**
 faces=[(4*i+j,4*i+(j+1)%4,4*i+(j+1)%4+4,4*i+j+4) for i in range(len(profile)-1) for j in range(4)]
 brow=mat('Wheel graphite brow','242527',.39,.15)
 bevel(mesh('Wheel visor brow',verts,faces,brow,steer),.0024,3)
+box('Recessed LED rail',(-.012,.060,-.035),(.137,.012,.004),black,steer,r=.002)
+for label,x,y in [('STRAT',.076,-.109),('DIFF',.0054,-.100),('BBAL',-.0569,-.114)]:
+ text(label,(x,y,-.023),.009,silver,(0,math.pi,0),steer)
+for side,label in [(-1,'N'),(1,'E')]:
+ text(label,(side*.289,.654,.020),.025,red,(-math.pi/2,0,math.pi),body)
 for x,y,w,h in [(-.012,.058,.161,.004),(-.012,-.034,.161,.004),(-.092,.012,.004,.093),(.068,.012,.004,.093)]:
  box('LCD bezel',(x,y,-.024),(w,h,.005),black,steer,r=.0016)
 wheel_ink=ink_material('VisorInk','steering-bank-ink.png')
@@ -1241,7 +1267,7 @@ for side in [-1,1]:
  rod('Headrest retaining pin',(side*.247,.646,-.226),(side*.247,.651,-.226),.007,metal,vertices=12)
 rod('Harness cam lock',(0,.421,-.25),(0,.436,-.25),.030,metal,occupant,24)
 box('Buckle release lever',(0,.438,-.25),(.049,.005,.012),red,occupant,r=.002)
-def suspension_blade(pickup,joint,front):
+def suspension_blade(pickup,joint,front,name="Carbon wishbone",scale=1):
  # Extruded carbon airfoil follows the suspension axis. Its chord always
  # faces the airflow, including the rearward wishbone and the opposite side.
  start,end=Vector(pickup),Vector(joint);axis=(end-start).normalized()
@@ -1252,14 +1278,14 @@ def suspension_blade(pickup,joint,front):
   centre=start.lerp(end,t)
   for k in range(samples):
    a=k*math.tau/samples;u=(1-math.cos(a))*.5
-   v=(centre+chord*((.48-u)*(.095 if front else .087)*section)
-      +thickness*(math.sin(a)*(.014-.008*u)*section))
+   v=(centre+chord*((.48-u)*(.095 if front else .087)*section*scale)
+      +thickness*(math.sin(a)*(.014-.008*u)*section*scale))
    vv.append(tuple(v))
  for row in range(5):
   for k in range(samples):
    a=row*samples+k;b=row*samples+(k+1)%samples;ff.append((a,b,b+samples,a+samples))
  ff.extend([tuple(reversed(range(samples))),tuple(range(5*samples,6*samples))])
- return mesh('Carbon wishbone',vv,ff,carbon)
+ return mesh(name,vv,ff,carbon)
 # Tyres with radial sidewall typography, dish covers and tiny fasteners.
 gunmetal=mat('Centrelock gunmetal','34383c',.26,.68)
 for front in [True,False]:
@@ -1279,10 +1305,29 @@ for front in [True,False]:
     box('Pickup clevis',pick,(.052,.036,.07),metal,r=.007)
     rod('Pickup bolt',(pick[0]-.03,pick[1],z+dz),(pick[0]+.03,pick[1],z+dz),.009,metal,vertices=6)
    ellipsoid('Upright spherical joint',(-s*.10,yy-.36,0),(.027,.022,.025),metal,knuckle)
-  rod('Suspension pushrod',(s*.138,.457 if front else .43,z+(-.29 if front else .29)),(ux,.25,z),.013)
-  rod('Steering trackrod',(s*.18,.33,z+.22),(ux,.34,z+.08),.009)
-  box('Brake duct scoop',(-s*.17,.03,.16),(.085,.13,.13),carbon,knuckle,r=.025)
-  box('Brake duct opening',(-s*.17,.04,.229),(.058,.087,.005),black,knuckle,r=.015)
+  for name,start,end,scale in [
+    ('Suspension pushrod',(s*.138,.457 if front else .43,z+(-.29 if front else .29)),(ux,.25,z),.56),
+    ('Steering trackrod',(s*.18,.33,z+.22),(ux,.34,z+.08),.41)]:
+   suspension_blade(start,end,front,name,scale)
+   axis=(Vector(end)-Vector(start)).normalized()
+   for rib in range(3):
+    centre=Vector(start)+axis*(.015+rib*.012)
+    rod('Pickup bellows',centre-axis*.004,centre+axis*.004,.021-rib*.002,rubber,vertices=8)
+  # A curved blade clears the tyre through full steering lock.
+  if front:
+   v=[];faces=[]
+   for j in range(11):
+    angle=-.67+j*.126
+    for dx,r in [(-.169,.377),(-.133,.389),(-.094,.385),(-.091,.380),(-.165,.371)]:
+     v.append((s*dx,r*math.cos(angle),r*math.sin(angle)))
+    if j:
+     for k in range(5):
+      a=(j-1)*5+k;b=(j-1)*5+(k+1)%5;faces.append((a,b,b+5,a+5))
+   mesh('Over wheel wake deflector',v,faces,carbon,knuckle)
+   panel('Deflector upright',[(-s*.166,.045,.04),(-s*.166,.37,.085),(-s*.166,.367,-.010),(-s*.166,.04,-.060)],.010,carbon,knuckle)
+  scoop=loft('Brake duct scoop',[[.105,-s*.178,.036,-.029,.081],[.17,-s*.182,.055,-.046,.095],[.233,-s*.187,.061,-.048,.101]],carbon,knuckle,n=12,power=.55)
+  for slot in range(3):
+   box('Brake duct channel',(-s*.187,-.023+slot*.046,.235),(.095,.031,.004),black,knuckle,r=.003)
   pivot=group(corner);pivot.location=(x,.36,z);wheelgroups.append(pivot)
   # Surface of revolution about X.
   def lathe(name,profile,m):
@@ -1322,31 +1367,12 @@ for front in [True,False]:
    rod('Centrelock spindle',(xx-side*.015,0,0),(xx+side*.012,0,0),.016,metal,knuckle,12)
    rod('Axle inspection cap',(xx+side*.018,0,0),(xx+side*.020,0,0),.012,yellow,pivot,16)
    lathe('Ventilated carbon brake rotor',[(xx-side*.07,.075),(xx-side*.07,.205),(xx-side*.083,.205),(xx-side*.083,.075)],brake)
-   box('Brake caliper',(xx-side*.092,.155,0),(.045,.09,.13),metal,knuckle,r=.012)
+   for half in [-1,1]:
+    box('Brake caliper jaw',(xx-side*(.089+.018*half),-.169,-.051),(.023,.061,.142),metal,knuckle,r=.007)
+   for rib in range(3):
+    box('Caliper bridge',(xx-side*.089,-.198,-.095+rib*.043),(.058,.015,.016),gunmetal,knuckle,r=.002)
    for j in range(12):
     a=j*math.tau/12;rod('Rotor cooling vein',(xx-side*.087,.09*math.cos(a),.09*math.sin(a)),(xx-side*.087,.20*math.cos(a+.05),.20*math.sin(a+.05)),.003,brake,pivot,5)
-   # The mould lettering remains white. Two partial ink arcs identify the
-   # fitted compound, with a gap at each of the two main sidewall wordmarks.
-   for arc in (0,math.pi):
-    # Twin printed rails enclose rectangular voids. Alternating half-width
-    # checks terminate each end, as on the outer wall in frame 010.
-    vv=[];ff=[]
-    def patch(start,end,inside,outside):
-     k=len(vv)
-     for ang,r in [(start,inside),(start,outside),(end,outside),(end,inside)]:
-      # The sidewall projection below seats each printed patch on the shoulder.
-      vv.append((side*w*.5,r*math.cos(ang+arc),r*math.sin(ang+arc)))
-     ff.append((k,k+1,k+2,k+3))
-    for j in range(20):
-     start=.85+j*.076;end=start+.076
-     if j<3 or j>=17:
-      r=.305+.015*(j%2)
-      patch(start,end,r,r+.015)
-     else:
-      patch(start,end,.305,.312)
-      patch(start,end,.328,.335)
-      patch(start,start+.027,.312,.328)
-    mesh('Compound sidewall ink',vv,ff,tyreink,pivot)
    for j in range(8):
     a=j*math.tau/8;rod('Cover fastener',(xx,.216*math.cos(a),.216*math.sin(a)),(xx+side*.003,.216*math.cos(a),.216*math.sin(a)),.002,metal,pivot,6)
 # Nose and front wing marks are projected on the final target meshes below.
@@ -1794,13 +1820,16 @@ mesh('Smooth carbon cockpit liner',vv,ff,mat('Cockpit liner','272d2a',.69,.025))
 # Their geometry is exported by Blender and protected with the other decals.
 from mathutils import Matrix
 halo_mesh=bpy.data.objects.get('Halo')
-for label,pos,size,right in [('NEXUS',(0,.980,.50),.030,(-1,0,0)),('AEROLAB',(-.292,.960,.105),.033,(0,0,-1)),('NEXUS',(.292,.960,.105),.037,(0,0,1)),('JGP',(-.274,.972,.305),.031,(-.24,0,-.97)),('JGP',(.274,.972,.305),.031,(-.24,0,.97))]:
- o=text(label,pos,size,silver,parent=decals)
- o.data.resolution_u=1  # Small markings need fewer curve subdivisions than body silhouettes.
- normal=Vector((0,1,0));r=Vector(right);up=normal.cross(r)
- o.rotation_euler=Matrix((r,up,normal)).transposed().to_euler()
- bpy.ops.object.select_all(action='DESELECT');o.select_set(True);bpy.context.view_layer.objects.active=o;bpy.ops.object.convert(target='MESH');o=bpy.context.object
- sw=o.modifiers.new('Halo mark conformity','SHRINKWRAP');sw.target=halo_mesh;sw.wrap_method='NEAREST_SURFACEPOINT';sw.offset=.0008;bpy.ops.object.modifier_apply(modifier=sw.name)
+halo_ink=ink_material('HaloInk','halo-strip.png')
+for row,(pos,right,width) in enumerate([((0,.980,.50),(-1,0,0),.078),((-.292,.960,.105),(0,0,-1),.115),((.292,.960,.105),(0,0,1),.085)]):
+ direction=Vector(right);across=Vector((0,1,0)).cross(direction)
+ def sample(u,v):
+  centre=Vector(pos)+direction*((u-.5)*width)+across*((.5-v)*.026)
+  hit,point,normal,_=halo_mesh.closest_point_on_mesh(centre)
+  return point+normal*(.0014 if normal.y>=0 else -.0014)
+ mark=print_grid('Halo transfer',halo_ink,sample,10,3,parent=body)
+ layer=mark.data.uv_layers['Printed ink']
+ for item in layer.data:item.uv.y=(2-row+item.uv.y)/3
 # Project the ink along the flank normal after all booleans and material
 # splits. This gives every letter the correct baseline on the curved wall.
 for mark in list(decals.children):
@@ -1819,13 +1848,13 @@ for pivot in wheelgroups:
  profile=[(.242,.5),(.266,.521),(.290,.525),(.321,.49),(.335,.487),(.349,.400),(.357,.34),(.361,.20)]
  bpy.context.view_layer.update()
  for o in pivot.children:
-  if o.type!='MESH' or not o.name.startswith(('Mark ','Sidewall segment','Compound sidewall ink')):continue
+  if o.type!='MESH' or not o.name.startswith(('Mark ','Sidewall segment')):continue
   transform=pivot.matrix_world.inverted()@o.matrix_world;inverse=transform.inverted()
   for vertex in o.data.vertices:
    pt=transform@vertex.co;r=math.hypot(pt.y,pt.z)
    for (r0,w0),(r1,w1) in zip(profile,profile[1:]):
     if r0<=r<=r1:
-     pt.x=math.copysign(width*(w0+(w1-w0)*(r-r0)/(r1-r0))+(.0019 if o.name.startswith('Compound sidewall ink') else .00065),pt.x)
+     pt.x=math.copysign(width*(w0+(w1-w0)*(r-r0)/(r1-r0))+.00065,pt.x)
      vertex.co=inverse@pt;break
   o.data.update()
 # Store assembly membership on the editable master so the inspection poses
@@ -1851,7 +1880,7 @@ inspection_roles={
  'impact':('Rear carbon impact casing','Rear casing fastener'),
  'suspension':('Carbon wishbone','Upright','Pickup clevis','Pickup bolt','Suspension pushrod',
                'Steering trackrod','Brake duct scoop','Brake duct opening'),
- 'wheel-cover':('Recessed black dish','Centre boss','Anodized bead seat','Swept rim vane','Rim lip','Centrelock','Locking collar','Axle inspection cap','Cover fastener','Compound sidewall ink','Slick tyre'),
+ 'wheel-cover':('Recessed black dish','Centre boss','Anodized bead seat','Swept rim vane','Rim lip','Centrelock','Locking collar','Axle inspection cap','Cover fastener','Slick tyre'),
  'front-main':('Front mainplane','Front signature'),
  'front-lower':('Front lower flap',),
  'front-upper':('Front upper flap','Front foil','Mark Marking on flap'),
@@ -1873,6 +1902,8 @@ for parent in list(groups.values()):
   if o.name=='DRS ram':batch='ActuatorRam'
   if o.name.startswith('Shift paddle'):batch='ShiftPaddle'+('Left' if sum(v.co.x for v in o.data.vertices)<0 else 'Right')
   if o.name.startswith('Front upper flap') and material=='Upper flap laminate':batch='MovingFlap'+('Left' if sum(v.co.x for v in o.data.vertices)<0 else 'Right')
+  if o.name.startswith('Front foil blue badge'):
+   batch='MovingFlapPrint'+('Left' if sum(v.co.x for v in o.data.vertices)<0 else 'Right')
   buckets.setdefault(batch,[]).append(o)
  for name,objects in buckets.items():
   bpy.ops.object.select_all(action='DESELECT')
@@ -1881,7 +1912,7 @@ for parent in list(groups.values()):
   bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
   bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT');bpy.ops.mesh.normals_make_consistent(inside=False);bpy.ops.object.mode_set(mode='OBJECT')
   # Generate metric UVs for a subtle carbon twill applied by the runtime.
-  if 'Carbon' in name or 'laminate' in name.lower() or name.startswith('MovingFlap') or name in ('RearAero','FloorFence','HaloComposite'):
+  if 'Carbon' in name or 'laminate' in name.lower() or name.startswith('MovingFlap') or name in ('RearAero','FloorFence','HaloComposite','TwoToneCover','Wheel graphite brow','Cockpit liner'):
    # Project each face on its dominant plane in car metres. Adjacent panels
    # retain the same physical weave scale regardless of their island size.
    uv=o.data.uv_layers.active or o.data.uv_layers.new(name='UVMap')

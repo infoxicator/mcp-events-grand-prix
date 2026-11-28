@@ -19,7 +19,7 @@ def pack(source,dest,positions=False):
     primitive.setdefault('extras',{})['inspectionPart']=f'{mi}/{pi}'
  # Actors rotate about pivots in Blender metres. Preserve that coordinate
  # system even when the exporter emits a single official as an ordinary node.
- actor_materials={'MarshalUniform','FinishUniform','PitCrewUniform'}
+ actor_materials={'MarshalUniform','FinishUniform','PitCrewUniform','GarageUniform'}
  instanced.update(mi for mi,m in enumerate(g['meshes']) if any(
   g['materials'][p['material']]['name'] in actor_materials for p in m['primitives'] if 'material' in p))
  position_mesh={p['attributes']['POSITION']:mi for mi,m in enumerate(g['meshes']) for p in m['primitives'] if mi not in instanced};transforms={};out=bytearray();quantized=False

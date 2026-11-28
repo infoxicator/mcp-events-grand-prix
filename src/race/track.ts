@@ -2,6 +2,8 @@
 import monzaGeo from '../../data/monza.json' with {type:'json'};
 import vegasGeo from '../../data/las-vegas.json' with {type:'json'};
 export type CircuitId='monza'|'las-vegas';
+// Filled by the MCP production build from this same survey and solver.
+declare const __MCP_RACING_LINES__:Record<CircuitId,readonly number[]>;
 export const isCircuit=(v:unknown):v is CircuitId=>v==='monza'||v==='las-vegas';
 export const CIRCUITS={monza:{name:'Monza',grandPrix:'ITALIAN GRAND PRIX',country:'ITALY',corners:11,night:false,temperature:28,coordinates:'45.6189° N / 9.2812° E'},'las-vegas':{name:'Las Vegas',grandPrix:'LAS VEGAS GRAND PRIX',country:'NEVADA / USA',corners:17,night:true,temperature:18,coordinates:'36.1099° N / 115.1612° W'}} as const;
 function buildTrack(id:CircuitId){
@@ -34,34 +36,66 @@ function sourceSample(distance:number){
 // This stays within the tarmac while removing sub-car-length curvature spikes.
 const smoothCount=Math.ceil(LENGTH/2),smoothStep=LENGTH/smoothCount;
 const rawPath=Array.from({length:smoothCount},(_,i)=>sourceSample(i*smoothStep));
-const smoothPath=rawPath.map((_,i)=>{let x=0,z=0,total=0;for(let j=-10;j<=10;j++){const w=Math.exp(-.5*(j*smoothStep/8)**2),p=rawPath[(i+j+smoothCount)%smoothCount];x+=p.x*w;z+=p.z*w;total+=w;}return {x:x/total,z:z/total};});
-function sample(distance:number){const u=wrap(distance)/smoothStep,i=Math.floor(u),t=u-i;
+const smoothing=Array.from({length:21},(_,i)=>Math.exp(-.5*((i-10)*smoothStep/8)**2));
+const smoothPath=rawPath.map((_,i)=>{let x=0,z=0,total=0;for(let j=-10;j<=10;j++){const w=smoothing[j+10],p=rawPath[(i+j+smoothCount)%smoothCount];x+=p.x*w;z+=p.z*w;total+=w;}return {x:x/total,z:z/total};});
+function sample(distance:number,out={x:0,z:0,tx:0,tz:0}){const u=wrap(distance)/smoothStep,i=Math.floor(u),t=u-i;
  const a=smoothPath[(i-1+smoothCount)%smoothCount],b=smoothPath[i],c=smoothPath[(i+1)%smoothCount],d=smoothPath[(i+2)%smoothCount];
  const interp=(a:number,b:number,c:number,d:number)=>.5*((2*b)+(-a+c)*t+(2*a-5*b+4*c-d)*t*t+(-a+3*b-3*c+d)*t*t*t);
  const derivative=(a:number,b:number,c:number,d:number)=>.5*((-a+c)+2*(2*a-5*b+4*c-d)*t+3*(-a+3*b-3*c+d)*t*t);
  const dx=derivative(a.x,b.x,c.x,d.x),dz=derivative(a.z,b.z,c.z,d.z),l=Math.hypot(dx,dz);
- return {x:interp(a.x,b.x,c.x,d.x),z:interp(a.z,b.z,c.z,d.z),tx:dx/l,tz:dz/l};
+ out.x=interp(a.x,b.x,c.x,d.x);out.z=interp(a.z,b.z,c.z,d.z);out.tx=dx/l;out.tz=dz/l;return out;
 }
-function pointAt(distance:number,offset=0){const p=sample(distance);return {x:p.x-p.tz*offset,z:p.z+p.tx*offset};}
-function tangentAt(d:number){const p=sample(d);return {x:p.tx,z:p.tz};}
-function signedCurvatureAt(d:number){const a=tangentAt(d-6),b=tangentAt(d+6);return Math.atan2(a.x*b.z-a.z*b.x,a.x*b.x+a.z*b.z)/12;}
+// Rendering often requests a position followed immediately by its track tangent.
+const sampled={x:0,z:0,tx:0,tz:0};let lastStation=NaN;
+function trackFrame(d:number){
+ if(d!==lastStation){sample(d,sampled);lastStation=d;}
+ return sampled;
+}
+function pointAt(distance:number,offset=0,out={x:0,z:0}){
+ const p=trackFrame(distance);out.x=p.x-p.tz*offset;out.z=p.z+p.tx*offset;return out;
+}
+function tangentAt(distance:number,out={x:0,z:0}){
+ const p=trackFrame(distance);out.x=p.tx;out.z=p.tz;return out;
+}
+function signedCurvatureAt(d:number){
+ const a=trackFrame(d-6),x=a.tx,z=a.tz,b=trackFrame(d+6);
+ return Math.atan2(x*b.tz-z*b.tx,x*b.tx+z*b.tz)/12;
+}
 function curvatureAt(d:number){return Math.abs(signedCurvatureAt(d));}
 function trackHalfWidth(d:number){const straight=Math.min(wrap(d),LENGTH-wrap(d));return 6+1.5*Math.max(0,1-straight/450);}
 // Bounded minimum-curvature line, relaxed in the local track normal. Agents choose
 // an offset from this path; the controller still has room to race side by side.
-const lineCount=Math.ceil(LENGTH/3),lineStep=LENGTH/lineCount,lineOffsets=new Float64Array(lineCount);
-const lineBase=Array.from({length:lineCount},(_,i)=>sample(i*lineStep));
-// Projected gradient of squared second differences (curvature), at several
-// spatial scales. Minimising path length instead would hug the inside and
-// tighten each apex, the opposite of a useful racing line.
-const curvatureWeights=[1,-4,6,-4,1];
-for(const stride of [8,4,2,1])for(let pass=0;pass<250;pass++)for(let i=0;i<lineCount;i++){
- const p=lineBase[i];let gx=0,gz=0;
- for(let k=0;k<curvatureWeights.length;k++){const weight=curvatureWeights[k],j=(i+(k-2)*stride+lineCount)%lineCount,q=lineBase[j];gx+=(q.x-q.tz*lineOffsets[j])*weight;gz+=(q.z+q.tx*lineOffsets[j])*weight;}
- const normal=-gx*p.tz+gz*p.tx;lineOffsets[i]=Math.max(-3.8,Math.min(3.8,lineOffsets[i]-.06*normal));
+const lineCount=Math.ceil(LENGTH/3),lineStep=LENGTH/lineCount;
+function solveRacingLine(){
+ const lineOffsets=new Float64Array(lineCount);
+ const lineBase=Array.from({length:lineCount},(_,i)=>sample(i*lineStep));
+ // Projected gradient of squared second differences (curvature), at several
+ // spatial scales. Minimising path length instead would hug the inside and
+ // tighten each apex, the opposite of a useful racing line.
+ const curvatureWeights=[1,-4,6,-4,1];
+ // The centreline and its normals remain fixed through all 250 relaxation passes.
+ const neighbours=new Uint32Array(lineCount*5),coupling=new Float64Array(lineCount*5),baseForce=new Float64Array(lineCount);
+ for(const stride of [8,4,2,1]){
+  for(let i=0;i<lineCount;i++){
+   const p=lineBase[i];let gx=0,gz=0;
+   for(let k=0;k<5;k++){
+    const j=(i+(k-2)*stride+lineCount)%lineCount,q=lineBase[j],weight=curvatureWeights[k];
+    neighbours[5*i+k]=j;coupling[5*i+k]=weight*(p.tx*q.tx+p.tz*q.tz);
+    gx+=weight*q.x;gz+=weight*q.z;
+   }
+   baseForce[i]=-p.tz*gx+p.tx*gz;
+  }
+  for(let pass=0;pass<250;pass++)for(let i=0;i<lineCount;i++){
+   let force=baseForce[i];
+   for(let k=5*i;k<5*i+5;k++)force+=coupling[k]*lineOffsets[neighbours[k]];
+   lineOffsets[i]=Math.max(-3.8,Math.min(3.8,lineOffsets[i]-.06*force));
+  }
+ }
+ // Fair the constrained path to avoid steering discontinuities at the lateral bounds.
+ const fairOffsets=new Float64Array(lineCount);for(let i=0;i<lineCount;i++){let sum=0,weight=0;for(let j=-8;j<=8;j++){const w=Math.exp(-.5*(j/3)**2);sum+=lineOffsets[(i+j+lineCount)%lineCount]*w;weight+=w;}fairOffsets[i]=sum/weight;}lineOffsets.set(fairOffsets);
+ return lineOffsets;
 }
-// Fair the constrained path to avoid steering discontinuities at the lateral bounds.
-const fairOffsets=new Float64Array(lineCount);for(let i=0;i<lineCount;i++){let sum=0,weight=0;for(let j=-8;j<=8;j++){const w=Math.exp(-.5*(j/3)**2);sum+=lineOffsets[(i+j+lineCount)%lineCount]*w;weight+=w;}fairOffsets[i]=sum/weight;}lineOffsets.set(fairOffsets);
+const lineOffsets=typeof __MCP_RACING_LINES__==='undefined'?solveRacingLine():__MCP_RACING_LINES__[id];
 function racingLineOffset(d:number){const u=wrap(d)/lineStep,i=Math.floor(u),t=u-i;return lineOffsets[i]*(1-t)+lineOffsets[(i+1)%lineCount]*t;}
 function racingCurvature(d:number){const a=pointAt(d-6,racingLineOffset(d-6)),b=pointAt(d,racingLineOffset(d)),c=pointAt(d+6,racingLineOffset(d+6));const ab=Math.hypot(b.x-a.x,b.z-a.z),bc=Math.hypot(c.x-b.x,c.z-b.z),ac=Math.hypot(c.x-a.x,c.z-a.z);return 2*((b.x-a.x)*(c.z-a.z)-(b.z-a.z)*(c.x-a.x))/Math.max(.01,ab*bc*ac);}
 // Corner/sector positions digitized against the 2025 FIA Monza map.

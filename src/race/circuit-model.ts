@@ -1,5 +1,7 @@
 import {batchCircuit,batchDistantInstances} from './embedded-batches';
 import {MeshResources} from './mesh-resources';
+import {constructors} from './grid';
+import {pitBox,type Constructor} from './pit-service';
 import {wetRoad} from './wet-road';
 import {circuitSignals} from './circuit-signals';
 import vegasSurvey from './assets/circuits/las-vegas-manifest.json';
@@ -22,7 +24,7 @@ import {circuitHeight} from './elevation';
 import canopyLightURL from './assets/circuits/monza-canopy-light.png?url';
 import asphaltNormal from './assets/asphalt-normal.webp?url';
 import type {Track} from './track';
-// Transfer a selected Drive venue to its first scene. An abandoned invitation
+// Transfer the selected venue to its first scene. An abandoned invitation
 // releases the parsed buffers and decoded bitmaps even if parsing is in flight.
 type PreparedCircuit={night:boolean;controller:AbortController;loaded:ReturnType<typeof embeddedGLB>;timer:number};
 let prepared:PreparedCircuit|undefined;
@@ -31,7 +33,7 @@ export function cancelPreparedCircuit(){
  prepared=undefined;clearTimeout(entry.timer);entry.controller.abort();
  void entry.loaded.then(asset=>new MeshResources().collect(asset.scene).dispose(),()=>{});
 }
-export function prepareDriveCircuit(night:boolean){
+export function prepareRaceCircuit(night:boolean){
  if(prepared?.night===night)return;
  cancelPreparedCircuit();
  const controller=new AbortController(),loaded=embeddedGLB(night?vegasMcp:monzaMcp,true,controller.signal);
@@ -77,18 +79,19 @@ function lakeReflection(bounds:T.Box3,cadence:()=>number){
 }
 /** All geometry is authored/exported by Blender. This loader only configures PBR and culling. */
 export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceWater={value:0},multiDraw=false){
+ const embedded=import.meta.env.MCP_APP==='true';
  let ready=false,error:string|undefined,disposed=false;
  const loadingAssets=new AbortController();
  const heightAt=(d:number)=>circuitHeight(track.id,d);
- const people=tracksideMotion();
+ const people=tracksideMotion(!!track.night);
  const sp=track.project(-115.1621,36.1207),spherePosition=new T.Vector3(sp.x,32.9184,sp.z);
  let sphereShow:ReturnType<typeof createSphereShow>|undefined;
  const normal=new T.TextureLoader().load(asphaltNormal);normal.colorSpace=T.NoColorSpace;normal.flipY=false;normal.wrapS=normal.wrapT=T.RepeatWrapping;normal.anisotropy=anisotropy;
  const canopyLight=track.night?null:new T.TextureLoader().load(canopyLightURL);
  if(canopyLight){canopyLight.flipY=false;canopyLight.colorSpace=T.NoColorSpace;}
  const shadowPatch={value:new T.Vector3()},puddles=wetRoad(),signals=circuitSignals(scene,track,heightAt),animation={value:0};
- const gravelNormal=new T.TextureLoader().load(rakedURL),waterNormal=new T.TextureLoader().load(waterURL);
- for(const t of [gravelNormal,waterNormal]){t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=anisotropy;}
+ const terrainNormal=new T.TextureLoader().load(track.night?waterURL:rakedURL);
+ terrainNormal.wrapS=terrainNormal.wrapT=T.RepeatWrapping;terrainNormal.anisotropy=anisotropy;
  const data=new Uint8Array(1024*4);
  for(let i=0;i<1024;i++){
   const d=track.LENGTH*i/1024;data[4*i]=Math.round((track.racingLineOffset(d)+16)*255/32);
@@ -99,10 +102,18 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
  let circuitRoot:T.Group|undefined;
  let batches:T.BatchedMesh[]=[];
  let distantInstances:ReturnType<typeof batchDistantInstances>|undefined;
+ const wetMaterials:{material:T.MeshStandardMaterial;dry:number}[]=[];let lastWet=-1;
  const lakeBounds=new T.Box3();let reflection:Reflector|undefined;
- const distant:T.Mesh[]=[],casters:T.Mesh[]=[],receivers:T.Mesh[]=[];
- const circuitLods:T.LOD[]=[],detailCamera=new T.PerspectiveCamera();
+ const distant:T.Mesh[]=[],casters:T.Mesh[]=[],highCasters:T.Mesh[]=[],receivers:T.Mesh[]=[];
+ const detailProps:{mesh:T.InstancedMesh;stations:readonly {matrix:T.Matrix4}[];colors:T.Color[]|null;range:number}[]=[];
+ const lastPropCamera=new T.Vector3(Infinity,0,0);
+ const spectatorLods:T.LOD[]=[];let crowdRange=0;
+ const circuitLods:T.LOD[]=[];
  let manualDetail=false;
+ const previousCullCamera=new T.Vector3(Infinity,0,0),previousFocus=new T.Vector3();
+ let previousExtent=-1,previousBalanced=false,previousHigh=false,cullRevision=0;
+ const previousEye=new T.Vector3(Infinity,0,0);
+ let previousCamera:T.PerspectiveCamera|null=null,previousDetail=-1,previousRange=-1,previousCrowdLimit=-1,detailRevision=-1;
  const draco=import.meta.env.MCP_APP==='true'?null:new DRACOLoader().setDecoderPath({js:decoderJS,wasm:decoderWasm}).setWorkerLimit(2);
  const source=import.meta.env.MCP_APP==='true'?takeCircuit(!!track.night,loadingAssets.signal):gzipBytes(track.night?vegasURL:monzaURL,loadingAssets.signal).then(b=>new GLTFLoader().setDRACOLoader(draco!).parseAsync(b,''));
  const loaded=source.then(gltf=>{
@@ -129,9 +140,33 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   lodSources.forEach(o=>{o.removeFromParent();});
   const buckets=new Map<string,{mesh:T.Mesh;matrix:T.Matrix4}[]>(),sources:T.Mesh[]=[];
   gltf.scene.traverse(o=>{if(o instanceof T.Mesh&&(o instanceof T.InstancedMesh||o.name.startsWith('Instance_'))){sources.push(o);const count=o instanceof T.InstancedMesh?o.count:1;
-   for(let i=0;i<count;i++){const matrix=new T.Matrix4();if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);matrix.premultiply(o.matrixWorld);const p=new T.Vector3().setFromMatrixPosition(matrix),key=`${o.geometry.uuid}:${(o.material as T.Material).uuid}:${Math.floor(p.x/180)}:${Math.floor(p.z/180)}`;const group=buckets.get(key)??[];group.push({mesh:o,matrix});buckets.set(key,group);}
+   const name=(o.material as T.Material).name,tile=name==='Spectator0'?60:180;
+   const singleBatch=/^(SpareNoseRack|TyreBlanketRack|Photographer|GrandstandFlag|SafetyBoard)$/.test(name);
+   const prefix=o.geometry.uuid+':'+(o.material as T.Material).uuid+':';
+   for(let i=0;i<count;i++){
+    const matrix=new T.Matrix4();
+    if(o instanceof T.InstancedMesh)o.getMatrixAt(i,matrix);
+    matrix.premultiply(o.matrixWorld);
+    const x=matrix.elements[12],z=matrix.elements[14];
+    const key=singleBatch?prefix:prefix+Math.floor(x/tile)+':'+Math.floor(z/tile);
+    let group=buckets.get(key);
+    if(!group){group=[];buckets.set(key,group);}
+    group.push({mesh:o,matrix});
+   }
   }});
   for(const o of sources){let parent=o.parent;o.removeFromParent();while(parent&&parent!==gltf.scene&&parent.children.length===0){const next=parent.parent;parent.removeFromParent();parent=next;}}
+  const garages=(Object.keys(constructors) as Constructor[]).map(team=>({
+   position:track.pointAt(pitBox(track,team),-26.3),color:new T.Color(constructors[team][0]),
+  }));
+  function garageColor(matrix:T.Matrix4){
+   const x=matrix.elements[12],z=matrix.elements[14];
+   let nearest=garages[0],best=Infinity;
+   for(const garage of garages){
+    const distance=(garage.position.x-x)**2+(garage.position.z-z)**2;
+    if(distance<best){nearest=garage;best=distance;}
+   }
+   return nearest.color;
+  }
   for(const objects of buckets.values()){
    const first=objects[0].mesh,materialName=(first.material as T.Material).name,spectator=materialName==='Spectator0';
    if(spectator&&!first.geometry.boundingBox)first.geometry.computeBoundingBox();
@@ -139,32 +174,52 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
    const key=staff?'LOD_Staff'+materialName:spectator?'LOD_Grandstand'+(first.geometry.boundingBox!.max.y>1.15?'Standing':'Seated'):materialName;
    const farGeometry=farCrowns.get(key),batch=new T.InstancedMesh(first.geometry,first.material,objects.length);batch.name=first.name;
    if(farGeometry){
-    const centre=new T.Vector3();for(const o of objects)centre.add(new T.Vector3().setFromMatrixPosition(o.matrix));centre.divideScalar(objects.length);
+    const centre=new T.Vector3();
+    for(const {matrix} of objects){
+     centre.x+=matrix.elements[12];centre.y+=matrix.elements[13];centre.z+=matrix.elements[14];
+    }
+    centre.divideScalar(objects.length);
     const offset=new T.Matrix4().makeTranslation(-centre.x,-centre.y,-centre.z);
     const far=new T.InstancedMesh(farGeometry,first.material,objects.length),lod=new T.LOD();
     const horizonGeometry=farCrowns.get('LOD_Distant'+materialName);
     const horizon=horizonGeometry?new T.InstancedMesh(horizonGeometry,first.material,objects.length):null;
     far.name=first.name+'_far';
     objects.forEach((o,i)=>{
+     if(materialName==='GarageUniform'){
+      const color=garageColor(o.matrix);batch.setColorAt(i,color);far.setColorAt(i,color);
+     }
      const matrix=o.matrix.premultiply(offset);
      batch.setMatrixAt(i,matrix);far.setMatrixAt(i,matrix);horizon?.setMatrixAt(i,matrix);
     });
     batch.computeBoundingSphere();far.computeBoundingSphere();lod.position.copy(centre);
-    lod.addLevel(batch,0);lod.addLevel(far,staff?40:spectator?34:100,.15);
+    lod.addLevel(batch,0);lod.addLevel(far,staff?40:spectator?45:100,.15);
+    if(spectator){lod.userData.spectator=true;spectatorLods.push(lod);}
     if(horizon){horizon.name=first.name+'_horizon';horizon.computeBoundingSphere();lod.addLevel(horizon,290,.12);}
-    lod.addLevel(new T.Group(),staff?360:spectator?550:950,.1);gltf.scene.add(lod);circuitLods.push(lod);
-   }else{objects.forEach((o,i)=>batch.setMatrixAt(i,o.matrix));batch.computeBoundingSphere();gltf.scene.add(batch);}
+    lod.addLevel(new T.Group(),staff?360:spectator?550:950,.1);lod.autoUpdate=!manualDetail;gltf.scene.add(lod);circuitLods.push(lod);
+   }else{
+    objects.forEach((o,i)=>{
+     batch.setMatrixAt(i,o.matrix);
+     if(materialName==='GrandstandFlag')batch.setColorAt(i,new T.Color(!track.night&&i%5<3?'#db1732':constructors[(Object.keys(constructors) as Constructor[])[i%11]][0]));
+     if(materialName==='PitWallEngineer')batch.setColorAt(i,garageColor(o.matrix));
+    });
+    batch.computeBoundingSphere();gltf.scene.add(batch);
+    if(materialName==='Photographer'||materialName.endsWith('Rack')||(materialName==='GrandstandFlag'&&import.meta.env.MCP_APP==='true')){
+     const colors=batch.instanceColor?objects.map((_,i)=>{const color=new T.Color();batch.getColorAt(i,color);return color;}):null;
+     detailProps.push({mesh:batch,stations:objects,colors,range:materialName==='GrandstandFlag'?105:materialName==='Photographer'?150:120});
+    }
+   }
   }
   gltf.scene.updateMatrixWorld(true);
   // The authored circuit has fixed world transforms. Crowd, flags and LEDs
   // animate in shaders, and LOD changes only toggle visibility.
   gltf.scene.traverse(o=>{o.matrixAutoUpdate=false;o.matrixWorldAutoUpdate=false;});
   const configured=new Set<T.Material>();
-  gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;o.receiveShadow=false;o.castShadow=false;o.geometry.computeBoundingSphere();o.userData.cullCenter=(o instanceof T.InstancedMesh?o.boundingSphere!:o.geometry.boundingSphere!).center.clone().applyMatrix4(o.matrixWorld);
+  gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;o.receiveShadow=false;o.castShadow=false;if(!embedded||!o.geometry.boundingSphere)o.geometry.computeBoundingSphere();o.userData.cullCenter=(o instanceof T.InstancedMesh?o.boundingSphere!:o.geometry.boundingSphere!).center.clone().applyMatrix4(o.matrixWorld);
    const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){const m=material as T.MeshStandardMaterial;
     if(!/^(DistantRidge|CityGround|ParkHorizon|Upper|WarmWindows|Windows|Sphere|StreetLamp)/.test(m.name))o.receiveShadow=true;
     if(m.name.startsWith('Canopy')||m.name==='Trunk'||m.name==='Foliage')o.userData.foliageCaster=true;
-    if(['Concrete','White','Steel','Armco'].includes(m.name)||o.userData.foliageCaster)casters.push(o);
+    if(embedded?m.name==='Armco':['Concrete','White','Steel','Armco'].includes(m.name)||o.userData.foliageCaster)casters.push(o);
+    if(import.meta.env.MCP_APP!=='true'&&/^(RoofSheet|GarageFascia|WorkshopBack|GantryCarbon|Sponsor[0-3]|ImpactRed|ImpactIvory)$/.test(m.name))highCasters.push(o);
     if(['Fence','Crowd','Foliage','Trunk','Skin'].includes(m.name)||m.name.startsWith('Spectator')||m.name.startsWith('Seated'))distant.push(o);
     if(m.name==='Sphere'){
      const bounds=new T.Box3().setFromObject(o),centre=bounds.getCenter(new T.Vector3());
@@ -174,20 +229,23 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     if(m.name==='Water')lakeBounds.expandByObject(o);
     if(configured.has(m))continue;
     configured.add(m);
-    m.side=/^(Canopy|Fence|Sign$|Brake[0-9]|ParkHorizon|Marquee|GarageFascia|WorkshopBack|DistantRidge|Impact|Balustrade|Armco$)/.test(m.name)?T.DoubleSide:T.FrontSide;
+    m.side=/^(Canopy|Fence|BarrierPrint|Sign$|Brake[0-9]|ParkHorizon|Marquee|GarageFascia|WorkshopBack|DistantRidge|Impact|Balustrade|Armco$)/.test(m.name)?T.DoubleSide:T.FrontSide;
     people.bind(m);signals.bind(m);
-    if(m.name==='PaddockBanner')m.side=T.DoubleSide;
+    if(m.name==='GarageFloor'){m.roughness=.22;m.envMapIntensity=1.2;}
+    if(m.name==='TimingScreen'||m.name==='GrandstandFlag'||m.name==='SafetyBoard')m.side=T.DoubleSide;
+    if(m.name==='PaddockBanner'||m.name.startsWith('ItalianFlag'))m.side=T.DoubleSide;
     if(m.name==='Trunk'){
      m.onBeforeCompile=shader=>{
       shader.vertexShader='varying vec3 bark;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nbark=position;');
       shader.fragmentShader='varying vec3 bark;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+       diffuseColor.rgb*=mix(.52,1.,smoothstep(-.5,-.06,bark.z));
        float arc=atan(bark.y,bark.x),ridge=sin(arc*21.+.74*sin(bark.z*7.+arc*2.));
        diffuseColor.rgb*=1.+.32*ridge*(1.-smoothstep(.07,.18,fwidth(arc))); `);
      };
     }
     if(m.name==='PalmFrond')m.side=T.DoubleSide;
-    if(m.name==='Gravel'){m.normalMap=gravelNormal;m.normalScale.set(.54,.54);m.roughness=.98;m.metalness=0;}
-    if(m.name==='Water'){m.normalMap=waterNormal;m.normalScale.set(.23,.23);}
+    if(m.name==='Gravel'){m.normalMap=terrainNormal;m.normalScale.set(.24,.24);m.roughness=.98;m.metalness=0;}
+    if(m.name==='Water'){m.normalMap=terrainNormal;m.normalScale.set(.23,.23);}
     if(/^(Armco|Impact|Concrete)$/.test(m.name)){m.normalMap=normal;m.normalScale.set(.12,.12);if(m.map)m.roughnessMap=m.map;}
     if(/^(Canopy|PalmFrond|ItalianFlag|FlagCloth|Fountain|Roller)/.test(m.name)){
      const prior=m.onBeforeCompile,program=m.customProgramCacheKey(),name=m.name;
@@ -207,23 +265,40 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        vec4 w=modelMatrix*local;vec3 wp=w.xyz;${deform}
        #include <project_vertex>
        mvPosition.xyz+=mat3(viewMatrix)*(w.xyz-wp);gl_Position=projectionMatrix*mvPosition;`);
-     };m.customProgramCacheKey=()=>program+'-venue-'+name;
+     };m.customProgramCacheKey=()=>program+'-venue-'+(name.startsWith('Canopy')?'canopy':name);
     }
     if(m.map){m.map.anisotropy=anisotropy;m.map.wrapS=m.map.wrapT=T.RepeatWrapping;}
     if(track.night&&m.name==='Steel'){m.envMapIntensity=.92;m.roughness=.48;m.metalness=.55;}
-    if(track.night&&['White','Concrete','RunoffPaint','Red','Green'].includes(m.name))drySurfaces.add(m);
+    if(['White','Concrete','RunoffPaint','Red','Green','PitTarget','Armco'].includes(m.name))drySurfaces.add(m);
     if(m.name==='GarageFascia'){
      // Constructor numbers and names sit on the live bay board above this backing.
      m.map=null;m.emissiveMap=null;m.color.set('#24272a');m.emissive.set('#090a0b');
     }
     if(m.name==='Concrete'){m.color.set('#c3c1b8');m.bumpMap=m.map;m.bumpScale=.003;m.roughness=.89;m.metalness=0;m.envMapIntensity=.55;}
     if(m.name==='Asphalt'||m.name==='RepairCourse'){
-     m.color.set(m.name==='RepairCourse'?(track.night?'#62676b':'#5f6263'):(track.night?'#7f8081':'#777b7c'));m.normalMap=normal;m.normalScale.set(.14,.14);
-     m.roughness=m.name==='RepairCourse'?.68:track.night?.66:.91;m.metalness=.015;m.envMapIntensity=track.night?.95:.7;
+     m.color.set(m.name==='RepairCourse'?(track.night?'#62676b':'#5f6263'):(track.night?'#7f8081':'#777b7c'));m.normalMap=normal;m.normalScale.set(.26,.26);
+     m.roughness=m.name==='RepairCourse'?.68:track.night?.49:.88;m.metalness=.015;m.envMapIntensity=track.night?1.15:.74;
      // Physical aggregate at the original survey UV scale, plus broad,
      // non-repeating binder variation between the racing line and the verge.
-     m.onBeforeCompile=shader=>{
-      Object.assign(shader.uniforms,{puddleMatrix:puddles.matrix,puddleMap:puddles.image,puddleVisible:puddles.visible,puddleTime:puddles.clock});
+     if(embedded){
+      // Read the surveyed rubber line once. The albedo and normal tiles already
+      // carry the chip bed at the scale resolved by an iframe.
+      m.onBeforeCompile=shader=>{
+       shader.uniforms.surfaceWater=surfaceWater;shader.uniforms.courseLine={value:lineMap};
+       shader.vertexShader='varying vec2 roadMetres;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nroadMetres=uv*3.;');
+       shader.fragmentShader='varying vec2 roadMetres;uniform sampler2D courseLine;uniform float surfaceWater;\n'+shader.fragmentShader
+        .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+         vec2 line=texture2D(courseLine,vec2(fract(-roadMetres.y/${track.LENGTH.toFixed(3)}),.5)).rg;
+         float lateral=abs(roadMetres.x-(line.r*32.-16.))-.77;
+         float rubber=exp(-6.*lateral*lateral)*(.30+.65*line.g);
+         diffuseColor.rgb*=1.-.23*rubber;
+         diffuseColor.rgb*=1.-.40*surfaceWater;
+         roughnessFactor=mix(roughnessFactor-.085*rubber,.19,surfaceWater);
+        `);
+      };
+     }else m.onBeforeCompile=shader=>{
+      const planar=import.meta.env.MCP_APP!=='true';
+      if(planar)Object.assign(shader.uniforms,{puddleMatrix:puddles.matrix,puddleMap:puddles.image,puddleVisible:puddles.visible,puddleTime:puddles.clock});
       shader.uniforms.surfaceWater=surfaceWater;shader.uniforms.courseLine={value:lineMap};
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform mat4 puddleMatrix;varying vec4 puddleClip;varying vec2 pavementUV;')
        .replace('#include <begin_vertex>','#include <begin_vertex>\npavementUV=uv;puddleClip=puddleMatrix*modelMatrix*vec4(transformed,1.);');
@@ -248,24 +323,35 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
         float binder=resolvedNoise(pavementUV*vec2(1.1,.13));
         float grit=resolvedNoise(pavementUV*vec2(7.7,.62));
         vec2 metres=pavementUV*3.;
+        // A rotated second footprint breaks the axial repetition of the chip bed.
+        float chip=texture2D(map,mat2(.82,.57,-.57,.82)*vMapUv*2.37).g;
+        diffuseColor.rgb*=.79+2.1*chip;
         float seamDistance=abs(metres.x-2.9+.058*sin(metres.y*.089)+.018*sin(metres.y*.81));
         float px=max(fwidth(metres.x),.004);
         float joint=pavementJoint(seamDistance,.020,px);
         float aged=smoothstep(.18,.57,pavementNoise(vec2(metres.y*.027,3.)));
         diffuseColor.rgb*=(.86+.20*binder+.08*grit)*(1.-joint*aged*.38);
         roughnessFactor-=joint*aged*.10;
-        roughnessFactor=clamp(roughnessFactor+.09*(binder-.5),.47,1.);
+        roughnessFactor=clamp(roughnessFactor+.09*(binder-.5)+.48*(chip-.1),.40,1.);
         // Water settles unevenly across the existing course and binder texture.
         float basin=resolvedNoise(metres*vec2(.43,.12))*.72+.28*binder;
         vec2 raceLine=texture2D(courseLine,vec2(fract(-metres.y/${track.LENGTH.toFixed(3)}),.5)).rg;
         float dist=abs(metres.x-(raceLine.r*32.-16.));
+        vec2 clagUV=metres*vec2(17.,13.);
+        vec2 scatter=fract(clagUV)-.5;
+        float grain=pavementHash(floor(clagUV));
+        float clag=(1.-smoothstep(.14,.41,length(scatter*vec2(1.,1.7))))*step(.72,grain)
+          *smoothstep(2.6,5.6,dist)*(1.-smoothstep(.22,1.1,max(fwidth(clagUV.x),fwidth(clagUV.y))));
+        diffuseColor.rgb*=1.-.64*clag;
         float rubber=exp(-6.*(dist-.77)*(dist-.77))*(.30+.65*raceLine.g);
         diffuseColor.rgb*=1.-.23*rubber;roughnessFactor-=.085*rubber;
         float film=(1.-.58*rubber)*surfaceWater*(.46+.54*smoothstep(.60-surfaceWater*.38,.81-surfaceWater*.38,basin));
         roughnessFactor=mix(roughnessFactor,.12+.15*(1.-basin),film);
        `);
       shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
-       if(puddleVisible>.5 && film>.035 && puddleClip.w>0.){
+       float grazing=pow(1.-abs(dot(normal,normalize(vViewPosition))),3.);
+       outgoingLight+=reflectedLight.indirectSpecular*(film*.95*grazing);
+       ${planar?`if(puddleVisible>.5 && film>.035 && puddleClip.w>0.){
         vec2 cell=floor(metres*2.8),drop=fract(metres*2.8)-.5;
         float cycle=fract(puddleTime*1.3+pavementHash(cell));
         float radius=length(drop),ring=exp(-90.*abs(radius-cycle*.60))*(1.-cycle);
@@ -275,7 +361,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
         float coverage=smoothstep(0.,.035,min(bounds.x,bounds.y))*smoothstep(.45,.78,basin+.22*surfaceWater);
         float fresnel=.18+.68*pow(1.-abs(dot(normal,normalize(vViewPosition))),3.);
         outgoingLight=mix(outgoingLight,texture2D(puddleMap,projected).rgb,film*coverage*fresnel);
-       }
+       }`:''}
        #include <opaque_fragment>`);
       if(!track.night)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
        // Blender's glTF export flips the survey V coordinate.
@@ -284,7 +370,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        // A recently surfaced braking zone. Preserve fine aggregate but omit the
        // long fissure photographed in the source tile.
        float aggregate=clamp(texture2D(map,vMapUv*1.83+vec2(.35,.71)).g,.076,.139);
-       vec3 wearingCourse=diffuse*vec3(1.,.986,.94)*(.047+aggregate*.52)*(.88+.2*binder);
+       vec3 wearingCourse=diffuse*vec3(1.,.986,.94)*(.028+aggregate*.58+chip*.22)*(.88+.2*binder);
        float stripe=abs(abs(metres.x+2.4+1.2*smoothstep(830.,930.,station))-.85);
        float brakingLoad=smoothstep(760.,892.,station);
        float shoulderWear=exp(-stripe*stripe/1.75)*(.07+.10*brakingLoad);
@@ -293,7 +379,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        float flecks=smoothstep(.73,.92,resolvedNoise(pavementUV*58.))*edge;
        float jointDistance=min(abs(station-801.+metres.x*.06),abs(station-903.-metres.x*.045));
        float transverse=pavementJoint(jointDistance,.036,fwidth(station));
-       diffuseColor.rgb=mix(diffuseColor.rgb,wearingCourse*(1.-brakingRubber-.17*transverse+.13*flecks),braking);
+       diffuseColor.rgb=mix(diffuseColor.rgb,wearingCourse*(1.-brakingRubber-.17*transverse+.13*flecks-.50*clag),braking);
       `);
       if(track.night)shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
        float station=3.-metres.y;
@@ -301,6 +387,9 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        float lane=pool*pool;
        float axial=exp(-lane);
        float lateral=exp(-pow((abs(metres.x)-7.5)/10.,2.));
+       float streak=exp(-.15*abs(abs(metres.x)-5.9))*exp(-.23*lane);
+       float glancing=pow(1.-abs(dot(normalize(vViewPosition),normalize(cross(dFdx(vViewPosition),dFdy(vViewPosition))))),3.);
+       totalEmissiveRadiance+=vec3(.044,.036,.030)*streak*glancing*(.38+film);
        totalEmissiveRadiance+=diffuseColor.rgb*vec3(.52,.55,.59)*(.12+.88*axial)*lateral;
       `);
       shader.fragmentShader=shader.fragmentShader.replace('#include <lights_physical_fragment>',`
@@ -309,11 +398,23 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
       `);
      };
     }
-    if(m.name.startsWith('Canopy')){m.color.set(['#a7ad94','#98ab8a','#96a49a','#b1ac8b'][Number(m.name.slice(-1))%4]);m.bumpMap=m.map;m.bumpScale=.009;m.roughness=1;m.transparent=false;m.alphaTest=.33;m.alphaToCoverage=true;m.depthWrite=true;if(m.map)m.map.repeat.set(1,1);}
+    if(m.name.startsWith('Canopy')){
+     const wind=m.onBeforeCompile;
+     if(!embedded)m.onBeforeCompile=function(shader,renderer){
+      wind.call(this,shader,renderer);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
+       #if NUM_DIR_LIGHTS > 0
+        float wrap=clamp(.42-.58*dot(normal,directionalLights[0].direction),0.,1.);
+        reflectedLight.indirectDiffuse+=diffuseColor.rgb*vec3(.44,.35,.14)*wrap;
+       #endif`);
+     };
+     m.color.set(['#a7ad94','#98ab8a','#96a49a','#b1ac8b'][Number(m.name.slice(-1))%4]);
+     if(!embedded){m.bumpMap=m.map;m.map?.repeat.set(1,1);}
+     m.bumpScale=.009;m.roughness=1;m.transparent=false;m.alphaTest=.33;m.alphaToCoverage=true;m.depthWrite=true;}
     if(m.name==='Windows'&&m.map){m.color.set('#acb3c2');m.emissiveIntensity=.88;}
     if(m.name==='Balustrade'){m.transparent=true;m.opacity=.23;m.depthWrite=false;}
-    if(track.night&&['Windows','WarmWindows','StoreGlass'].includes(m.name)&&m.map){
-     m.customProgramCacheKey=()=>'strip-facade-'+m.name;
+    if(!embedded&&track.night&&/^(Upper|Windows|WarmWindows|StoreGlass)/.test(m.name)&&m.map){
+     m.customProgramCacheKey=()=>'strip-facade-'+(m.name==='StoreGlass'?'store':'tower');
      const strip=track.pointAt(3841,0),elevation=heightAt(3841),store=m.name==='StoreGlass';
      m.onBeforeCompile=shader=>{
       shader.vertexShader='varying vec3 facadeWorld;\n'+shader.vertexShader.replace('#include <begin_vertex>',
@@ -342,8 +443,8 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        float floorBand=abs(fract((facadeWorld.y+phase*43.)/(22.+17.*phase))-.5);
        float shaft=smoothstep(.05,.15+min(.16,fwidth(frontage)*.035),vertical);
        float floors=smoothstep(.025,.095+min(.12,fwidth(facadeWorld.y)*.028),floorBand);
-       float corridor=1.-smoothstep(210.,720.,length(local));
-       totalEmissiveRadiance*=mix(vec3(1.),mix(vec3(.48,.68,.80),vec3(.96,.87,.78),phase)*(.17+.83*shaft*floors),corridor);
+
+       totalEmissiveRadiance*=mix(vec3(.71,.82,.94),vec3(1.,.96,.85),phase)*(.57+.43*shaft*floors);
        float low=(1.-smoothstep(105.,295.,length(local)))*(1.-smoothstep(13.,45.,facadeWorld.y-${elevation.toFixed(3)}));
        vec2 rooms=floor(vec2((local.x*.83+local.y*.56)/5.3,(facadeWorld.y-${elevation.toFixed(3)})/4.3));
        float suite=fract(sin(dot(rooms,vec2(12.71,39.46)))*4358.67);
@@ -353,11 +454,33 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
       `);
      };
     }
+    if(m.name==='Marquee'){
+     m.onBeforeCompile=shader=>{
+      shader.uniforms.venueTime=animation;
+      shader.fragmentShader='uniform float venueTime;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+       float sweep=smoothstep(.65,1.,cos(vMapUv.x*5.-venueTime*.64));
+       totalEmissiveRadiance*=vec3(1.+.14*sweep,.93+.08*sweep,.85+.19*sweep);`);
+     };
+    }
+    if(!embedded&&track.night&&/^(Upper|Marquee|StoreGlass|Ice$|Gold$|Pink$)/.test(m.name)){
+     const base=m.onBeforeCompile,key=m.customProgramCacheKey();
+     m.onBeforeCompile=function(shader,renderer){
+      base.call(this,shader,renderer);
+      shader.uniforms.surfaceWater=surfaceWater;
+      shader.fragmentShader='uniform float surfaceWater;\n'+shader.fragmentShader.replace('#include <lights_physical_fragment>',
+       'totalEmissiveRadiance*=1.+surfaceWater*1.85;\n#include <lights_physical_fragment>').replace('#include <fog_fragment>',
+       T.ShaderChunk.fog_fragment.replace('gl_FragColor.rgb = mix', 'fogFactor*=1.-.88*smoothstep(.009,.22,max(max(totalEmissiveRadiance.r,totalEmissiveRadiance.g),totalEmissiveRadiance.b));\n gl_FragColor.rgb = mix'));
+     };
+     m.customProgramCacheKey=()=>key+'-luminous-fog';
+    }
+    if(m.name.startsWith('Brake')&&track.night){m.emissive.set('#faf0d6');m.emissiveMap=m.map;m.emissiveIntensity=.45;m.roughness=.57;}
     if(m.name.startsWith('Brake')&&!track.night){m.color.set('#ffffff');m.roughness=.92;m.metalness=0;}
     if(m.name==='Hospitality'){m.transparent=true;m.opacity=.67;m.depthWrite=false;m.roughness=.12;m.metalness=.48;m.envMapIntensity=1.16;}
     if(m.name==='WarmWindows'&&m.map){m.map.repeat.set(1,1);m.color.set('#ffdfae');m.emissiveIntensity=.65;}
-    if(m.name==='Travertine'){m.emissive.set('#c28b43');m.emissiveIntensity=.11;m.envMapIntensity=.5;}
-    if(m.name==='CityGround'){m.color.set('#828897');m.emissive.set('#9ba4b1');m.emissiveIntensity=.38;m.envMapIntensity=.34;}
+    if(m.name==='Travertine'){m.color.set('#8d8175');m.emissive.set('#987f69');m.emissiveIntensity=.06;m.envMapIntensity=.61;}
+    if(m.name==='RecessGlass'){m.color.set('#243138');m.metalness=.4;m.roughness=.23;m.envMapIntensity=1.2;}
+    if(m.name==='StoreGlass'){m.color.set('#777f83');m.roughness=.31;m.emissiveIntensity=.90;}
+    if(m.name==='CityGround'){m.color.set('#828897');m.emissive.set('#9ba4b1');m.emissiveIntensity=.072;m.envMapIntensity=.28;}
     if(m.name==='Fountain'){m.color.set('#c2c9ce');m.emissive.set('#e5dbc3');m.emissiveIntensity=.66;m.roughness=.64;}
     if(m.name==='BootContact'){m.transparent=true;m.depthWrite=false;m.polygonOffset=true;m.polygonOffsetFactor=-2;}
     if(m.name==='Water'){m.envMapIntensity=.55;m.roughness=.24;m.metalness=.37;}
@@ -367,7 +490,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
      m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <alphatest_fragment>',
       'diffuseColor.a*=1.-smoothstep(.12,.29,dot(normalize(vViewPosition),viewMatrix[1].xyz));\n#include <alphatest_fragment>');};
      m.transparent=false;m.alphaTest=.40;m.alphaToCoverage=true;m.depthWrite=true;}
-    if(m.name==='Concrete'&&!track.night){
+    if(!embedded&&m.name==='Concrete'&&!track.night){
      m.onBeforeCompile=shader=>{
       shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
        if(vMapUv.x< -6.95 && vMapUv.x> -8.05 && vMapUv.y>7.95 && vMapUv.y<9.05){
@@ -421,7 +544,7 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
     if(m.name==='LeafLitter')m.color.set('#514a35');
     if(m.name==='RoughMeadow')m.color.set('#81774d');
     if(m.name==='Gravel'){m.bumpMap=m.map;m.bumpScale=.008;}
-    if(m.name==='RunoffPaint'&&!m.userData.canopyBaked){
+    if(!embedded&&m.name==='RunoffPaint'&&!m.userData.canopyBaked){
      m.roughness=.88;
      // The slab joints run across the apron. Scuffed binder shows through
      // the paint between joints, with subpixel grit filtered at distance.
@@ -441,23 +564,25 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        `);
      };
     }
-    if(m.name==='Ice'&&track.night)m.emissiveIntensity=1.15;
+    if(m.name==='Ice'&&track.night)m.emissiveIntensity=2.3;
     if(m.name==='Gold'&&track.night){m.emissiveIntensity=.37;m.roughness=.49;}
     if(m.name==='Dark'&&track.night)m.color.set('#080b12');
     if(['Foliage','Fence','Crowd'].includes(m.name)){m.transparent=false;m.alphaTest=m.name==='Fence'?.34:.4;m.alphaToCoverage=true;m.depthWrite=true;}
     if(m.name==='Fence'){
-     m.roughness=.92;m.metalness=.06;
+     m.roughness=.35;m.metalness=.65;
      m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <alphatest_fragment>',`
       vec3 plane=cross(dFdx(vViewPosition),dFdy(vViewPosition));
       float angle=abs(dot(plane,normalize(vViewPosition)))/max(length(plane),.000001);
       diffuseColor.a*=mix(.59,1.,smoothstep(.025,.38,angle));
       #include <alphatest_fragment>`);};
     }
+    if(m.name==='Astroturf')m.color.set('#449264');
+    if(m.name==='GridNumber'){m.transparent=false;m.alphaTest=.45;}
     if(m.name==='GravelMargin'){m.transparent=true;m.depthWrite=false;m.roughness=.93;}
     if(m.name==='Rubber'){m.transparent=true;m.depthWrite=false;m.polygonOffset=true;m.polygonOffsetFactor=-1;}
     if(canopyLight&&['Asphalt','RepairCourse','Grass','LeafLitter','RoughMeadow','White','Red','Green','RunoffPaint','Gravel','Rubber'].includes(m.name)){
      if(m.name==='Asphalt'||m.name==='RepairCourse'||!m.userData.canopyBaked){
-      const original=m.onBeforeCompile;
+      const original=m.onBeforeCompile,program=m.customProgramCacheKey();
       m.onBeforeCompile=function(shader,renderer){
        original.call(this,shader,renderer);shader.uniforms.canopyLight={value:canopyLight};shader.uniforms.shadowPatch=shadowPatch;
        shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 canopyUV;')
@@ -465,24 +590,43 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
        shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nuniform vec3 shadowPatch;uniform sampler2D canopyLight;varying vec2 canopyUV;')
         .replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nfloat radius=distance(canopyUV*vec2(1536.,2560.)-vec2(128.,1536.),shadowPatch.xy);float sunlight=mix(1.,texture2D(canopyLight,canopyUV).r,smoothstep(.60,1.,radius/max(1.,shadowPatch.z))); reflectedLight.directDiffuse*=sunlight;reflectedLight.directSpecular*=sunlight;');
       };
-      m.customProgramCacheKey=()=>'park-canopy-'+m.name;
+      m.customProgramCacheKey=()=>embedded?program+'-park-canopy':'park-canopy-'+m.name;
       m.userData.canopyBaked=true;
      }
     }
 
    }
-   if(import.meta.env.MCP_APP==='true'&&materials.some(m=>/^(Canopy|Trunk|Foliage|Spectator|Seated|Skin|.*Uniform|Fountain)/.test(m.name)))o.layers.set(1);
+   // Rear mirrors resolve the roadway, barriers and skyline. All survey LODs
+   // belong to the main view, so a rear render can reuse its selection.
+   if(embedded&&!materials.some(m=>/^(Asphalt|RepairCourse|White|Red|Green|Concrete|Armco|Grass|CityGround|ParkHorizon|Upper.*|Sphere|DistantRidge)$/.test(m.name)))o.layers.set(1);
    if(o.receiveShadow)receivers.push(o);
    o.userData.cullRadius=(o instanceof T.InstancedMesh?o.boundingSphere:o.geometry.boundingSphere)!.radius*o.matrixWorld.getMaxScaleOnAxis();
+   if(embedded){
+    const bounds=new T.Sphere(o.userData.cullCenter,o.userData.cullRadius);
+    o.intersectsFrustum=frustum=>frustum.intersectsSphere(bounds);
+   }
   });
   for(const material of drySurfaces){
    const concrete=material.name==='Concrete';
-   if(material.name==='White')material.color.set('#bcbeb9');
-   material.roughness=Math.max(.91,material.roughness);material.metalness=0;
-   material.envMapIntensity=.30;
+   const nightMatte=track.night&&material.name!=='Armco';
+   if(nightMatte&&material.name==='White')material.color.set('#bcbeb9');
+   if(nightMatte){material.roughness=Math.max(.91,material.roughness);material.metalness=0;material.envMapIntensity=.52;}
+   if(embedded){wetMaterials.push({material,dry:material.roughness});continue;}
    const previous=material.onBeforeCompile;
    material.onBeforeCompile=function(shader,renderer){
     previous.call(this,shader,renderer);
+    shader.uniforms.surfaceWater=surfaceWater;
+    shader.fragmentShader='uniform float surfaceWater;\n'+shader.fragmentShader
+     .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+      roughnessFactor=mix(roughnessFactor,.21,surfaceWater*.86);
+      diffuseColor.rgb*=1.-.28*surfaceWater;`);
+    if(['Red','Green','White'].includes(material.name)){
+     shader.vertexShader='varying vec2 paintUV;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\npaintUV=uv;');
+     shader.fragmentShader='varying vec2 paintUV;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      float wear=sin(paintUV.y*4.1+.42*sin(paintUV.x*14.))*sin(12.4*paintUV.x+3.5*paintUV.y);
+      diffuseColor.rgb*=1.-.16*smoothstep(.24,.9,wear);`);
+    }
+    if(!nightMatte)return;
     // Compress only intense reflected light on matte paint and concrete.
     // The venue's authored luminaires and signs use their own HDR materials.
     shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
@@ -493,7 +637,8 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
      #include <opaque_fragment>
     `);
    };
-   material.customProgramCacheKey=()=>`dry-${material.name}`;
+   const paint=['Red','White','Green'].includes(material.name);
+   material.customProgramCacheKey=()=>`wet-${paint?'kerb':material.name}`;
   }
   if(import.meta.env.MCP_APP==='true'){
    if(multiDraw)batches=batchCircuit(gltf.scene);
@@ -503,31 +648,81 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
   for(const geometry of farCrowns.values())original.geometries.add(geometry);
   original.dispose(active);
   scene.add(gltf.scene);
+  // Finalize the appended batches as well. The venue stays in survey space for
+  // its entire lifetime. Main, mirror and shadow renders can reuse these matrices.
+  gltf.scene.updateMatrixWorld(true);
+  gltf.scene.updateMatrixWorld=()=>{};
   if(!lakeBounds.isEmpty()){reflection=lakeReflection(lakeBounds,()=>reflectionMs);scene.add(reflection);}
-  ready=true;
+  previousCullCamera.x=Infinity;previousCamera=null;ready=true;
  }).catch(e=>{draco?.dispose();if(disposed)return;error=String(e);console.error('Blender circuit asset failed',e);});
- return {setReflectionCadence(ms:number){reflectionMs=ms;},loaded,heightAt,spherePosition,people,signals,puddles,get sphereShow(){return sphereShow;},get ready(){return ready;},get error(){return error;},viewDetail(camera:T.Camera|null,detail=1,drawDistance=1){
+ return {setReflectionCadence(ms:number){reflectionMs=ms;},loaded,heightAt,spherePosition,people,signals,puddles,get sphereShow(){return sphereShow;},get ready(){return ready;},get error(){return error;},viewDetail(camera:T.PerspectiveCamera|null,detail=1,drawDistance=1,viewHeight=0){
   if(!camera&&!manualDetail)return;
-  manualDetail=!!camera;
-  if(camera){detailCamera.matrixWorld.copy(camera.matrixWorld);detailCamera.zoom=detail;}
-  for(const lod of circuitLods){
-   lod.autoUpdate=!camera;
-   if(camera){
-    // Lower silhouette detail while preserving the venue's draw distance.
-    const end=lod.levels[lod.levels.length-1],range=end.distance;
-    end.distance=range*drawDistance/detail;lod.update(detailCamera);end.distance=range;
+  if(manualDetail!==!!camera){
+   manualDetail=!!camera;
+   for(const lod of circuitLods)lod.autoUpdate=!manualDetail;
+  }
+  if(camera){
+   // Survey LODs are fixed. Use the camera origin once for the whole venue.
+   // Apply the same transition hysteresis without modifying authored ranges.
+   const view=camera.matrixWorld.elements,main=camera.name==='Race camera';
+   const crowdLimit=viewHeight?1.7*viewHeight/(2*Math.tan(camera.fov*Math.PI/360)*3):Infinity;
+   const moved=previousEye.distanceToSquared(camera.position)>.09;
+   if(camera!==previousCamera||moved||previousDetail!==detail||previousRange!==drawDistance||previousCrowdLimit!==crowdLimit||detailRevision!==cullRevision){
+    previousCamera=camera;previousEye.copy(camera.position);previousDetail=detail;previousRange=drawDistance;
+    previousCrowdLimit=crowdLimit;detailRevision=cullRevision;
+    for(const lod of circuitLods){
+     const m=lod.matrixWorld.elements,dx=view[12]-m[12],dy=view[13]-m[13],dz=view[14]-m[14];
+     const distanceSq=dx*dx+dy*dy+dz*dz,levels=lod.levels,end=levels.length-1;
+     let selected=0;
+     for(let i=1;i<=end;i++){
+      const level=levels[i],scale=i===end?drawDistance:i===1&&main&&lod.userData.spectator?1:detail;
+      const cutoff=i===end&&lod.userData.spectator?Math.min(level.distance*scale,crowdLimit+42):level.distance*scale;
+      const range=cutoff*(level.object.visible?1-level.hysteresis:1);
+      if(distanceSq<range*range)break;
+      selected=i;
+     }
+     for(let i=0;i<=end;i++)levels[i].object.visible=i===selected;
+    }
+   }
+  }else previousCamera=null;
+  distantInstances?.(camera);
+ },update(time:number,focus:T.Vector3,camera:T.Vector3,shadowExtent:number,balanced:boolean,highQuality:boolean){
+  const range=import.meta.env.MCP_APP==='true'?45:75;
+  if(range!==crowdRange){for(const lod of spectatorLods)lod.levels[1].distance=range;crowdRange=range;}
+  if(lastPropCamera.distanceToSquared(camera)>36){
+   lastPropCamera.copy(camera);
+   for(const prop of detailProps){
+    const batch=prop.mesh;batch.count=0;
+    for(let i=0;i<prop.stations.length;i++){
+     const matrix=prop.stations[i].matrix,m=matrix.elements;
+     if((m[12]-camera.x)**2+(m[13]-camera.y)**2+(m[14]-camera.z)**2>=prop.range**2)continue;
+     if(prop.colors)batch.setColorAt(batch.count,prop.colors[i]);
+     batch.setMatrixAt(batch.count++,matrix);
+    }
+    batch.visible=batch.count>0;batch.instanceMatrix.needsUpdate=true;
+    if(batch.instanceColor)batch.instanceColor.needsUpdate=true;
    }
   }
-  distantInstances?.(camera);
- },update(time:number,focus:T.Vector3,camera:T.Vector3,shadowExtent:number,balanced:boolean){
+  if(embedded&&lastWet!==surfaceWater.value){
+   lastWet=surfaceWater.value;
+   for(const {material,dry} of wetMaterials)material.roughness=T.MathUtils.lerp(dry,.21,lastWet*.86);
+  }
   animation.value=time;shadowPatch.value.set(focus.x,focus.z,balanced?0:shadowExtent);
   if(reflection)(reflection.material as T.ShaderMaterial).uniforms.waterTime.value=time;
+  // Distance-controlled flags are independent of viewing direction. Keep a
+  // half-metre guard band while a parked car's camera vibrates on its mount.
+  const guard=import.meta.env.MCP_APP==='true'?.5:0;
+  if(guard&&previousCullCamera.distanceToSquared(camera)<guard*guard&&previousFocus.distanceToSquared(focus)<guard*guard
+    &&previousExtent===shadowExtent&&previousBalanced===balanced&&previousHigh===highQuality)return;
+  previousCullCamera.copy(camera);previousFocus.copy(focus);previousExtent=shadowExtent;
+  previousBalanced=balanced;previousHigh=highQuality;cullRevision++;
   function near(mesh:T.Mesh,range:number){
    const centre=mesh.userData.cullCenter as T.Vector3;
    const radius=mesh.userData.cullRadius as number;
-   return Math.min(centre.distanceToSquared(camera),centre.distanceToSquared(focus))<(range+radius)**2;
+   return Math.min(centre.distanceToSquared(camera),centre.distanceToSquared(focus))<(range+radius+guard)**2;
   }
   for(const mesh of casters)mesh.castShadow=(!balanced||!canopyLight||!mesh.userData.foliageCaster)&&near(mesh,balanced?48:105);
+  for(const mesh of highCasters)mesh.castShadow=highQuality&&near(mesh,85);
   for(const mesh of receivers)mesh.receiveShadow=near(mesh,balanced?shadowExtent+8:shadowExtent*1.5+15);
   for(const mesh of distant)mesh.visible=near(mesh,balanced?640:950);
  },dispose:()=>{if(disposed)return;disposed=true;loadingAssets.abort();
@@ -536,5 +731,5 @@ export function loadCircuit(scene:T.Scene,track:Track,anisotropy:number,surfaceW
    for(const batch of batches){assets.geometries.delete(batch.geometry);batch.dispose();}
    assets.dispose();circuitRoot=undefined;
   }
-  puddles.dispose();signals.dispose();lineMap.dispose();gravelNormal.dispose();waterNormal.dispose();normal.dispose();canopyLight?.dispose();if(reflection){reflection.removeFromParent();reflection.geometry.dispose();reflection.dispose();}}};
+  puddles.dispose();signals.dispose();lineMap.dispose();terrainNormal.dispose();normal.dispose();canopyLight?.dispose();if(reflection){reflection.removeFromParent();reflection.geometry.dispose();reflection.dispose();}}};
 }

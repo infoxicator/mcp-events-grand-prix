@@ -177,7 +177,10 @@ export function createSphereShow(centre:T.Vector3){
     float rails=.5+.5*cos(cell.y*PI*.25);
     show*=1.+baseFade*(resolved*.34*(emitter-.48)
        -.046*(rails-.5)*(1.-smoothstep(1.,3.,footprint.y)));
-    gl_FragColor=vec4(show,1.);
+    // Drive the logo and LED highlights above bloom threshold while the
+    // broad areas of the mascot retain their programmed colour.
+    float highlight=smoothstep(.86,1.08,min(show.r,min(show.g,show.b)));
+    gl_FragColor=vec4(show*(1.+.64*highlight*(1.-faceMix)),1.);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
     #include <fog_fragment>

@@ -49,7 +49,7 @@ export const gridSlot=(entry:GridEntry)=>{
  return {distance:-8-slot*8-3,offset:slot%2?3:-3};
 };
 export const FIELD_STEP_TICKS=4;
-export interface FieldCar {lateralVelocity?:number;impactYaw?:number;lastImpact?:{source:string;time:number};damage?:import('./types').PanelDamage;distance:number;offset:number;speed:number;finishTime:number|null;pitHeading?:number;pit?:'none'|'entry'|'stopped'|'exit';service?:number;compound?:Compound;wear?:number;tyreAge?:number;stops?:number;lastLap?:number}
+export interface FieldCar {harvesting?:boolean;lateralVelocity?:number;impactYaw?:number;lastImpact?:{source:string;time:number};damage?:import('./types').PanelDamage;distance:number;offset:number;speed:number;finishTime:number|null;pitHeading?:number;pit?:'none'|'entry'|'stopped'|'exit';service?:number;previousCompound?:Compound;compound?:Compound;wear?:number;tyreAge?:number;stops?:number;lastLap?:number}
 export interface OpponentCar extends FieldCar {service:number;lateralVelocity?:number;impactSideSpeed?:number;compound?:Compound;weatherPit?:number;wear?:number;tyreAge?:number;stops?:number;lap?:number;lapStart?:number;lastLap?:number;sector?:number;sectorStart?:number;splits?:number[];plannedStops?:number[];plannedCompounds?:Compound[]}
 
 function opponentPlan(index:number,laps:number):{compound:Compound;plannedStops:number[];plannedCompounds:Compound[]}{

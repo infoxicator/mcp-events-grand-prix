@@ -1,12 +1,12 @@
 import type {MeshStandardMaterial} from 'three';
 
 // Both rigs supply the friction face in metres relative to the wheel spindle.
-export function finishRotor(material:MeshStandardMaterial,heat?:{value:number}){
+export function finishRotor(material:MeshStandardMaterial,heat?:{value:number},axleWeight=1){
  material.onBeforeCompile=shader=>{
   if(heat)shader.uniforms.discHeat=heat;
   const inputs=heat?'attribute vec2 rotorPlane;uniform float discHeat;':'attribute float rotorHeat;';
   shader.vertexShader=inputs+'\nvarying vec3 disc;\n'+shader.vertexShader.replace('#include <begin_vertex>',
-   '#include <begin_vertex>\ndisc='+ (heat?'vec3(rotorPlane,discHeat);':'vec3(position.y-.36,position.z-(position.z>0.?1.55:-2.05),rotorHeat);'));
+   '#include <begin_vertex>\ndisc='+ (heat?`vec3(rotorPlane,discHeat*${axleWeight.toFixed(2)});`:'vec3(position.y-.36,position.z-(position.z>0.?1.55:-2.05),rotorHeat*(position.z>0.?1.:.55));'));
   shader.fragmentShader='varying vec3 disc;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
    float radius=length(disc.xy);
    if(radius>.071 && radius<.213){
@@ -24,5 +24,5 @@ export function finishRotor(material:MeshStandardMaterial,heat?:{value:number}){
     diffuseColor.rgb*=1.-.7*vent;
    }`);
  };
- material.customProgramCacheKey=()=>heat?'wheel-friction-ring':'field-friction-ring';
+ material.customProgramCacheKey=()=>heat?'wheel-friction-ring'+axleWeight:'field-friction-ring';
 }

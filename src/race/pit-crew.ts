@@ -9,7 +9,7 @@ import suitURL from './assets/service-suit.glb.gz?url';
 import library from './assets/pit-equipment.glb.gz?url';
 import type {Track} from './track';
 import {circuitHeight} from './elevation';
-import {cornerService,frontJackPose,jackLift,pitBox,canRelease,serviceClock,ramp,type PitTelemetry} from './pit-service';
+import {cornerLocked,cornerService,frontJackPose,jackLift,pitBox,canRelease,serviceClock,ramp,type PitTelemetry} from './pit-service';
 import {BOX_OFFSET,garageBay,type Constructor} from './pit-service';
 import {compoundColors,constructors,grid} from './grid';
 import {wheelStations} from './suspension';
@@ -19,7 +19,7 @@ const up=V(0,1),identity=new T.Quaternion(),unit=V(1,1,1);
 const colour=(compound='medium')=>compoundColors[compound]??compoundColors.medium;
 
 /** One instance batch per Blender part. All service poses are calculated in box-local metres. */
-export function pitCrew(scene:T.Scene,track:Track){
+export function pitCrew(scene:T.Scene,track:Track,sidewallInk:T.Texture){
  const loadingAssets=new AbortController();
  const root=new T.Group();scene.add(root);
  const resources=new MeshResources();
@@ -35,8 +35,12 @@ export function pitCrew(scene:T.Scene,track:Track){
  }));
  const hoses=new Map<T.Group,ReturnType<typeof pitHoses>>();
  const displays=new Map<Constructor,ReturnType<typeof pitDisplay>>();
+ const freeGroups:T.Group[]=[];
+ const fabrics=new Map<Constructor,T.MeshStandardMaterial>();
+ const fabricUploads:T.Texture[]=[];
+
  const crews=new Map<T.Group,ReturnType<typeof serviceSuit>[]>();
- let build:((team:Constructor)=>void)|undefined;
+ let build:((team:Constructor)=>T.Group)|undefined;
  const loaded=Promise.allSettled([embeddedGLB(library,true,loadingAssets.signal),embeddedGLB(suitURL,true,loadingAssets.signal)]).then(results=>{
   for(const result of results)if(result.status==='fulfilled')resources.collect(result.value.scene);
   const [kitResult,suitResult]=results;
@@ -74,18 +78,27 @@ export function pitCrew(scene:T.Scene,track:Track){
   for(const panel of panels)panel.dispose();
   for(const name of Object.keys(garageBay) as Constructor[]){
    const d=pitBox(track,name),t=track.tangentAt(d);
-   displays.set(name,pitDisplay(scene,track.pointAt(d,-20.9),circuitHeight(track.id,d)+2.9,Math.atan2(t.x,t.z)-Math.PI/2));
+   displays.set(name,pitDisplay(scene,track.pointAt(d,-20.84),circuitHeight(track.id,d)+2.9,Math.atan2(t.x,t.z)-Math.PI/2,name));
+  }
+  for(const team of Object.keys(garageBay) as Constructor[]){
+   const {fabric,patch}=suitFabric(source.material as T.MeshStandardMaterial,team);
+   fabrics.set(team,fabric);resources.material(fabric);fabricUploads.push(patch);
   }
   build=team=>{
    const group=new T.Group(),kit=new Map<string,T.InstancedMesh>();
+   // Three also traverses invisible groups when updating world matrices.
+   // A pooled rig only needs its bones and equipment placed during service.
+   const updatePose=group.updateMatrixWorld;
+   group.updateMatrixWorld=function(force){if(this.visible)updatePose.call(this,force);};
    gltf.scene.traverse(o=>{if(!(o instanceof T.Mesh))return;
     if(['Torso','Arm','Leg','AirHose'].includes(o.name))return;
     const material:T.MeshStandardMaterial=['Helmet','PitVisor'].includes(o.name)?
      new T.MeshPhysicalMaterial({clearcoat:1,clearcoatRoughness:.12}):o.material.clone();
     if(o.name==='Helmet'){
      material.vertexColors=false;material.color.set(constructors[team][0]);material.metalness=.22;
+     const stripe={value:new T.Color(constructors[team][1])};material.userData.stripe=stripe;
      material.onBeforeCompile=shader=>{
-      shader.uniforms.crewStripe={value:new T.Color(constructors[team][1])};
+      shader.uniforms.crewStripe=stripe;
       shader.vertexShader='varying vec3 shell;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nshell=position;');
       shader.fragmentShader='uniform vec3 crewStripe;varying vec3 shell;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
        if(shell.y>.185){
@@ -96,12 +109,53 @@ export function pitCrew(scene:T.Scene,track:Track){
     }
     material.roughness=o.name==='Helmet'?.24:.85;
     if(/Jack|SocketGun|HoseBoom/.test(o.name)){material.metalness=.72;material.roughness=.35;}
-    if(o.name==='SpareWheel'){material.roughness=.60;material.metalness=.13;}
-    if(o.name==='PitVisor'){material.vertexColors=false;material.color.set('#304956');material.metalness=.61;material.roughness=.08;}
+    if(o.name==='SpareWheel'){
+     material.roughness=.66;material.metalness=.13;
+     material.onBeforeCompile=shader=>{
+      shader.uniforms.sidewallInk={value:sidewallInk};
+      shader.vertexShader='varying vec3 wheelLocal;varying float tread;\n'+shader.vertexShader
+       .replace('#include <begin_vertex>','#include <begin_vertex>\nwheelLocal=position;tread=0.;\n#ifdef USE_INSTANCING_COLOR\ntread=instanceColor.b;\n#endif')
+       .replace('#include <color_vertex>','#include <color_vertex>\nvColor.rgb=color.rgb;');
+      shader.fragmentShader='uniform sampler2D sidewallInk;varying vec3 wheelLocal;varying float tread;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+       float r=length(wheelLocal.yz);
+       if(r>.235&&abs(wheelLocal.x)>.125){
+        vec2 coord=.5+vec2(-sign(wheelLocal.x)*wheelLocal.z,wheelLocal.y)/.729;
+        float ink=texture2D(sidewallInk,coord).r;
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.9),clamp((ink-.018)/.879,0.,1.));
+       }
+       if(tread>.1&&r>.343){
+        float cuts=sin(atan(wheelLocal.y,wheelLocal.z)*(tread>.7?42.:28.)+abs(wheelLocal.x)*52.);
+        diffuseColor.rgb*=.4+.6*smoothstep(-.50,-.13,cuts);
+       }`);
+     };
+    }
+    if(o.name==='SocketGun'){
+     material.onBeforeCompile=shader=>{
+      shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+       vColor.rgb=color.rgb;
+       #ifdef USE_INSTANCING_COLOR
+       if(position.z>.208&&position.z<.223&&color.r>.90)vColor.rgb=instanceColor*3.;
+       #endif`);
+     };
+    }
+    if(o.name==='JackHandle'){
+     material.onBeforeCompile=shader=>{
+      shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>','#include <color_vertex>\nvColor.rgb=color.rgb;')
+       .replace('#include <begin_vertex>',`#include <begin_vertex>
+        #ifdef USE_INSTANCING_COLOR
+         if(color.r>color.g*3.){
+          float angle=-.66*instanceColor.r;
+          vec2 hinge=vec2(.82,-.69);
+          transformed.yz=hinge+mat2(cos(angle),sin(angle),-sin(angle),cos(angle))*(transformed.yz-hinge);
+         }
+        #endif`);
+     };
+    }
+    if(o.name==='PitVisor'){material.vertexColors=true;material.color.set('#ffffff');material.metalness=.61;material.roughness=.08;}
     const batch=new T.InstancedMesh(o.geometry,o.name==='ReleaseLens'?new T.MeshBasicMaterial({toneMapped:false}):material,48);batch.name=team+' pit '+o.name;
-    batch.count=0;batch.boundingSphere=new T.Sphere(V(2,1,0),10);
+    batch.setColorAt(0,new T.Color(0xffffff));batch.count=0;batch.boundingSphere=new T.Sphere(V(2,1,0),10);
     batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
-    batch.castShadow=['Helmet','Boot','JackFoot','JackHandle','SpareWheel','SpareNose'].includes(o.name);
+    batch.castShadow=['Helmet','Boot','JackFoot','JackHandle','SpareWheel','ServiceNose'].includes(o.name);
     batch.receiveShadow=true;
     if(o.name==='ReleaseLens')material.dispose();
     if(o.name==='SoleContact'){
@@ -112,19 +166,21 @@ export function pitCrew(scene:T.Scene,track:Track){
    });
    for(const name of ['Helmet','Boot','Glove','SocketGun','JackFoot','JackHandle','SpareWheel','CompoundBand','SoleContact'])
     if(!kit.has(name))throw Error('Missing Blender service part '+name);
-   const fabric=suitFabric(source.material as T.MeshStandardMaterial,team);
-   const people=Array.from({length:20},()=>serviceSuit(source,fabric));crews.set(group,people);
-   for(const actor of people)group.add(actor.mesh);
+   const people=Array.from({length:20},(_,i)=>serviceSuit(source,fabrics.get(team)!,.96+.08*((i*13)%20)/19));
+   crews.set(group,people);for(const actor of people)group.add(actor.mesh);
    const lines=pitHoses();group.add(lines.mesh);hoses.set(group,lines);
-   group.visible=false;root.add(group);groups.set(team,group);kits.set(group,kit);
+   group.visible=false;root.add(group);kits.set(group,kit);return group;
   }
-  build('Ferrari');build('Mercedes');
+  freeGroups.push(build('Ferrari'),build('Mercedes'));
   ready=true;
  }).catch(e=>{error=String(e);console.error('Blender pit equipment failed',e)});
  const m=new T.Matrix4(),tint=new T.Color(),oldTyre:Partial<Record<Constructor,string>>={};
  const lastStop:Partial<Record<Constructor,{offset:number;yaw:number}>>={};
  const vectors=Array.from({length:176},()=>new T.Vector3());
  const rotations=Array.from({length:32},()=>new T.Quaternion());
+ const valveTint=new T.Color();
+ const lampColours=['#ff3127','#ffb432','#52ff79','#427bff'];
+ const lift={front:0,rear:0,dropBounce:0};
  const corner=cornerService(0,0),jackPose=frontJackPose(0);
  let vectorIndex=0,rotationIndex=0;
  function scratch(x=0,y=0,z=0){const v=vectors[vectorIndex]??=new T.Vector3();vectorIndex++;return v.set(x,y,z);}
@@ -136,11 +192,12 @@ export function pitCrew(scene:T.Scene,track:Track){
  const poseFrame={entry:false,exit:false,gap:0,progress:0,time:0};
  function mount(hips:T.Vector3,torso:T.Quaternion,x:number,y:number,z:number){return scratch(x,y,z).applyQuaternion(torso).add(hips);}
  function offset(side:number,progress:number,x:number){return T.MathUtils.lerp(6.1+side*.55,x,progress);}
- function put(kit:Map<string,T.InstancedMesh>,name:string,p:T.Vector3,q=identity,scale=unit,color='#ffffff'){
+ function put(kit:Map<string,T.InstancedMesh>,name:string,p:T.Vector3,q=identity,scale=unit,color:string|T.Color='#ffffff'){
   const b=kit.get(name)!,i=b.count++;b.setMatrixAt(i,m.compose(p,q,scale));b.setColorAt(i,tint.set(color));
  }
  // Resolve a two-bone chain, then orient the entire fabric skin in that
  // bend plane. Bone lengths stay fixed even when the hand target is distant.
+ const solvedJoint=V(),solvedLower=V();
  function chain(actor:ReturnType<typeof serviceSuit>,side:number,base:T.Vector3,end:T.Vector3,pole:T.Vector3,name:'Arm'|'Leg',a:number,b:number){
   const ray=scratch().copy(end).sub(base),distance=Math.max(.001,ray.length());ray.divideScalar(distance);
   const d=T.MathUtils.clamp(distance,Math.abs(a-b)+.001,a+b-.001);
@@ -148,7 +205,7 @@ export function pitCrew(scene:T.Scene,track:Track){
   const joint=scratch().copy(base).addScaledVector(ray,h).addScaledVector(normal,Math.sqrt(Math.max(0,a*a-h*h)));
   const tip=scratch().copy(base).addScaledVector(ray,d),upper=scratch().copy(joint).sub(base).normalize(),lower=scratch().copy(tip).sub(joint).normalize();
   const angle=Math.acos(T.MathUtils.clamp(upper.dot(lower),-1,1));
-  actor.limb(name,side,base,joint,upper,lower,angle);return tip;
+  actor.limb(name,side,base,joint,upper,lower,angle);solvedJoint.copy(joint);solvedLower.copy(lower);return tip;
  }
  function person(actor:ReturnType<typeof serviceSuit>,kit:Map<string,T.InstancedMesh>,hips:T.Vector3,yaw:number,lean:number,hands:T.Vector3[],role:'gun'|'carrier'|'jack'|'steady',phase:number,step:number,stride:number,stance:T.Vector3){
   const vectorStart=vectorIndex,rotationStart=rotationIndex;
@@ -158,20 +215,26 @@ export function pitCrew(scene:T.Scene,track:Track){
   const dir=rotation().setFromAxisAngle(up,yaw);
   const breath=Math.sin(time*2.8+phase);
   const twist=.10*Math.sin(phase)+.12*stride;
+  const size=actor.size;hips.y*=size;
+  const pelvis=rotation().setFromEuler(euler.set(lean*.58,yaw,.018*stride,'YXZ'));
   const torso=rotation().setFromEuler(euler.set(lean+.011*breath,yaw+twist,.035*stride,'YXZ'));
   // Follow a two-handed grip with the shoulders and pelvis. Knees take
   // the load while the boots stay at their independent support positions.
-  for(let pass=0;pass<2;pass++)for(let i=0;i<2;i++){
+  const chestOffset=scratch(0,.22*size,0).applyQuaternion(pelvis).sub(scratch(0,.22*size,0).applyQuaternion(torso));
+  for(let pass=0;pass<3;pass++)for(let i=0;i<2;i++){
    const side=sides[i];
-   const delta=scratch().copy(hands[i]).sub(mount(hips,torso,side*.166,.425,0)),length=delta.length();
-   if(length>.557)hips.addScaledVector(delta,(length-.557)/length);
+   const delta=scratch().copy(hands[i]).sub(mount(hips,torso,side*.166*size,.425*size,0).add(chestOffset)),length=delta.length();
+   if(length>.557*size)hips.addScaledVector(delta,(length-.557*size)/length);
   }
-  actor.core(hips,torso);
-  const eye=mount(hips,torso,0,.515,.012),aim=scratch().copy(hands[0]).lerp(hands[1],.5).sub(eye);
+  const chest=scratch().copy(hips).add(chestOffset),neck=mount(chest,torso,0,.49*size,0);
+  const eye=scratch().copy(neck),aim=scratch().copy(hands[0]).lerp(hands[1],.5).sub(eye);
   if(entry)aim.lerp(scratch(-hips.x,-.7,gap-hips.z).normalize(),1-ramp(gap,-8,-1));
   const headYaw=Math.atan2(aim.x,aim.z),headPitch=Math.atan2(-aim.y,Math.hypot(aim.x,aim.z));
   const head=rotation().setFromEuler(euler.set(T.MathUtils.clamp(headPitch*.65,.10,.79),headYaw+.023*breath,.035*Math.sin(phase),'YXZ'));
-  put(kit,'Helmet',eye,head);put(kit,'PitVisor',eye,head);put(kit,'HelmetHardware',eye,head);
+  if(phase===25)head.copy(dir);
+  actor.core(hips,pelvis,chest,torso,neck,head);
+  eye.add(scratch(0,.025*size,.012*size).applyQuaternion(head));
+  put(kit,'Helmet',eye,head,actor.scale);put(kit,'PitVisor',eye,head,actor.scale);put(kit,'HelmetHardware',eye,head,actor.scale);
   for(let i=0;i<2;i++){
    const side=sides[i];
    const kneeling=role==='gun',trail=side<0;
@@ -188,31 +251,40 @@ export function pitCrew(scene:T.Scene,track:Track){
    foot.y=.060+walking*.09*Math.sin(Math.PI*swing)+.075*Math.sin(Math.PI*stepping);
    // A long withdrawal step must still land under the pelvis. Shorten its
    // horizontal reach while keeping the sole on the apron.
-   const hip=mount(hips,torso,side*.097,0,0),dx=foot.x-hip.x,dz=foot.z-hip.z;
-   const reach=Math.sqrt(Math.max(0,.858**2-(foot.y-hip.y)**2));
+   const hip=mount(hips,torso,side*.097*size,0,0),dx=foot.x-hip.x,dz=foot.z-hip.z;
+   const reach=Math.sqrt(Math.max(0,(.858*size)**2-(foot.y-hip.y)**2));
    const planar=Math.hypot(dx,dz);
    if(planar>reach){foot.x=hip.x+dx*reach/planar;foot.z=hip.z+dz*reach/planar;}
    const knee=kneeling&&trail?scratch(side*.22,-1,.25):scratch(side*.21,.04,1);
-   chain(actor,side,hip,foot,knee.applyQuaternion(dir),'Leg',.43,.43);
+   chain(actor,side,hip,foot,knee.applyQuaternion(dir),'Leg',.43*size,.43*size);
+   if(kneeling||role==='carrier')put(kit,'KneePad',solvedJoint,dir,actor.scale);
    const toe=kneeling&&trail?.64*progress:0;
    put(kit,'Boot',scratch().copy(foot).add(scratch(0,-.060+.12*Math.sin(toe),0)),rotation().copy(dir).multiply(rotation().setFromAxisAngle(scratch(1,0,0),toe)));
    const contact=Math.max(.2,1-(foot.y-.060)*7);
    put(kit,'SoleContact',scratch(foot.x,.008,foot.z),dir,scratch(contact,1,contact));
-   const wrist=chain(actor,side,mount(hips,torso,side*.166,.425,0),hands[i],scratch(side*.80,-.85,-.23).applyQuaternion(dir),'Arm',.31,.27);
-   const grip=rotation().copy(dir).multiply(rotation().setFromAxisAngle(scratch(1,0,0),role==='gun'?.20:.56));
-   put(kit,side<0?'GloveLeft':'Glove',wrist,grip);
+   const wrist=chain(actor,side,mount(hips,torso,side*.166*size,.425*size,0).add(chestOffset),hands[i],scratch(side*.80,-.85,-.23).applyQuaternion(dir),'Arm',.31*size,.27*size);
+   const grip=rotation().setFromUnitVectors(up,solvedLower).multiply(dir);
+   put(kit,side<0?'GloveLeft':'Glove',wrist,grip,actor.scale);
   }
   vectorIndex=vectorStart;rotationIndex=rotationStart;
  }
- function tyre(kit:Map<string,T.InstancedMesh>,p:T.Vector3,q:T.Quaternion,i:number,ink:string){
-  const scale=scratch(i<2?.92:1.10,1,1);put(kit,'SpareWheel',p,q,scale);put(kit,'CompoundBand',p,q,scale,ink);
+ function tyre(kit:Map<string,T.InstancedMesh>,p:T.Vector3,q:T.Quaternion,i:number,compound:string|undefined){
+  const scale=scratch(i<2?.92:1.10,1,1);put(kit,'SpareWheel',p,q,scale,compound==='wet'?'#0000ff':compound==='intermediate'?'#0000a0':'#000000');put(kit,'CompoundBand',p,q,scale,colour(compound));
  }
- function update(team:Constructor,car:PitTelemetry|undefined,time:number){
+ function update(team:Constructor,car:PitTelemetry|undefined,time:number,camera:T.Vector3,driver?:string){
   vectorIndex=0;rotationIndex=0;
-  displays.get(team)?.update(car);
-  if(!car){delete oldTyre[team];const g=groups.get(team);if(g)g.visible=false;delete lastStop[team];return;}
-  if(!groups.has(team))build?.(team);
-  const group=groups.get(team);if(!group)return;
+  if(import.meta.env.MCP_APP==='true')displays.get(team)?.setCameraRange(camera);
+  if(!car&&!groups.has(team))return;
+  displays.get(team)?.update(car,driver);
+  if(!car){delete oldTyre[team];const g=groups.get(team);if(g){g.visible=false;groups.delete(team);freeGroups.push(g);}delete lastStop[team];return;}
+  let group=groups.get(team);
+  if(!group){
+   group=freeGroups.pop()??build?.(team);if(!group)return;
+   groups.set(team,group);
+   const helmet=kits.get(group)!.get('Helmet')!.material as T.MeshPhysicalMaterial;
+   helmet.color.set(constructors[team][0]);helmet.userData.stripe.value.set(constructors[team][1]);
+   for(const actor of crews.get(group)!)actor.mesh.material=fabrics.get(team)!;
+  }
   const stopped=car.pit==='stopped',entry=car.pit==='entry',exit=car.pit==='exit';
   if(!stopped&&!exit)delete lastStop[team];
   if(!stopped&&!entry&&!exit){group.visible=false;return;}
@@ -225,7 +297,7 @@ export function pitCrew(scene:T.Scene,track:Track){
   const gap=track.wrap(car.distance-box+track.LENGTH/2)-track.LENGTH/2;
   group.visible=(entry&&gap>=-135&&gap<=2)||stopped||(exit&&gap>=-2&&gap<36);
   if(!group.visible)return;
-  if(entry||(!oldTyre[team]&&stopped))oldTyre[team]=car.compound??oldTyre[team];
+  if(entry||(!oldTyre[team]&&stopped))oldTyre[team]=(stopped?car.previousCompound:undefined)??car.compound??oldTyre[team];
   const seconds=stopped?serviceClock(car):entry?-1:3;
   const progress=entry?ramp(gap,-135,-54):exit?1-ramp(gap,4,36):1;
   const {point,forward}=bay,lateral=parked?.offset??BOX_OFFSET;
@@ -234,22 +306,36 @@ export function pitCrew(scene:T.Scene,track:Track){
   const kit=kits.get(group)!;for(const b of kit.values())b.count=0;
   poseFrame.entry=entry;poseFrame.exit=exit;poseFrame.gap=gap;poseFrame.progress=progress;poseFrame.time=time;
   let personIndex=0;const people=crews.get(group)!;
+  jackLift(car,lift);
   group.updateWorldMatrix(true,false);
   const lines=hoses.get(group)!;
-  const lamp=scratch(.34,2.62,1.55-.36);put(kit,'ReleaseHousing',lamp);
-  put(kit,'ReleaseLens',lamp,identity,unit,canRelease(car)?'#67ff80':'#fc3127');
+  // Both clamps stay on the surveyed boom when the stopped car is off-centre.
+  const lamp=group.worldToLocal(scratch().copy(bay.outlets[0]).lerp(bay.outlets[1],.5));
+  lamp.y-=.33;
+  const pod=rotation().setFromAxisAngle(up,-(parked?.yaw??0));
+  put(kit,'ReleaseHousing',lamp,pod);
+  const go=canRelease(car);
+  const reversePod=rotation().copy(pod).multiply(rotation().setFromAxisAngle(up,Math.PI));
+  for(let i=0;i<4;i++){
+   const lit=i===0?stopped&&!go:i===1?entry:i===2?go:exit;
+   put(kit,'ReleaseLens',scratch(-.24+i*.16,.033,0).applyQuaternion(pod).add(lamp),pod,unit,lit?lampColours[i]:'#282c30');
+   put(kit,'ReleaseLens',scratch(-.24+i*.16,.033,0).applyQuaternion(pod).add(lamp),reversePod,unit,lit?lampColours[i]:'#282c30');
+   const locked=stopped&&cornerLocked(seconds,i)||go;
+   put(kit,'ReleaseLens',scratch(-.24+i*.16,-.068,-.055).applyQuaternion(pod).add(lamp),pod,scratch(.52,.52,.52),locked?'#65ff83':'#4d2d21');
+   put(kit,'ReleaseLens',scratch(-.24+i*.16,-.068,.055).applyQuaternion(pod).add(lamp),reversePod,scratch(.52,.52,.52),locked?'#65ff83':'#4d2d21');
+  }
   for(let i=0;i<wheelStations.length;i++){
    const w=wheelStations[i];
    const vectorStart=vectorIndex,rotationStart=rotationIndex;
-   const side=Math.sign(w.x),z=w.z,stage=cornerService(seconds,i,corner),y=.365+jackLift(car);
+   const side=Math.sign(w.x),z=w.z,stage=cornerService(seconds,i,corner),y=.365+(w.z>0?lift.front:lift.rear);
    const clear=exit?1:ramp(seconds,2.0,2.42),idle=1-progress;
    const yaw=-side*Math.PI/2,gunDir=rotation().setFromAxisAngle(up,yaw);
    const back=1-stage.gun,ready=ramp(gap,-38,-3);
    const gun=scratch(offset(side,progress,side*(Math.abs(w.x)+.472+.23*back+.29*clear)),y+.012+.095*clear,z-.10*back);
    const gunQ=rotation().copy(gunDir).multiply(rotation().setFromEuler(euler.set(.18*back,0,.045*stage.gun*Math.sin(seconds*79+i),'XYZ')));
-   put(kit,'SocketGun',gun,gunQ);
+   put(kit,'SocketGun',gun,gunQ,unit,cornerLocked(seconds,i)?'#53ff70':'#f92b18');
    const outlet=group.worldToLocal(scratch().copy(bay.outlets[i]));
-   lines.connect(i,outlet,scratch(0,-.145,.018).applyQuaternion(gunQ).add(gun),side);
+   lines.connect(i,outlet,scratch(0,-.145,.018).applyQuaternion(gunQ).add(gun),side,time);
    const gunHome=scratch(offset(side,progress,side*1.87),0,z-.10);
    const gunHands=handsAt(scratch(-.039,-.078,.018).applyQuaternion(gunQ).add(gun),scratch(.040,-.013,.109).applyQuaternion(gunQ).add(gun));
    // A short free-hand signal follows the final torque pulse at each corner.
@@ -266,15 +352,15 @@ export function pitCrew(scene:T.Scene,track:Track){
    const fresh=scratch(offset(side,progress,w.x+side*(.48*(1-seat)+.47*(1-align))),y+.31*(1-align),z+.92*(1-align));
    const oldQ=rotation().setFromEuler(euler.set(.16*carry,side*.31*carry,.09*side*carry,'XYZ'));
    const newQ=rotation().setFromEuler(euler.set(-.14*(1-align),-side*.29*(1-align),-.09*side*(1-align),'XYZ'));
-   if(stage.off||stage.remove>=1)tyre(kit,old,oldQ,i,colour(oldTyre[team]));
-   if(stage.fit<1)tyre(kit,fresh,newQ,i,colour(car.instruction?.tyre??car.compound));
+   if(stage.off||stage.remove>=1)tyre(kit,old,oldQ,i,oldTyre[team]);
+   if(stage.fit<1)tyre(kit,fresh,newQ,i,car.instruction?.tyre??car.compound);
    for(const k of sides){
     const removing=k<0,held=removing?old:fresh,q=removing?oldQ:newQ;
     const shift=removing?carry:1-align,transfer=removing?carry:align;
     const release=removing?0:ramp(seconds,1.73+i*.015,2.16);
-    const home=scratch(offset(side,progress,side*(1.33+.32*(removing?0:1))),0,z+k*(.68+.58*shift));
+    const home=scratch(offset(side,progress,side*(1.33+.32*(removing?0:1))),0,z+k*(.86+.61*shift));
     const brace=removing?ramp(seconds,.17+i*.021,.47+i*.021)*(1-carry):align*(1-seat);
-    const hips=scratch(offset(side,progress,side*(1.33+.40*shift+.31*release-.075*brace)),.61+.25*shift+.18*release+.10*idle-.065*brace,z+k*(.70+.72*shift+.20*release));
+    const hips=scratch(offset(side,progress,side*(1.33+.40*shift+.31*release-.075*brace)),.61+.25*shift+.18*release+.10*idle-.065*brace,z+k*(.78+.72*shift+.20*release));
     hips.z+=k*.058*Math.sin(transfer*Math.PI);
     const look=Math.atan2(held.x-hips.x,held.z-hips.z);
     const right=scratch(Math.cos(look),0,-Math.sin(look));
@@ -294,9 +380,9 @@ export function pitCrew(scene:T.Scene,track:Track){
    const hold=ramp(seconds,-.06,.22)*(1-ramp(seconds,2.08,2.38));
    const t=car.pitTime??0;
    const repair=stopped&&(car.totalStop??2.6)>2.6?ramp(t,.4,1.6)*(1-ramp(t,(car.totalStop??2.6)-.9,(car.totalStop??2.6)-.55)):0;
-   const home=scratch(side*(1.16+(1-progress)*1.9),0,-.46+2.64*repair);
+   const home=scratch(offset(side,progress,side*1.16),0,-.46+2.64*repair);
    const hips=scratch().copy(home).add(scratch(-side*.10*hold,.80-.085*hold,0));
-   const x=side*(1.01-.55*hold+(1-progress)*1.9),y=.87+.025*hold-.48*repair+.035*repair*Math.sin(t*7+side);
+   const x=offset(side,progress,side*(1.01-.55*hold)),y=.87+.025*hold-.48*repair+.035*repair*Math.sin(t*7+side);
    const hands=handsAt(scratch(x,y,home.z-.20),scratch(x,y,home.z+.12));
    person(people[personIndex++],kit,hips,-side*Math.PI/2,.34+.72*hold,hands,'steady',side+7,0,0,home);
   }
@@ -311,8 +397,12 @@ export function pitCrew(scene:T.Scene,track:Track){
    const handleFace=rotation().copy(face).multiply(rotation().setFromAxisAngle(up,side>0?sweep.handleYaw:0));
    const jack=rotation().copy(handleFace).multiply(rotation().setFromAxisAngle(scratch(1,0,0),-angle));
    const axle=scratch(0,.09,-.13).applyQuaternion(face).add(origin);
-   put(kit,'JackFoot',origin,face,side>0?unit:scratch(.82,.72,1.18));put(kit,'JackCradle',scratch().copy(origin).add(scratch(0,jackLift(car),0)),face);put(kit,'JackHandle',axle,jack);
-   const hands=handsAt(scratch(-.17,.81,-.69).applyQuaternion(jack).add(axle),scratch(.17,.81,-.69).applyQuaternion(jack).add(axle));
+   put(kit,side>0?'JackFoot':'RearJackFoot',origin,face);
+   if(side>0)put(kit,'JackLiftArm',axle,rotation().copy(face).multiply(rotation().setFromAxisAngle(scratch(1,0,0),-lift.front*2.45)));
+   put(kit,'JackCradle',scratch().copy(origin).add(scratch(0,side>0?lift.front:lift.rear,0)),face);
+   const valve=side>0?ramp(seconds,2.07,2.19)*(1-ramp(seconds,2.39,2.52)):0;
+   put(kit,'JackHandle',axle,jack,unit,valveTint.setRGB(valve,1,1));
+   const hands=handsAt(scratch(-.17,.794,-.67).applyQuaternion(jack).add(axle),scratch(.17,.794,-.67).applyQuaternion(jack).add(axle));
    const pivot=side>0?sweep.pivot:0;
    const stance=scratch(side>0?approach+.76*pull:x-pull*.34,0,origin.z+side*(1.21-.47*pivot));
    const bodyX=side>0?approach+1.06*pivot+.65*pull:x;
@@ -326,21 +416,32 @@ export function pitCrew(scene:T.Scene,track:Track){
   const noseX=carrying?3.4*(1-ramp(exchange,.05,.73)):0,noseZ=3.40-.47*ramp(exchange,.65,.96);
   if(carrying)put(kit,'ServiceNose',scratch(noseX,.23*(1-ramp(exchange,.65,.96)),noseZ),identity,unit,constructors[team][0]);
   for(const side of sides){
-   const home=scratch(side*(1.61+(1-progress)*2),0,2.51);
+   const home=scratch(offset(side,progress,side*1.61),0,2.51);
    if(carrying){home.x=noseX+side*1.24;home.z=noseZ-.12;}
    const hip=scratch().copy(home).add(scratch(0,.68-.13*reach,0));
    person(people[personIndex++],kit,hip,-side*Math.PI/2,.54+.28*reach,handsAt(scratch(home.x-side*(.38+.22*reach),.53-.19*reach,home.z-.14),scratch(home.x-side*(.38+.22*reach),.53-.19*reach,home.z+.14)),'steady',side+21,0,0,home);
   }
   for(let j=0;j<reserveStations.length;j++){
    const z=reserveStations[j];
-   const home=scratch(2.8+.55*j,0,z),hip=scratch().copy(home).add(scratch(0,.84,0));
-   person(people[personIndex++],kit,hip,-Math.PI/2,.17,handsAt(scratch(home.x-.25,.95,z-.17),scratch(home.x-.25,.95+(j===0&&canRelease(car)?.42:0),z+.17)),'steady',j+25,0,0,home);
+   const home=scratch(offset(1,progress,2.8+.55*j),0,z),hip=scratch().copy(home).add(scratch(0,.84,0));
+   if(j===0){
+    const controller=scratch(home.x+.13,.99,z+.28);
+    put(kit,'ReleaseController',controller);
+    person(people[personIndex++],kit,hip,0,.12,handsAt(scratch(home.x-.19,1.03,z+.22),controller),'steady',25,0,0,home);
+   }else{
+    const origin=scratch(home.x-.75,0,z),face=rotation().setFromAxisAngle(up,-Math.PI/2);
+    const axle=scratch(0,.09,-.13).applyQuaternion(face).add(origin);
+    put(kit,'JackFoot',origin,face);put(kit,'JackHandle',axle,face,unit,valveTint.setRGB(0,1,1));put(kit,'JackCradle',origin,face);
+    person(people[personIndex++],kit,hip,-Math.PI/2,.19,handsAt(scratch(-.17,.8,-.67).applyQuaternion(face).add(axle),scratch(.17,.8,-.67).applyQuaternion(face).add(axle)),'steady',26,0,0,home);
+   }
   }
   for(const batch of kit.values()){if(!batch.count)continue;batch.instanceMatrix.needsUpdate=true;if(batch.instanceColor)batch.instanceColor.needsUpdate=true;}
  }
- return {update,loaded,setMirrorHidden(hidden:boolean){root.visible=!hidden;},get ready(){return ready},get error(){return error},dispose(){
+ return {update,loaded,warmNextFabric(renderer:T.WebGLRenderer){
+  const texture=fabricUploads.pop();if(texture)renderer.initTexture(texture);
+ },setMirrorHidden(hidden:boolean){root.visible=!hidden;},get ready(){return ready},get error(){return error},dispose(){
   if(disposed)return;
-  disposed=true;loadingAssets.abort();build=undefined;
+  disposed=true;loadingAssets.abort();build=undefined;freeGroups.length=0;fabricUploads.length=0;fabrics.clear();
   for(const display of displays.values())display.dispose();
   root.removeFromParent();resources.collect(root).dispose();root.clear();
   groups.clear();kits.clear();crews.clear();hoses.clear();displays.clear();

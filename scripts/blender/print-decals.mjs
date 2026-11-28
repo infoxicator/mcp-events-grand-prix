@@ -27,6 +27,7 @@ function bank(brow){
 }
 const shell='<path d="M6 24Q3 11 13 6Q24 -2 35 7Q42 13 40 24L30 29L17 29Z" fill="#ffc32c" stroke="#d41d29" stroke-width="3"/><path d="M22 25L12 10M23 25L19 6M24 25V5M25 25L30 7M26 25L36 11" stroke="#e53b24" fill="none"/>';
 const ink={
+ 'halo-strip':[192,108,['IBM','AEROLAB','IBM'].map((label,i)=>text(96,28+i*36,28,label,'text-anchor="middle"')).join('')],
  'front-bank-ink':[520,144,bank(false)],'steering-bank-ink':[500,120,bank(true)],
  'front-foil-ink':[103,104,`<g transform="translate(4,88) rotate(-40)">${text(0,0,25,'Ray-Ban','font-style="italic"')}</g>`],
  'front-flap-print':[128,64,`<circle cx="32" cy="32" r="19" fill="#168fc3"/>${text(20,39,19,'hp','font-style="italic"')}${text(96,37,14,'V-Power','text-anchor="middle" font-style="italic"')}`],
@@ -36,5 +37,5 @@ const ink={
 };
 for(const [name,[w,h,content]] of Object.entries(ink)){
  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${content}</svg>`;
- await sharp(Buffer.from(svg),{density:216}).png().toFile(directory+name+'.png');
+ await sharp(Buffer.from(svg),{density:['nose-side-badge','front-foil-ink','front-flap-print'].includes(name)?432:216}).png().toFile(directory+name+'.png');
 }

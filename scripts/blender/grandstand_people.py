@@ -14,13 +14,13 @@ def spectator_mesh(material,pose,distant=False,engineer_colour=None):
         for a,b in zip(rings,rings[1:]):
             for k in range(len(a)):faces.append((a[k],a[(k+1)%len(a)],b[(k+1)%len(a)],b[k]))
         faces.append(tuple(reversed(rings[0])));faces.append(tuple(rings[-1]))
-    sides=5 if distant else 10
+    sides=5 if distant else 6
     def tube(a,b,ra,rb,group,col):
         a,b=Vector(a),Vector(b);axis=(b-a).normalized();u=axis.cross(Vector((0,0,1)))
         if u.length<.01:u=axis.cross(Vector((1,0,0)))
         u.normalize();v=axis.cross(u)
-        n=4 if distant else 7
-        profile=[(0,ra),(1,rb)] if distant else [(0,ra),(.55,(ra+rb)*.55),(1,rb)]
+        n=4
+        profile=[(0,ra),(1,rb)]
         link([[vert(a+(b-a)*t+(u*math.cos(k*math.tau/n)+v*math.sin(k*math.tau/n))*r,col,group) for k in range(n)] for t,r in profile])
     def shape(rows,group,col,upper=False,head=False):
         rings=[]
@@ -60,28 +60,28 @@ def spectator_mesh(material,pose,distant=False,engineer_colour=None):
             tube(torso((side*.16,.34,0)),torso((side*.20,.10,.12)),.072,.05,0,shirt)
     else:
         shape([(0,0,0,.15,.105),(0,.13,0,.171,.12),(0,.31,.01,.197,.121),(0,.378,0,.175,.103),(0,.423,.005,.072,.068)],0,shirt,True)
-        shape([(0,.40,.01,.063,.062),(0,.463,.020,.052,.069),(0,.482,.024,.073,.082),(0,.515,.027,.087,.089),(0,.55,.025,.091,.094),(0,.581,.017,.087,.096),(0,.603,.008,.088,.089),(0,.638,0,.061,.065)],1,skin,True,True)
+        shape([(0,.40,.01,.063,.062),(0,.482,.024,.073,.082),(0,.55,.025,.091,.094),(0,.603,.008,.088,.089),(0,.638,0,.061,.065)],1,skin,True,True)
         shape([(0,.513,.112,.018,.014),(0,.54,.111,.014,.016)],1,skin,True,True)
         shape([(0,.58,-.002,.09,.091),(0,.628,-.005,.081,.083),(0,.652,-.005,.045,.047)],2,hair,True,True)
         if pose in (0,4,7,9):
-            shape([(0,.587,.057,.089,.113),(0,.598,.060,.088,.117)],3,(.43,.44,.47),True,True)
+            shape([(0,.587,.057,.089,.113),(0,.598,.060,.088,.117)],4,(.43,.44,.47),True,True)
         elif pose in (2,5,8):
             shape([(0,.460,-.087,.043,.042),(0,.514,-.090,.067,.064),(0,.594,-.062,.074,.068)],2,hair,True,True)
         # Outer layers change the silhouette as well as the colour.
         if pose in (1,6,11):
             shape([(0,.298,-.077,.108,.062),(0,.354,-.085,.143,.087),(0,.414,-.061,.10,.061)],4,(.33,.32,.32),True)
             for sign in (-1,1):
-                tube(torso((sign*.045,.394,.083)),torso((sign*.052,.289,.119)),.004,.003,3,(.68,.65,.59))
+                tube(torso((sign*.045,.394,.083)),torso((sign*.052,.289,.119)),.004,.003,4,(.68,.65,.59))
         if pose in (0,4,7):
-            shape([(0,.235,.001,.188,.129),(0,.268,.003,.19,.128)],3,(.55,.54,.49),True)
+            shape([(0,.235,.001,.188,.129),(0,.268,.003,.19,.128)],4,(.55,.54,.49),True)
         if pose in (3,10):
             for sign in (-1,1):
-                shape([(sign*.102,.517,.001,.02,.032),(sign*.10,.563,.003,.022,.043),(sign*.093,.585,.006,.018,.029)],3,(.06,.066,.072),True,True)
+                shape([(sign*.102,.517,.001,.02,.032),(sign*.10,.563,.003,.022,.043),(sign*.093,.585,.006,.018,.029)],4,(.06,.066,.072),True,True)
         if pose in (1,8):
             for sign in (-1,1):
-                shape([(sign*.039,.533,.098,.022,.009),(sign*.039,.551,.103,.031,.010),(sign*.039,.561,.098,.025,.008)],3,(.052,.068,.075),True,True)
+                shape([(sign*.039,.533,.098,.022,.009),(sign*.039,.551,.103,.031,.010),(sign*.039,.561,.098,.025,.008)],4,(.052,.068,.075),True,True)
         if pose in (2,5,8,10):
-            shape([(0,.029,0,.16,.115),(0,.057,0,.164,.117)],3,(.65,.65,.60),True)
+            shape([(0,.029,0,.16,.115),(0,.057,0,.164,.117)],4,(.65,.65,.60),True)
         if pose in (0,3,4,9):
             shape([(0,.397,.004,.098,.078),(0,.423,.008,.071,.067)],4,(.28,.26,.23),True)
         for side in (-1,1):
@@ -91,7 +91,7 @@ def spectator_mesh(material,pose,distant=False,engineer_colour=None):
             if pose==7 and side==-1:foot=(-.19,-.23,-.14)
             tube(hips+Vector((side*.094,0,0)),knee,.089,.074,4,denim);tube(knee,foot,.072,.052,4,denim)
             x,y,z=foot
-            shape([(x,y-.04,z+.043,.062,.102),(x,y+.009,z+.047,.068,.111),(x,y+.057,z,.051,.063)],3,(.34,.32,.29))
+            shape([(x,y-.04,z+.043,.062,.102),(x,y+.009,z+.047,.068,.111),(x,y+.057,z,.051,.063)],4,(.34,.32,.29))
             e=(side*.21,.17,.075);hand=(side*.148,.065,.245)
             if pose==1:e=(side*.19,.12,.22);hand=(side*.07,.075,.27)
             if pose in (2,9):e=(side*.25,.22,.11);hand=(side*.044,.37 if pose==2 else .53,.23)

@@ -26,9 +26,9 @@ def bake_canopy_light(directory, samples, height):
         if distance > 65:
             continue
         h = max(0, y - height(path[index]['d']))
-        # Fixed directional light in scene.ts is (-80, 120, -50).
-        cx = x + h * (80 / 120) - x_min
-        cz = z + h * (50 / 120) - z_min
+        # Fixed directional light in scene.ts is (-80, 89, -50).
+        cx = x + h * (80 / 89) - x_min
+        cz = z + h * (50 / 89) - z_min
         rx, rz = max(2, crown.scale.x*1.45), max(2, crown.scale.y*1.43)
         x0, x1 = max(0, int(cx-rx)-1), min(width, math.ceil(cx+rx)+1)
         z0, z1 = max(0, int(cz-rz)-1), min(depth, math.ceil(cz+rz)+1)

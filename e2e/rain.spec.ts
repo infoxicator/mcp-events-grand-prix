@@ -28,11 +28,12 @@ for(const circuit of ['monza','las-vegas'] as const){
    if(m.type==='ping')ws.send(JSON.stringify({type:'pong',sent:m.sent}));
   }));
   await page.setViewportSize({width:960,height:600});
-  await page.goto('/?spectate&camera=cockpit-a&visor&cameraDebug');
+  const highQuality=circuit==='las-vegas';
+  await page.goto('/?spectate&camera=cockpit-a&visor&cameraDebug'+(highQuality?'&quality=high':''));
   await page.waitForFunction(()=>(window as any).__renderStats?.modelsReady);
   await page.keyboard.press('b');
   await expect(page.locator('body')).toHaveClass(/clean-feed/);
-  const stats=()=>page.evaluate(()=>(window as any).__renderStats as {rainDrops:number;sprayPackets:number;lensBeads:number});
+  const stats=()=>page.evaluate(()=>(window as any).__renderStats as {rainDrops:number;sprayPackets:number;lensBeads:number;reflectionWidth:number;bloomWidth:number;stormSkyActive:boolean});
   // Send complete field snapshots, as the 30 Hz broadcast does. The
   // presentation clock waits for the solved field pose between those ticks.
   const send=()=>{
@@ -66,6 +67,11 @@ for(const circuit of ['monza','las-vegas'] as const){
    await expect.poll(async()=>(await stats()).rainDrops).toBeGreaterThan(previousDensity);
    await expect.poll(async()=>(await stats()).sprayPackets).toBeGreaterThan(0);
    await expect.poll(async()=>(await stats()).lensBeads).toBeGreaterThan(0);
+   if(rain==='heavy'){
+    await expect.poll(async()=>(await stats()).stormSkyActive).toBe(true);
+    expect((await stats()).reflectionWidth).toBe(highQuality?512:0);
+    expect((await stats()).bloomWidth>0).toBe(highQuality);
+   }
    previousDensity=(await stats()).rainDrops;
    const path=info.outputPath(rain+'.png');
    await page.locator('#viewport').screenshot({path});

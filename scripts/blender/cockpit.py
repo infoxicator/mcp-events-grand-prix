@@ -108,7 +108,7 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
     bpy.ops.object.modifier_apply(modifier=fuse.name)
     smooth=skin.modifiers.new('Blend finger webs','SMOOTH');smooth.factor=.82;smooth.iterations=6
     bpy.ops.object.modifier_apply(modifier=smooth.name)
-    reduce=skin.modifiers.new('Preserve knuckle profile','DECIMATE');reduce.ratio=.147
+    reduce=skin.modifiers.new('Preserve knuckle profile','DECIMATE');reduce.ratio=.021
     bpy.ops.object.modifier_apply(modifier=reduce.name)
     side=-1 if suffix=='L' else 1
     colors=skin.data.color_attributes.new(name='Racewear',type='BYTE_COLOR',domain='POINT')
@@ -125,10 +125,8 @@ def fit_glove_skin(hand, suffix, shells, paths, fabric, leather, mesh):
         edge=(1-smooth(.05,.17,abs(angle+1.29)-.56))*smooth(-.102,-.089,z)
         cuff=1-smooth(-.094,-.085,z+.006*math.sin(angle))
         base=mix((.69,.145,.18),(.115,.105,.12),max(palm,edge,cuff*.89))
-        # A narrow cream bias binding follows the cuff, while the inner palm
-        # has darker silicone contact pads around the curled finger tips.
-        piping=1-smooth(.0004,.0019,abs(z+.092+.006*math.sin(angle)))
-        colors.data[vertex.index].color_srgb=(*mix(base,(.84,.83,.78),piping*.84),1)
+        # The narrow cream binding is printed per fragment in garment space.
+        colors.data[vertex.index].color_srgb=(*base,1)
     skin.data.materials.append(leather)
     for face in skin.data.polygons:
         face.use_smooth=True

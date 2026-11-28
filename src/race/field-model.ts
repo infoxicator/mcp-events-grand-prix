@@ -1,3 +1,4 @@
+import {kerbHeight} from './suspension';
 import {MeshResources} from './mesh-resources';
 import {finishRotor} from './brake-rotor';
 import {cornerService,jackLift} from './pit-service';
@@ -6,7 +7,7 @@ import {applyLivery} from './liveries';
 import * as T from 'three';
 import {constructorKit,trimMesh} from './constructor-trim';
 import {embeddedGLB} from './embedded-glb';
-import {compoundColors,grid, gridSlot, opponents, paints, type FieldCar} from './grid';
+import {compoundColors,grid, opponents, paints, type FieldCar} from './grid';
 import type {Track} from './track';
 import nearURL from './assets/field-near.glb.gz?url';
 import fieldURL from './assets/field.glb.gz?url';
@@ -48,22 +49,6 @@ function shapeAero(material:T.Material){
  material.customProgramCacheKey=()=>key+'-aero-profile';
 }
 
-// The two Blender circuits contain the original twenty painted boxes.
-function extraGridBoxes(track:Track,heightAt:(distance:number)=>number){
- const vertices:number[]=[];
- function stripe(d0:number,d1:number,left:number,right:number){
-  for(const [d,offset] of [[d0,left],[d1,left],[d1,right],[d0,left],[d1,right],[d0,right]]){
-   const p=track.pointAt(d,offset);vertices.push(p.x,heightAt(d)+.05,p.z);
-  }
- }
- for(const entry of grid.slice(20)){
-  const slot=gridSlot(entry),line=slot.distance+3;
-  stripe(line,line+.12,slot.offset-1.1,slot.offset+1.1);
-  stripe(line-4,line,slot.offset-1.1,slot.offset-1);
- }
- const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();
- return new T.Mesh(geometry,new T.MeshStandardMaterial({color:'#dddeda',roughness:.9,side:T.DoubleSide}));
-}
 function spinRims(material:T.Material){
  material.onBeforeCompile=shader=>{
   shader.vertexShader='attribute vec2 wheelMotion;\n'+shader.vertexShader.replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
@@ -98,9 +83,13 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
  const loadingAssets=new AbortController();
  const root=new T.Group(),pose=new T.Object3D(),inkMap=new T.TextureLoader().load(tyrePrintURL);
  inkMap.colorSpace=T.SRGBColorSpace;inkMap.anisotropy=import.meta.env.MCP_APP==='true'?4:8;
- const gridBoxes=extraGridBoxes(track,heightAt);const signage=new T.Group();signage.add(gridBoxes);
+ const tailGeometry=new T.BoxGeometry(.125,.090,.024);tailGeometry.translate(0,.392,-2.67);
+ const tails=new T.InstancedMesh(tailGeometry,new T.MeshBasicMaterial({color:new T.Color(4.2,.025,.008)}),opponents.length);
+ tails.name='Field rain lights';tails.count=0;tails.frustumCulled=false;root.add(tails);
+ const signage=new T.Group();
  const frustum=new T.Frustum(),projection=new T.Matrix4(),bounds=new T.Sphere(new T.Vector3(),3.6);
  const level=()=>({batches:[] as T.InstancedMesh[],palettes:[] as T.Color[][],
+  matrices:new T.InstancedBufferAttribute(new Float32Array(opponents.length*16),16).setUsage(T.DynamicDrawUsage),
   entries:new Int16Array(opponents.length).fill(-1),
   wheels:new T.InstancedBufferAttribute(new Float32Array(opponents.length*2),2),
   controls:new T.InstancedBufferAttribute(new Float32Array(opponents.length*2),2),
@@ -113,6 +102,7 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
  const far=level(),close=level(),wasClose=new Uint8Array(opponents.length);
  let disposed=false,ready=false,error:string|null=null;
  const compoundColor=new T.Color();
+ const carPoint={x:0,z:0},carTangent={x:0,z:0};
  const centres=opponents.map(()=>new T.Vector3());
  const order=new Int16Array(opponents.length);
  const visibleInCamera=new Uint8Array(opponents.length);
@@ -139,9 +129,9 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    ctx.font='bold 86px Arial';ctx.fillText('DRS',128,123);
    const map=new T.CanvasTexture(art);map.flipY=false;map.colorSpace=T.SRGBColorSpace;map.anisotropy=4;
    const geometry=(kit.getObjectByName('RulesBoard') as T.Mesh).geometry.clone();
-   const boards=new T.InstancedMesh(geometry,new T.MeshStandardMaterial({map,vertexColors:true,roughness:.94,side:T.DoubleSide}),track.DRS_ZONES.length);
+   const boards=new T.InstancedMesh(geometry,new T.MeshStandardMaterial({map,vertexColors:true,roughness:.94,side:T.FrontSide}),track.DRS_ZONES.length);
    for(const [i,zone] of track.DRS_ZONES.entries()){
-    const d=zone.start,p=track.pointAt(d,track.trackHalfWidth(d)+(track.night?.85:2.4)),t=track.tangentAt(d);
+    const d=zone.start,p=track.pointAt(d,track.trackHalfWidth(d)+(track.night?1.55:2.4)),t=track.tangentAt(d);
     pose.position.set(p.x,heightAt(d)+.04,p.z);pose.rotation.set(0,Math.atan2(t.x,t.z),0);pose.updateMatrix();boards.setMatrixAt(i,pose.matrix);
    }
    boards.name='Legacy DRS activation';signage.add(boards);
@@ -156,6 +146,19 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    if(type!=='Contact'&&type!=='BrightWheelFaces'){
     batch.geometry.setAttribute('liveryRow',new T.InstancedBufferAttribute(new Float32Array(opponents.length),1));
     applyLivery(mesh.material as T.MeshStandardMaterial,paintSheet,true,0,false,true);
+    const angles=new T.InstancedBufferAttribute(new Float32Array(opponents.length),1);
+    batch.geometry.setAttribute('fieldFlapAngle',angles);
+    const livery=mesh.material.onBeforeCompile,key=mesh.material.customProgramCacheKey();
+    mesh.material.onBeforeCompile=(shader,renderer)=>{
+     livery.call(mesh.material,shader,renderer);
+     shader.vertexShader='attribute float fieldFlapAngle;\n'+shader.vertexShader.replace('#include <project_vertex>',`
+      if(flapUV.x>=0.){
+       vec2 hinge=vec2(.87,-2.42);float a=fieldFlapAngle;
+       transformed.yz=hinge+mat2(cos(a),sin(a),-sin(a),cos(a))*(transformed.yz-hinge);
+      }
+      #include <project_vertex>`);
+    };
+    mesh.material.customProgramCacheKey=()=>key+'-moving-flap';
     prepareAero(mesh.geometry,strengths[profiles.indexOf(type.replace(/^Far/,'Field'))]);
    }
    batch.frustumCulled=false;batch.count=0;batch.receiveShadow=type!=='Contact';modules.set(type,batch);root.add(batch);
@@ -206,23 +209,33 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
       shader.uniforms.sidewallInk={value:inkMap};shader.uniforms.surfaceWater=surfaceWater;
       shader.vertexShader='attribute vec2 wheelMotion; varying vec2 spin; varying vec3 tyrePoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntyrePoint=position;spin=wheelMotion;');
       shader.fragmentShader='uniform float surfaceWater; uniform sampler2D sidewallInk; varying vec2 spin; varying vec3 tyrePoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+       vec3 compound=vColor.rgb;diffuseColor.rgb=diffuse;
        float radius=length(vec2(tyrePoint.y-.36,tyrePoint.z-(tyrePoint.z>0.?1.55:-2.05)));
        float ring=1.-smoothstep(.0015,.003+fwidth(radius),min(abs(radius-.287),abs(radius-.316)));
        diffuseColor.rgb*=.88+.22*smoothstep(.25,.36,radius)+.23*ring;
+       float band=1.-smoothstep(.003,.003+max(.0004,fwidth(radius)),abs(radius-.316));
        if(radius>.235 && abs(tyrePoint.x)>.91){
         vec2 radial=vec2((tyrePoint.z-(tyrePoint.z>0.?1.55:-2.05))*-sign(tyrePoint.x),tyrePoint.y-.36)/.729;
         float a=spin.x*-sign(tyrePoint.x),cs=cos(a),sn=sin(a);
         vec2 uv=mat2(cs,sn,-sn,cs)*radial;
         float arc=min(.43,spin.y/100.);
-        float ink=0.;
+        float ink=0.,stripe=0.;
         for(int tap=-2;tap<=2;tap++){
          float t=float(tap)*arc*.25;
-         float coverage=texture2D(sidewallInk,.5+mat2(cos(t),sin(t),-sin(t),cos(t))*uv).r;
+         vec2 point=mat2(cos(t),sin(t),-sin(t),cos(t))*uv;
+         float coverage=texture2D(sidewallInk,.5+point).r;
+         stripe+=.2*smoothstep(.51,.54,point.x*point.x/max(dot(point,point),.00001));
          ink+=clamp((coverage-.0176)/.879,0.,1.)*.2;
         }
-        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.90),ink);
+        diffuseColor.rgb=mix(mix(diffuseColor.rgb,compound,band*stripe),vec3(.90),ink);
        }
       `).replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+       if(radius>.344 && surfaceWater>.08){
+        float axle=tyrePoint.z>0.?1.55:-2.05;
+        float tread=atan(tyrePoint.y-.36,tyrePoint.z-axle)*8.+spin.x*8.+abs(tyrePoint.x)*35.;
+        float channel=smoothstep(.58,.94,cos(tread))*(1.-smoothstep(.3,1.4,fwidth(tread)));
+        diffuseColor.rgb*=1.-channel*(distance(compound,vec3(.02,.18,.7))<.65?.54:.30);
+       }
        float film=surfaceWater*(.26+.69*smoothstep(.343,.358,radius));
        roughnessFactor=mix(roughnessFactor,.24,film);
        diffuseColor.rgb*=1.-.30*film;
@@ -237,8 +250,21 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
     obj.geometry.setAttribute('liveryRow',tier.rows);
     applyLivery(material,paintSheet,true,0,printedEndplates);
    }
+   if(import.meta.env.MCP_APP!=='true'&&near&&(paint||obj.name==='Carbon'||trim)){
+    const prior=material.onBeforeCompile,key=material.customProgramCacheKey();
+    material.onBeforeCompile=(shader,renderer)=>{
+     prior.call(material,shader,renderer);
+     shader.vertexShader='varying vec3 surfacePoint; varying vec3 teamHue;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nsurfacePoint=position;teamHue=instanceColor;');
+     if(trim)shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>','#include <color_vertex>\nvColor.rgb=color.rgb;');
+     shader.fragmentShader='varying vec3 surfacePoint;varying vec3 teamHue;\n'+shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+      float occlusion=clamp(.74+.50*surfacePoint.y-.06*step(.55,abs(surfacePoint.x)),.66,1.);
+      diffuseColor.rgb*=occlusion;
+      ${obj.name==='Carbon'?'float fibre=dot(surfacePoint,vec3(284.,329.,248.)); diffuseColor.rgb*=1.+.045*cos(fibre)*(1.-smoothstep(.6,2.5,fwidth(fibre)));':''}
+      ${trim?'if(surfacePoint.y>.81 && abs(surfacePoint.x)<.38 && surfacePoint.z>-.45 && surfacePoint.z<.58)diffuseColor.rgb+=.075*teamHue;':''}`);
+    };material.customProgramCacheKey=()=>key+'-field-surface-'+obj.name;
+   }
    const batch=new T.InstancedMesh(obj.geometry,material,opponents.length),color=new T.Color();
-   if(near&&(obj.name==='WheelMetal'||obj.name==='Tyre'||obj.name==='CompoundInk')){
+   if(near&&(obj.name==='WheelMetal'||obj.name==='Tyre')){
     obj.geometry.setAttribute('removedWheels',removedWheels);serviceWheels(material);
     const depth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking});
     serviceWheels(depth);batch.customDepthMaterial=depth;
@@ -253,36 +279,34 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
     const depth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking});
     shapeAero(depth);batch.customDepthMaterial=depth;
    }
-   if(near&&['Tyre','WheelMetal','CompoundInk','Carbon','Paint'].includes(obj.name)){
-    const wheel=['Tyre','WheelMetal','CompoundInk'].includes(obj.name);
+   if(near&&['Tyre','WheelMetal'].includes(obj.name)){
     obj.geometry.setAttribute('fieldControl',tier.controls);
     for(const surface of [material,batch.customDepthMaterial].filter((m):m is T.Material=>!!m)){
      const prior=surface.onBeforeCompile,key=surface.customProgramCacheKey();
      surface.onBeforeCompile=(shader,renderer)=>{
       prior.call(surface,shader,renderer);
-      const motion=wheel?`if(position.z>.8){
+      const motion=`if(position.z>.8){
        vec2 hub=vec2(sign(position.x)*.81,1.55);float a=fieldControl.x;
-       transformed.xz=hub+mat2(cos(a),-sin(a),sin(a),cos(a))*(transformed.xz-hub);}`:
-       `if(position.z< -2.42&&position.y>.81&&abs(position.x)<.78){
-       vec2 hinge=vec2(.87,-2.42);float a=fieldControl.y;
-       transformed.yz=hinge+mat2(cos(a),sin(a),-sin(a),cos(a))*(transformed.yz-hinge);}`;
+       transformed.xz=hub+mat2(cos(a),-sin(a),sin(a),cos(a))*(transformed.xz-hub);}`;
       shader.vertexShader='attribute vec2 fieldControl;\n'+shader.vertexShader.replace('#include <project_vertex>',motion+'\n#include <project_vertex>');
-     };surface.customProgramCacheKey=()=>key+'-controls-'+(wheel?'steer':'flap');
+     };surface.customProgramCacheKey=()=>key+'-steer';
     }
    }
    batch.name='Field '+obj.name;batch.frustumCulled=false;
-   batch.castShadow=!shadow;batch.receiveShadow=!shadow;batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
+   batch.castShadow=!shadow;batch.receiveShadow=!shadow;batch.instanceMatrix=tier.matrices;
    batch.onBeforeShadow=()=>{batch.count=tier.shadowCount;};
    batch.onAfterShadow=()=>{batch.count=tier.count;};
    const palette=opponents.map(entry=>{
     const [primary,accent]=paints(entry);
-    const tint=obj.name==='HelmetTint'?new T.Color().setHSL(entry.number*.137%1,.53,.52,T.SRGBColorSpace):color.set(entry.team==='Mercedes'&&paint?'#637278':entry.team==='Mercedes'&&obj.name==='Accent'?'#263439':obj.name==='Accent'?accent:paint?primary:'#ffffff');
+    const tint=near&&trim&&import.meta.env.MCP_APP!=='true'?new T.Color(primary):obj.name==='HelmetTint'?new T.Color().setHSL(entry.number*.137%1,.53,.52,T.SRGBColorSpace):color.set(entry.team==='Mercedes'&&paint?'#637278':entry.team==='Mercedes'&&obj.name==='Accent'?'#263439':obj.name==='Accent'?accent:paint?primary:'#ffffff');
     return tint.clone();
    });
    tier.palettes.push(palette);root.add(batch);tier.batches.push(batch);
   });sources.dispose(new MeshResources().collect(root));ready=true;
  }).catch(e=>{error=String(e);});
- return {root,signage,loaded,get ready(){return ready;},get error(){return error;},update(field:readonly FieldCar[]|undefined,camera:T.PerspectiveCamera,focus:T.Vector3,shadowExtent:number,mirror=false,balanced=false,drawShadows=true,viewHeight=0){
+ const lift={front:0,rear:0,dropBounce:0},service={distance:0,pit:'stopped',pitTime:0};
+ return {root,signage,inkMap,loaded,get ready(){return ready;},get error(){return error;},update(field:readonly FieldCar[]|undefined,camera:T.PerspectiveCamera,focus:T.Vector3,shadowExtent:number,mirror=false,balanced=false,drawShadows=true,viewHeight=0,time=0){
+  tails.count=0;
   root.visible=!!field?.length;if(!ready||!field)return;
   camera.updateMatrixWorld();frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
   for(const batch of modules.values())batch.count=0;
@@ -292,7 +316,7 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
   let casters=0,others=order.length;
   for(let i=0;i<field.length;i++){
    const c=field[i];if(c.finishTime!==null)continue;
-   const p=track.pointAt(c.distance,c.offset),centre=centres[i];
+   const p=track.pointAt(c.distance,c.offset,carPoint),centre=centres[i];
    centre.set(p.x,heightAt(c.distance)+.55,p.z);bounds.center.copy(centre);
    const focusSq=centre.distanceToSquared(focus);
    visibleInCamera[i]=Number(frustum.intersectsSphere(bounds));
@@ -303,7 +327,7 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
    if(k>=casters&&k<others)continue;
    const i=order[k],c=field[i],inShadow=k<casters,inCamera=visibleInCamera[i];
    bounds.center.copy(centres[i]);
-   const t=track.tangentAt(c.distance);pose.position.copy(bounds.center);pose.position.y-=.524;
+   const t=track.tangentAt(c.distance,carTangent);pose.position.copy(bounds.center);pose.position.y-=.524;
    pose.rotation.set(Math.atan2(heightAt(c.distance-3)-heightAt(c.distance+3),6),Math.atan2(t.x,t.z)+(c.pitHeading??0)+(c.impactYaw??0),0,'YXZ');pose.updateMatrix();
    const distanceSq=bounds.center.distanceToSquared(camera.position);
    const stopped=c.pit==='stopped',seconds=track.PIT_STOP_SECONDS-(c.service??0);
@@ -328,30 +352,45 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
     removedWheels.setX(slot,off);
    }
    const module=modules.get(near?profiles[i]:farModules[i])!,contact=modules.get('Contact')!;
-   contact.setMatrixAt(contact.count++,pose.matrix);
-   if(stopped){pose.position.y+=jackLift({distance:c.distance,pit:c.pit,pitTime:seconds});pose.updateMatrix();}
+   service.pitTime=seconds;
+   if(stopped)jackLift(service,lift);
+   if(!stopped||Math.max(lift.front,lift.rear)<.025)contact.setMatrixAt(contact.count++,pose.matrix);
+   if(!mirror&&!balanced&&near&&!stopped){
+    pose.rotation.x+=heat[i]*.018;
+    const edge=kerbHeight(track,c.distance,c.offset+Math.sign(c.offset)*.82);
+    pose.rotation.z+=Math.sign(c.offset)*edge*.33;pose.updateMatrix();
+   }
+   if(stopped){pose.position.y+=(lift.front+lift.rear)*.5+lift.dropBounce;pose.rotation.x+=(lift.rear-lift.front)/3.6;pose.updateMatrix();}
+   const harvesting=c.harvesting??false;
+   if(inCamera&&(surfaceWater.value>.07||heat[i]>.16||c.pit&&c.pit!=='none'||harvesting)&&(time*4+i*.373)%1<.46){
+    tails.setMatrixAt(tails.count++,pose.matrix);
+   }
    const row=module.geometry.getAttribute('liveryRow');
    if(row.getX(module.count)!==rows[i]){row.setX(module.count,rows[i]);row.needsUpdate=true;}
+   module.geometry.getAttribute('fieldFlapAngle').setX(module.count,!stopped&&c.speed>46&&track.isDrsZone(c.distance)?-.43:0);
    module.setMatrixAt(module.count++,pose.matrix);
    if(opponents[i].team==='Cadillac'||opponents[i].team==='Racing Bulls'){
     const faces=modules.get('BrightWheelFaces')!;faces.geometry.getAttribute('removedWheels').setX(faces.count,off);
     faces.geometry.getAttribute('wheelMotion').setXY(faces.count,(c.distance/.36)%(2*Math.PI),c.speed);
     faces.setMatrixAt(faces.count++,pose.matrix);
    }
+   // Every material in this LOD draws the same ordered cars.
+   pose.matrix.toArray(tier.matrices.array,slot*16);
    for(const [j,batch] of tier.batches.entries()){
-    batch.setMatrixAt(slot,pose.matrix);
-    if(batch.name==='Field CompoundInk'){compoundColor.set(compoundColors[c.compound??'medium']);const color=batch.instanceColor!;
+    if(batch.name==='Field Tyre'){compoundColor.set(compoundColors[(stopped&&seconds<=1.66?c.previousCompound??c.compound:c.compound)??'medium']);const color=batch.instanceColor!;
      if(color.getX(slot)!==Math.fround(compoundColor.r)||color.getY(slot)!==Math.fround(compoundColor.g)||color.getZ(slot)!==Math.fround(compoundColor.b)){batch.setColorAt(slot,compoundColor);color.needsUpdate=true;}}
     else if(tier.entries[slot]!==i)batch.setColorAt(slot,tier.palettes[j][i]);
    }
    if(tier.entries[slot]!==i){tier.entries[slot]=i;tier.rows.setX(slot,rows[i]);
     tier.forms.setX(slot,strengths[i]);tier.dirty=true;}
   }
+  tails.visible=tails.count>0;if(tails.count)tails.instanceMatrix.needsUpdate=true;
   if(close.count){removedWheels.needsUpdate=true;close.wheels.needsUpdate=true;close.controls.needsUpdate=true;rotorHeat.needsUpdate=true;}
-  for(const m of modules.values()){m.visible=m.count>0;if(!m.count)continue;for(const name of ['wheelMotion','removedWheels']){const a=m.geometry.getAttribute(name);if(a)a.needsUpdate=true;}m.instanceMatrix.needsUpdate=true;}
+  for(const m of modules.values()){m.visible=m.count>0;if(!m.count)continue;for(const name of ['wheelMotion','removedWheels','fieldFlapAngle']){const a=m.geometry.getAttribute(name);if(a)a.needsUpdate=true;}m.instanceMatrix.needsUpdate=true;}
   for(const tier of [far,close]){
+   if(tier.count)tier.matrices.needsUpdate=true;
    if(tier.dirty){tier.rows.needsUpdate=true;tier.forms.needsUpdate=true;}
-   for(const batch of tier.batches){batch.castShadow=tier.shadowCount>0&&batch.name!=='Field UndertrayShadow';batch.count=tier.count;batch.visible=tier.count>0;if(!tier.count)continue;batch.instanceMatrix.needsUpdate=true;if(tier.dirty)batch.instanceColor!.needsUpdate=true;}
+   for(const batch of tier.batches){batch.castShadow=tier.shadowCount>0&&batch.name!=='Field UndertrayShadow';batch.count=tier.count;batch.visible=tier.count>0;if(tier.count&&tier.dirty)batch.instanceColor!.needsUpdate=true;}
   }
  },dispose(){
   if(disposed)return;

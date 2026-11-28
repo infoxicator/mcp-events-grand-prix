@@ -19,6 +19,8 @@ export interface RaceControl {
  wetness:number;
  sectorWetness?:[number,number,number];
  forecast?:WeatherForecast;
+ /** Explicit trackside message from race control, when supplied by a replay or race feed. */
+ marshalSignal?:'GREEN'|'YELLOW'|'DOUBLE YELLOW'|'SC'|'VSC'|'BLUE'|'RED'|'WHITE';
  yellowUntil?:number;
  safetyCar?:{distance:number;speed:number;offset:number;releaseDistance:number};
  queuedSafetyCarLap?:number;

@@ -141,7 +141,21 @@ for side in (-1,1):
     rod((side*.10,.119,-.045),(side*.113,.119,-.045),.029,dark)
 rod((-.104,.123,.058),(-.088,.096,.146),.004,dark)
 rod((-.088,.096,.146),(-.045,.093,.157),.006,dark)
+for side in (-1,1):
+    rings([(side*.119,.077,-.026,.016,.034),(side*.121,.094,-.026,.033,.047),
+           (side*.122,.150,-.026,.034,.049),(side*.116,.170,-.026,.023,.035)],dark,16)
+    rod((side*.122,.16,-.026),(side*.096,.234,-.031),.007,metal,n=8)
+for i in range(24):
+    def cable(k):
+        t=k/24
+        return (-.125+.007*math.cos(t*math.tau*4),.085-.088*t,-.04-.063*t+.007*math.sin(t*math.tau*4))
+    rod(cable(i),cable(i+1),.003,dark,n=5)
 make('HelmetHardware')
+rings([(0,-.075,.043,.046,.029),(0,-.040,.068,.072,.039),(0,.030,.071,.077,.042),(0,.082,.049,.050,.030)],dark,14)
+make('KneePad')
+rings([(0,0,0,.049,.029),(0,.082,0,.049,.029)],dark,8)
+rod((0,.082,0),(0,.092,0),.016,red,n=8)
+make('ReleaseController')
 tailored(section([(-.054,.018,.023,0),(-.028,.069,.066,0),(.022,.086,.077,.004),
     (.095,.084,.080,.005),(.178,.075,.069,0),(.252,.063,.063,-.005),(.31,.059,.061,-.008),
     (.354,.065,.064,-.005),(.405,.066,.060,0),(.494,.050,.047,0),(.575,.039,.039,0)]),
@@ -183,6 +197,8 @@ rod((0,0,.305),(0,0,.312),.029,dark,.029,6)
 rod((0,-.118,.018),(0,-.148,.018),.016,metal,.014,12)
 for j in range(4):
     rod((-.039,.031,-.019+j*.027),(.039,.031,-.019+j*.027),.007,dark)
+# Mark the LED by its saturated white vertex colour and axial range.
+rod((0,0,.209),(0,0,.222),.039,(1,1,1),n=20)
 make('SocketGun')
 # A one-metre hose section, instanced along the hanging lines.
 rod((0,0,0),(0,1,0),.011,(.044,.048,.052),n=10);make('AirHose')
@@ -192,13 +208,14 @@ rod((0,2.15,0),(-1.15,2.85,0),.034,(.13,.14,.15))
 for x in [-1.35,-4.45]:
     rod((x,2.85,-.10),(x,2.85,.10),.049,metal)
 make('HoseBoom')
-rod((0,0,0),(0,0,-.076),.112,(.024,.027,.031),n=28)
-rod((0,0,-.075),(0,0,-.091),.088,(.11,.12,.13),n=28)
-rod((0,.22,-.038),(0,.083,-.038),.019,metal,n=10)
-rod((0,0,.004),(0,0,.014),.085,metal,n=28)
+# Twin clamp posts bolt the pod directly to the end chord.
+rings([(0,-.11,0,.34,.105),(0,.14,0,.34,.105)],dark,8)
+for x in (-.20,.20):rod((x,.12,0),(x,.39,0),.027,metal)
+for x in (-.24,-.08,.08,.24):
+    rod((x,.033,-.06),(x,.033,-.13),.065,dark,n=16)
+    rod((x,.095,-.070),(x,.095,-.164),.011,metal,n=8)
 make('ReleaseHousing')
-rod((0,0,-.093),(0,0,-.098),.073,(.92,.92,.88),n=28)
-rod((0,0,.015),(0,0,.020),.072,(.92,.92,.88),n=28);make('ReleaseLens')
+rod((0,0,-.131),(0,0,-.135),.047,(1,1,1),n=18);make('ReleaseLens')
 rubber=(.034,.033,.031)
 tyre_ring([(-.15,.224),(-.166,.261),(-.159,.310),(-.128,.349),(-.082,.36),(.082,.36),(.128,.349),(.159,.310),(.166,.261),(.15,.224)],rubber)
 for sign in [-1,1]:
@@ -224,8 +241,19 @@ for side in [-1,1]:
     rod((side*.145,.085,.12),(side*.062,.20,.33),.027,red)
     rod((side*.20,.070,-.13),(side*.245,.070,-.13),.071,dark)
 rod((-.2,.09,-.15),(.2,.09,-.15),.031,metal);make('JackFoot')
+# Low rear fork straddles the crash structure and hooks behind its lip.
+for side in (-1,1):
+    rod((side*.17,.063,-.19),(side*.085,.090,.28),.031,metal,n=8)
+    rod((side*.085,.09,.28),(side*.085,.22,.33),.032,red,n=8)
+    rod((side*.085,.22,.33),(side*.085,.22,.39),.026,dark,n=8)
+    rod((side*.14,.061,-.13),(side*.20,.061,-.13),.062,dark,n=8)
+rod((-.17,.073,-.13),(.17,.073,-.13),.03,metal,n=8);make('RearJackFoot')
+for side in (-1,1):rod((side*.10,0,0),(side*.10,.055,.42),.027,red,n=10)
+make('JackLiftArm')
 rod((-.113,.155,.345),(.113,.155,.345),.038,dark);make('JackCradle')
-rod((0,0,0),(0,.82,-.69),.029,metal);rod((-.21,.82,-.69),(.21,.82,-.69),.028,dark);make('JackHandle')
+rod((0,0,0),(0,.82,-.69),.029,metal);rod((-.21,.82,-.69),(.21,.82,-.69),.028,dark)
+rod((.15,.82,-.69),(.15,.76,-.64),.012,red,n=8)
+rod((.15,.76,-.64),(.073,.76,-.64),.012,red,n=8);make('JackHandle')
 # Soft occlusion under an individual planted sole. The renderer follows each
 # boot so the contact opens out and fades as its weight shifts to the other leg.
 contact=bpy.data.materials.new('Sole contact');contact.use_nodes=True
@@ -263,6 +291,9 @@ faces.append(tuple(reversed(prev)));make('ServiceNose')
 # Each mesh can be inspected individually in the native file.
 for i,o in enumerate(parts):o.location.x=i*.65
 bpy.ops.wm.save_as_mainfile(filepath=str(root/'scripts/blender/pit-equipment.blend'))
+# Keep the suit bind meshes in the native file for build_service_suit.py.
+for part in parts:
+    part.select_set(part.name not in {'Torso','Arm','Leg','AirHose','HoseBoom'})
 raw=Path('/tmp/jgp-service-kit.glb')
-bpy.ops.export_scene.gltf(filepath=str(raw),export_format='GLB',export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_yup=True,export_cameras=False,export_lights=False)
+bpy.ops.export_scene.gltf(filepath=str(raw),export_format='GLB',use_selection=True,export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_yup=True,export_cameras=False,export_lights=False)
 pack(raw,out/'pit-equipment.glb.gz')
