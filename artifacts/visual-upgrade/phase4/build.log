@@ -1,0 +1,215 @@
+
+> jev-grand-prix@1.0.0 build
+> npm run typecheck && vite build && vite build --config vite.mcp.config.ts && vite build --config vite.mcp-host.config.ts && node scripts/check-asset-budget.mjs
+
+
+> jev-grand-prix@1.0.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.worker.json
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 152 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                     0.69 kB │ gzip:   0.45 kB
+dist/assets/space-grotesk-vietnamese-700-normal-DMty7AZE.woff2      4.20 kB
+dist/assets/space-grotesk-vietnamese-400-normal-B7xT_GF5.woff2      4.30 kB
+dist/assets/space-grotesk-vietnamese-600-normal-DUi7WF5p.woff2      4.31 kB
+dist/assets/space-grotesk-vietnamese-500-normal-BmEvtly_.woff2      4.32 kB
+dist/assets/space-mono-vietnamese-400-normal-B0PMp_xB.woff          5.41 kB
+dist/assets/space-grotesk-vietnamese-700-normal-Duxec5Rn.woff       5.59 kB
+dist/assets/space-grotesk-vietnamese-600-normal-D6zpsUhD.woff       5.70 kB
+dist/assets/space-grotesk-vietnamese-500-normal-BTqKIpxg.woff       5.72 kB
+dist/assets/space-grotesk-vietnamese-400-normal-BIWiOVfw.woff       5.73 kB
+dist/assets/space-mono-vietnamese-400-normal-BNOj0Qhp.woff2         7.27 kB
+dist/assets/space-grotesk-latin-ext-700-normal-BQnZhY3m.woff2      11.99 kB
+dist/assets/space-grotesk-latin-ext-400-normal-CfP_5XZW.woff2      12.26 kB
+dist/assets/space-grotesk-latin-ext-500-normal-DUe3BAxM.woff2      12.27 kB
+dist/assets/space-grotesk-latin-ext-600-normal-DxxdqCpr.woff2      12.29 kB
+dist/assets/space-mono-latin-400-normal-_3DlpgIW.woff              12.31 kB
+dist/assets/oxanium-latin-C1BHJTsC.woff2                           12.34 kB
+dist/assets/space-mono-latin-ext-400-normal-D4cJI_B-.woff          12.61 kB
+dist/assets/space-grotesk-latin-700-normal-RjhwGPKo.woff2          12.84 kB
+dist/assets/space-grotesk-latin-600-normal-DjKNqYRj.woff2          13.28 kB
+dist/assets/space-grotesk-latin-500-normal-lFbtlQH6.woff2          13.31 kB
+dist/assets/space-grotesk-latin-400-normal-CJ-V5oYT.woff2          13.39 kB
+dist/assets/space-mono-latin-ext-400-normal-DTLbW2xa.woff2         15.83 kB
+dist/assets/space-grotesk-latin-700-normal-CwsQ-cCU.woff           16.42 kB
+dist/assets/space-grotesk-latin-ext-700-normal-HVCqSBdx.woff       16.46 kB
+dist/assets/space-mono-latin-400-normal-Rg4St2Dn.woff2             16.52 kB
+dist/assets/space-grotesk-latin-ext-600-normal-VcznFIpX.woff       16.73 kB
+dist/assets/space-grotesk-latin-ext-400-normal-DRPE3kg4.woff       16.79 kB
+dist/assets/space-grotesk-latin-ext-500-normal-3dgZTiw9.woff       16.79 kB
+dist/assets/space-grotesk-latin-600-normal-BflQw4A9.woff           16.88 kB
+dist/assets/space-grotesk-latin-500-normal-CNSSEhBt.woff           16.99 kB
+dist/assets/space-grotesk-latin-400-normal-BnQMeOim.woff           17.00 kB
+dist/assets/slick-print-FPiltFKO.png                               20.24 kB
+dist/assets/space-grotesk-latin-DPT1xrvW.woff2                     22.32 kB
+dist/assets/draco_wasm_wrapper-fZCQGLGb.js                         58.46 kB
+dist/assets/draco_wasm_wrapper-DxJM36Ib.js                         58.76 kB
+dist/assets/water-normal-CuSUDuFk.jpg                              66.20 kB
+dist/assets/safety-gt.glb-D5rcgrK_.gz                              71.80 kB
+dist/assets/monza-canopy-light-C0F_sxZt.png                       121.94 kB
+dist/assets/constructor-trim.glb-CyIdt8hZ.gz                      154.80 kB
+dist/assets/jgp26-contact-1r-HLQHR.png                            159.00 kB
+dist/assets/field.glb-CfJfeLQS.gz                                 174.95 kB
+dist/assets/draco_decoder-Z1_iN-Ht.wasm                           192.42 kB │ gzip:  63.46 kB
+dist/assets/pit-equipment.glb-iM8rNOW3.gz                         208.24 kB
+dist/assets/service-suit.glb-BXg0syoD.gz                          222.18 kB
+dist/assets/strip-reflection.hdr-DQpaF3Dw.gz                      229.42 kB
+dist/assets/draco_decoder-C32yEggz.wasm                           285.75 kB │ gzip:  88.64 kB
+dist/assets/field-near.glb-5T7rpURq.gz                            286.73 kB
+dist/assets/jgp26-wire-shell.json-X5LuMe6o.gz                     316.68 kB
+dist/assets/asphalt-normal-DbdgdJQE.webp                          329.95 kB
+dist/assets/raked-normal-BT8bK1QS.jpg                             337.69 kB
+dist/assets/jgp26-ao-DM5lUCPi.png                                 384.78 kB
+dist/assets/inspection-poses.json-BFFh0iBj.gz                     414.02 kB
+dist/assets/draco_decoder-fzg4nYZr.js                             719.41 kB
+dist/assets/daylight.hdr-BQOR4GX5.gz                              954.16 kB
+dist/assets/jgp26-race-low.glb-C8chtt4e.gz                      1,258.29 kB
+dist/assets/jgp26-race-high.glb-BW2yh-Pm.gz                     3,656.24 kB
+dist/assets/jgp26-high.glb-CB4TZCoD.gz                          3,836.72 kB
+dist/assets/las-vegas.glb-DXRxJDaD.gz                           4,325.88 kB
+dist/assets/monza.glb-C8Uc0aRd.gz                               5,350.68 kB
+dist/assets/las-vegas-mcp.glb-LCltMb9T.gz                       5,560.19 kB
+dist/assets/monza-mcp.glb-IWjK7rG1.gz                           6,567.95 kB
+dist/assets/strategy-view-BkYdgFUU.css                              0.71 kB │ gzip:   0.38 kB
+dist/assets/driver-radio-CS86R0xZ.css                               3.82 kB │ gzip:   1.37 kB
+dist/assets/clipboard-Ka6bmONk.css                                  5.00 kB │ gzip:   0.72 kB
+dist/assets/replay-view-Isfh8fuN.css                                7.89 kB │ gzip:   2.27 kB
+dist/assets/drive-view-DLr82trZ.css                                36.92 kB │ gzip:   7.91 kB
+dist/assets/ui-CM4-7OnP.css                                        66.76 kB │ gzip:  17.55 kB
+dist/assets/clipboard-CCbLw2VU.js                                   0.24 kB │ gzip:   0.18 kB
+dist/assets/flythrough-Lve8I-qD.js                                  0.83 kB │ gzip:   0.57 kB
+dist/assets/replay-three--djvucmc.js                                2.30 kB │ gzip:   1.31 kB
+dist/assets/strategy-view-BXkOcl_A.js                              16.31 kB │ gzip:   7.33 kB
+dist/assets/replay-view-Ff2hy3Ny.js                                22.35 kB │ gzip:   8.96 kB
+dist/assets/driver-radio-CO1kzaLv.js                               26.46 kB │ gzip:  10.33 kB
+dist/assets/drive-view-SFXSbukk.js                                 53.44 kB │ gzip:  17.65 kB
+dist/assets/ui-CwrG5rw-.js                                         54.56 kB │ gzip:  20.62 kB
+dist/assets/index-CL5AZWWF.js                                      83.50 kB │ gzip:  32.53 kB
+dist/assets/three.module-DG_tR8T4.js                              612.88 kB │ gzip: 153.69 kB
+dist/assets/scene-CD7o8QIT.js                                     924.18 kB │ gzip: 335.47 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.23s
+vite v7.3.8 building client environment for production...
+transforming...
+node_modules/zod/v4/core/util.js (400:0): A comment
+
+"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
+
+in "node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/zod/v4/core/regexes.js (74:0): A comment
+
+"/** Anchors a pattern source. The interpolation lives here rather than at the call site because
+ * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
+ * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
+
+in "node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 299 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/mcp/assets/space-grotesk-vietnamese-700-normal-DMty7AZE.woff2      4.20 kB
+dist/mcp/assets/space-grotesk-vietnamese-400-normal-B7xT_GF5.woff2      4.30 kB
+dist/mcp/assets/space-grotesk-vietnamese-600-normal-DUi7WF5p.woff2      4.31 kB
+dist/mcp/assets/space-grotesk-vietnamese-500-normal-BmEvtly_.woff2      4.32 kB
+dist/mcp/assets/space-mono-vietnamese-400-normal-B0PMp_xB.woff          5.41 kB
+dist/mcp/assets/space-grotesk-vietnamese-700-normal-Duxec5Rn.woff       5.59 kB
+dist/mcp/assets/space-grotesk-vietnamese-600-normal-D6zpsUhD.woff       5.70 kB
+dist/mcp/assets/space-grotesk-vietnamese-500-normal-BTqKIpxg.woff       5.72 kB
+dist/mcp/assets/space-grotesk-vietnamese-400-normal-BIWiOVfw.woff       5.73 kB
+dist/mcp/assets/space-mono-vietnamese-400-normal-BNOj0Qhp.woff2         7.27 kB
+dist/mcp/mcp-app.html                                                   9.65 kB │ gzip:   3.03 kB
+dist/mcp/assets/space-grotesk-latin-ext-700-normal-BQnZhY3m.woff2      11.99 kB
+dist/mcp/assets/space-grotesk-latin-ext-400-normal-CfP_5XZW.woff2      12.26 kB
+dist/mcp/assets/space-grotesk-latin-ext-500-normal-DUe3BAxM.woff2      12.27 kB
+dist/mcp/assets/space-grotesk-latin-ext-600-normal-DxxdqCpr.woff2      12.29 kB
+dist/mcp/assets/space-mono-latin-400-normal-_3DlpgIW.woff              12.31 kB
+dist/mcp/assets/oxanium-latin-C1BHJTsC.woff2                           12.34 kB
+dist/mcp/assets/space-mono-latin-ext-400-normal-D4cJI_B-.woff          12.61 kB
+dist/mcp/assets/space-grotesk-latin-700-normal-RjhwGPKo.woff2          12.84 kB
+dist/mcp/assets/space-grotesk-latin-600-normal-DjKNqYRj.woff2          13.28 kB
+dist/mcp/assets/space-grotesk-latin-500-normal-lFbtlQH6.woff2          13.31 kB
+dist/mcp/assets/space-grotesk-latin-400-normal-CJ-V5oYT.woff2          13.39 kB
+dist/mcp/assets/space-mono-latin-ext-400-normal-DTLbW2xa.woff2         15.83 kB
+dist/mcp/assets/space-grotesk-latin-700-normal-CwsQ-cCU.woff           16.42 kB
+dist/mcp/assets/space-grotesk-latin-ext-700-normal-HVCqSBdx.woff       16.46 kB
+dist/mcp/assets/space-mono-latin-400-normal-Rg4St2Dn.woff2             16.52 kB
+dist/mcp/assets/space-grotesk-latin-ext-600-normal-VcznFIpX.woff       16.73 kB
+dist/mcp/assets/space-grotesk-latin-ext-500-normal-3dgZTiw9.woff       16.79 kB
+dist/mcp/assets/space-grotesk-latin-ext-400-normal-DRPE3kg4.woff       16.79 kB
+dist/mcp/assets/space-grotesk-latin-600-normal-BflQw4A9.woff           16.88 kB
+dist/mcp/assets/space-grotesk-latin-500-normal-CNSSEhBt.woff           16.99 kB
+dist/mcp/assets/space-grotesk-latin-400-normal-BnQMeOim.woff           17.00 kB
+dist/mcp/assets/slick-print-FPiltFKO.png                               20.24 kB
+dist/mcp/assets/space-grotesk-latin-DPT1xrvW.woff2                     22.32 kB
+dist/mcp/assets/draco_wasm_wrapper-fZCQGLGb.js                         58.46 kB
+dist/mcp/assets/draco_wasm_wrapper-DxJM36Ib.js                         58.76 kB
+dist/mcp/assets/water-normal-CuSUDuFk.jpg                              66.20 kB
+dist/mcp/assets/safety-gt.glb-D5rcgrK_.gz                              71.80 kB
+dist/mcp/assets/monza-canopy-light-C0F_sxZt.png                       121.94 kB
+dist/mcp/assets/constructor-trim.glb-CyIdt8hZ.gz                      154.80 kB
+dist/mcp/assets/jgp26-contact-1r-HLQHR.png                            159.00 kB
+dist/mcp/assets/field.glb-CfJfeLQS.gz                                 174.95 kB
+dist/mcp/assets/draco_decoder-Z1_iN-Ht.wasm                           192.42 kB │ gzip:  63.46 kB
+dist/mcp/assets/pit-equipment.glb-iM8rNOW3.gz                         208.24 kB
+dist/mcp/assets/service-suit.glb-BXg0syoD.gz                          222.18 kB
+dist/mcp/assets/strip-reflection.hdr-DQpaF3Dw.gz                      229.42 kB
+dist/mcp/assets/draco_decoder-C32yEggz.wasm                           285.75 kB │ gzip:  88.64 kB
+dist/mcp/assets/field-near.glb-5T7rpURq.gz                            286.73 kB
+dist/mcp/assets/jgp26-wire-shell.json-X5LuMe6o.gz                     316.68 kB
+dist/mcp/assets/asphalt-normal-DbdgdJQE.webp                          329.95 kB
+dist/mcp/assets/raked-normal-BT8bK1QS.jpg                             337.69 kB
+dist/mcp/assets/jgp26-ao-DM5lUCPi.png                                 384.78 kB
+dist/mcp/assets/inspection-poses.json-BFFh0iBj.gz                     414.02 kB
+dist/mcp/assets/draco_decoder-fzg4nYZr.js                             719.41 kB
+dist/mcp/assets/daylight.hdr-BQOR4GX5.gz                              954.16 kB
+dist/mcp/assets/jgp26-race-low.glb-C8chtt4e.gz                      1,258.29 kB
+dist/mcp/assets/jgp26-race-high.glb-BW2yh-Pm.gz                     3,656.24 kB
+dist/mcp/assets/jgp26-high.glb-CB4TZCoD.gz                          3,836.72 kB
+dist/mcp/assets/las-vegas.glb-DXRxJDaD.gz                           4,325.88 kB
+dist/mcp/assets/monza.glb-C8Uc0aRd.gz                               5,350.68 kB
+dist/mcp/assets/las-vegas-mcp.glb-Dr5gxpUG.gz                       5,829.00 kB
+dist/mcp/assets/monza-mcp.glb-Bc7pyKil.gz                           6,792.91 kB
+dist/mcp/assets/event-log-view-CS86R0xZ.css                             3.82 kB │ gzip:   1.37 kB
+dist/mcp/assets/drive-view-DLr82trZ.css                                36.92 kB │ gzip:   7.91 kB
+dist/mcp/assets/mcp-app-lMINCSs6.css                                   83.39 kB │ gzip:  20.32 kB
+dist/mcp/assets/drive-view-iy_CILHb.js                                 53.34 kB │ gzip:  17.60 kB
+dist/mcp/assets/mcp-app-QhCvrWSs.js                                   312.19 kB │ gzip:  90.32 kB
+dist/mcp/assets/event-log-view-By6uiJ3R.js                          1,294.42 kB │ gzip: 416.46 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.03s
+vite v7.3.8 building client environment for production...
+transforming...
+node_modules/zod/v4/core/util.js (400:0): A comment
+
+"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
+
+in "node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/zod/v4/core/regexes.js (74:0): A comment
+
+"/** Anchors a pattern source. The interpolation lives here rather than at the call site because
+ * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
+ * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
+
+in "node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 166 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/mcp-host/mcp-sandbox.html                             0.48 kB │ gzip:  0.33 kB
+dist/mcp-host/mcp-host.html                                1.29 kB │ gzip:  0.77 kB
+dist/mcp-host/assets/modulepreload-polyfill-B5Qt9EMX.js    0.71 kB │ gzip:  0.40 kB
+dist/mcp-host/assets/mcp-sandbox-Cyg2KFhq.js               1.12 kB │ gzip:  0.63 kB
+dist/mcp-host/assets/mcp-host-Bn1lL6lu.js                345.71 kB │ gzip: 92.73 kB
+✓ built in 439ms
+Asset budget PASS: largest dist/mcp/assets/monza-mcp.glb-Bc7pyKil.gz, 6792908 / 26214400 bytes
+MCP template budget PASS: 9649 / 65536 bytes
+Hero triangle budget PASS: 228714 / 245000

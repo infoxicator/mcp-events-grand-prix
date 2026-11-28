@@ -47,7 +47,7 @@ for(const id of ['monza','las-vegas'] as const)describe(id+' Blender circuit',()
   const url=new URL(`../src/race/assets/circuits/${id}.glb`,import.meta.url),b=readFileSync(url),g=JSON.parse(b.toString('utf8',20,20+b.readUInt32LE(12)));
   expect(b.toString('ascii',0,4)).toBe('glTF');expect(g.asset.generator).toContain('Blender');expect(g.extensionsRequired).toContain('KHR_draco_mesh_compression');
   expect(g.buffers.every((v:any)=>!v.uri)).toBe(true);expect(g.images.every((v:any)=>v.bufferView!==undefined)).toBe(true);
-  const materials=g.materials.map((m:any)=>m.name);for(const m of ['Asphalt','Fence','Spectator0','Sign','Glass','Brake150'])expect(materials).toContain(m);
+  const materials=g.materials.map((m:any)=>m.name);for(const m of ['Asphalt','Fence','Spectator0','Sign','Glass','Brake150','Brake200','GridNumber','BarrierPrint'])expect(materials).toContain(m);
   expect(materials).toContain(id==='monza'?'Canopy0':'Sphere');expect(statSync(new URL(`../src/race/assets/circuits/${id}.glb.gz`,import.meta.url)).size).toBeLessThan(7_500_000);expect(g.extensionsUsed).toContain('EXT_mesh_gpu_instancing');if(id==='monza')expect(g.nodes.some((n:any)=>n.name==='LOD_Canopy0')).toBe(true);expect(g.nodes.filter((n:any)=>n.extensions?.EXT_mesh_gpu_instancing).length).toBeGreaterThan(4);
  });
 });
@@ -55,6 +55,7 @@ for(const id of ['monza','las-vegas'] as const)describe(id+' Blender circuit',()
 it('authors Monza as perforated branchlet layers with a cheaper open distant LOD',()=>{
  const b=readFileSync(new URL('../src/race/assets/circuits/monza-mcp.glb.gz',import.meta.url)),raw=gunzipSync(b),g=JSON.parse(raw.toString('utf8',20,20+raw.readUInt32LE(12)));
  const canopies=g.materials.filter((m:any)=>m.name.startsWith('Canopy'));expect(canopies).toHaveLength(4);
+ expect(new Set(canopies.map((m:any)=>m.pbrMetallicRoughness.baseColorTexture.index)).size).toBe(4);
  for(const m of canopies){expect(m.alphaMode).toBe('BLEND');expect(m.pbrMetallicRoughness.baseColorTexture).toBeTruthy();}
  const near=g.nodes.find((n:any)=>n.extensions?.EXT_mesh_gpu_instancing&&n.mesh!==undefined&&g.meshes[n.mesh].primitives.some((p:any)=>g.materials[p.material].name==='Canopy0')),far=g.nodes.find((n:any)=>n.name==='LOD_Canopy0');expect(near).toBeTruthy();expect(far).toBeTruthy();
  const count=(n:any)=>g.meshes[n.mesh].primitives.reduce((sum:number,p:any)=>sum+g.accessors[p.indices].count/3,0);

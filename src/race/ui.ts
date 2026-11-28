@@ -485,7 +485,7 @@ export function mountRace(room:HostedRoom,options:{team?:Team|null;controller?:b
     ({LENGTH,pointAt,cornerName,SECTORS,tangentAt}=track);
    }
    if(embeddedFeed){renderFailed=false;renderDeadline=now+12_000;showFeed('loading');}
-   if(!telemetryOnly)try{scene=createScene(viewport,track);}
+   if(!telemetryOnly)try{scene=createScene(viewport,track,params.get('quality')==='high'?'high':'auto');}
    catch(error){
     if(!embeddedFeed)throw error;
     renderFailed=true;

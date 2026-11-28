@@ -1,0 +1,34 @@
+
+> jev-grand-prix@1.0.0 test:mcp
+> playwright test --grep "MCP"
+
+[WebServer] (node:71822) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:71850) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:71852) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:71884) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 13 tests using 1 worker
+
+(node:71885) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 e2e/mcp-lifecycle.spec.ts:11:43 › MCP autopilot releases the renderer across five offscreen cycles (11.1s)
+  ✓   2 e2e/mcp-lifecycle.spec.ts:11:43 › MCP human releases the renderer across five offscreen cycles (11.5s)
+  ✓   3 e2e/mcp.spec.ts:17:1 › MCP autopilot sends a driver question to chat and airs the strategist reply (11.6s)
+  ✓   4 e2e/mcp.spec.ts:69:1 › MCP manual cockpit sends the typed driver question to chat (6.3s)
+  ✓   5 e2e/mcp.spec.ts:85:1 › MCP team radio explains when the host cannot send chat messages (6.0s)
+  ✓   6 e2e/mcp.spec.ts:98:1 › MCP shows a live map and waits at the grid until a delayed 3D frame is visible (1.9s)
+  ✓   7 e2e/mcp.spec.ts:140:1 › MCP can start from a live map when the circuit model is unavailable (1.5s)
+{"mcpResource":"ui://jev-grand-prix/pit-wall-v35.html","sharedRoom":"9ec828af-b95c-4694-91ca-ab63e91b837e","circuit":"monza","intents":{"a":18,"b":22},"paidCalls":0,"clipboardFallback":true,"independentTeardown":true,"browserInvitation":true,"errors":[]}
+  ✓   8 e2e/mcp.spec.ts:154:44 › two MCP app contexts join by invitation and a browser spectator watches the same race (monza) (13.9s)
+{"mcpResource":"ui://jev-grand-prix/pit-wall-v35.html","sharedRoom":"9710fb9a-42ca-48d3-9cf3-ae9b5b4b7edb","circuit":"las-vegas","intents":{"a":16,"b":18},"paidCalls":0,"clipboardFallback":true,"independentTeardown":true,"browserInvitation":true,"errors":[]}
+  ✓   9 e2e/mcp.spec.ts:154:44 › two MCP app contexts join by invitation and a browser spectator watches the same race (las-vegas) (13.4s)
+  ✓  10 e2e/mcp.spec.ts:186:1 › mock watch links use the MCP host to open the selected circuit in a browser (2.4s)
+  ✓  11 e2e/mcp.spec.ts:221:1 › MCP pit wall keeps its dark palette on a light host (1.2s)
+  ✓  12 e2e/mcp.spec.ts:242:1 › MCP setup supports Jev System 1 and Luna with an in-memory API key (6.4s)
+  ✓  13 e2e/mcp.spec.ts:326:1 › MCP driver-key endpoint accepts each driving mode and defaults to tactical (30ms)
+
+  13 passed (1.5m)

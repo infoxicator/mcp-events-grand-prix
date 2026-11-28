@@ -7,7 +7,7 @@ import {applyLivery} from './liveries';
 import * as T from 'three';
 import {constructorKit,trimMesh} from './constructor-trim';
 import {embeddedGLB} from './embedded-glb';
-import {compoundColors,grid, gridSlot, opponents, paints, type FieldCar} from './grid';
+import {compoundColors,grid, opponents, paints, type FieldCar} from './grid';
 import type {Track} from './track';
 import nearURL from './assets/field-near.glb.gz?url';
 import fieldURL from './assets/field.glb.gz?url';
@@ -49,22 +49,6 @@ function shapeAero(material:T.Material){
  material.customProgramCacheKey=()=>key+'-aero-profile';
 }
 
-// The two Blender circuits contain the original twenty painted boxes.
-function extraGridBoxes(track:Track,heightAt:(distance:number)=>number){
- const vertices:number[]=[];
- function stripe(d0:number,d1:number,left:number,right:number){
-  for(const [d,offset] of [[d0,left],[d1,left],[d1,right],[d0,left],[d1,right],[d0,right]]){
-   const p=track.pointAt(d,offset);vertices.push(p.x,heightAt(d)+.05,p.z);
-  }
- }
- for(const entry of grid.slice(20)){
-  const slot=gridSlot(entry),line=slot.distance+3;
-  stripe(line,line+.12,slot.offset-1.1,slot.offset+1.1);
-  stripe(line-4,line,slot.offset-1.1,slot.offset-1);
- }
- const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();
- return new T.Mesh(geometry,new T.MeshStandardMaterial({color:'#dddeda',roughness:.9,side:T.DoubleSide}));
-}
 function spinRims(material:T.Material){
  material.onBeforeCompile=shader=>{
   shader.vertexShader='attribute vec2 wheelMotion;\n'+shader.vertexShader.replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
@@ -102,7 +86,7 @@ export function createField(track:Track,heightAt:(distance:number)=>number,paint
  const tailGeometry=new T.BoxGeometry(.125,.090,.024);tailGeometry.translate(0,.392,-2.67);
  const tails=new T.InstancedMesh(tailGeometry,new T.MeshBasicMaterial({color:new T.Color(4.2,.025,.008)}),opponents.length);
  tails.name='Field rain lights';tails.count=0;tails.frustumCulled=false;root.add(tails);
- const gridBoxes=extraGridBoxes(track,heightAt);const signage=new T.Group();signage.add(gridBoxes);
+ const signage=new T.Group();
  const frustum=new T.Frustum(),projection=new T.Matrix4(),bounds=new T.Sphere(new T.Vector3(),3.6);
  const level=()=>({batches:[] as T.InstancedMesh[],palettes:[] as T.Color[][],
   matrices:new T.InstancedBufferAttribute(new Float32Array(opponents.length*16),16).setUsage(T.DynamicDrawUsage),

@@ -1,0 +1,7 @@
+> jev-grand-prix@1.0.0 circuit:build
+> node --import tsx scripts/export-circuit.ts && python3 scripts/blender/circuit_textures.py && /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/blender/build_circuits.py -- 11
+Info: Saved as "monza.blend"
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:49:19)
+CIRCUIT monza 3637560 triangles 358 chunks
+Info: Saved as "las-vegas.blend"
+CIRCUIT las-vegas 3036154 triangles 703 chunks

@@ -1,0 +1,775 @@
+{
+  "name": "drive-stress",
+  "profile": {
+    "renderMs": {
+      "p50": 16.399999976158142,
+      "p95": 25.300000071525574,
+      "max": 43.299999952316284
+    },
+    "frameCount": 877,
+    "sampledFrames": 74,
+    "meanCalls": 403.62941847206383,
+    "meanTriangles": 983269.2611174459,
+    "worstCutMs": 0,
+    "cuts": [],
+    "spikes": [
+      {
+        "t": 17852.100000023842,
+        "mode": "tcam-a",
+        "from": "tcam-a",
+        "cut": false,
+        "interval": 40.800000071525574,
+        "sceneMs": 32.300000071525574,
+        "mainMs": 19.800000071525574,
+        "mirrorMs": 8.5,
+        "shadowMs": 0,
+        "reflectionMs": 0,
+        "warmupMs": 0,
+        "compileMs": 0,
+        "linkPollMs": 0,
+        "uniformReflectionMs": 0,
+        "attributeReflectionMs": 0,
+        "otherSceneMs": 4,
+        "outsideSceneMs": 8.5
+      },
+      {
+        "t": 24447.899999976158,
+        "mode": "tcam-a",
+        "from": "tcam-a",
+        "cut": false,
+        "interval": 48.39999997615814,
+        "sceneMs": 43.299999952316284,
+        "mainMs": 27.299999952316284,
+        "mirrorMs": 0,
+        "shadowMs": 1.7999999523162842,
+        "reflectionMs": 0,
+        "warmupMs": 0,
+        "compileMs": 0,
+        "linkPollMs": 0.7999999523162842,
+        "uniformReflectionMs": 0,
+        "attributeReflectionMs": 0,
+        "otherSceneMs": 16,
+        "outsideSceneMs": 5.100000023841858
+      },
+      {
+        "t": 24492.899999976158,
+        "mode": "tcam-a",
+        "from": "tcam-a",
+        "cut": false,
+        "interval": 45,
+        "sceneMs": 33.89999997615814,
+        "mainMs": 14.600000023841858,
+        "mirrorMs": 16.399999976158142,
+        "shadowMs": 0,
+        "reflectionMs": 0,
+        "warmupMs": 0,
+        "compileMs": 0,
+        "linkPollMs": 0,
+        "uniformReflectionMs": 0,
+        "attributeReflectionMs": 0,
+        "otherSceneMs": 2.899999976158142,
+        "outsideSceneMs": 11.100000023841858
+      }
+    ],
+    "startup": [
+      {
+        "start": 2330.399999976158,
+        "ms": 546.7999999523163,
+        "sample": false,
+        "main": 0,
+        "mirror": 0,
+        "reflection": 0,
+        "warmup": 0,
+        "compile": 307.10000002384186,
+        "linkQuery": 3.899999976158142,
+        "uniforms": 5.199999928474426,
+        "attributes": 0,
+        "shadow": 0,
+        "calls": 0,
+        "triangles": 0
+      },
+      {
+        "start": 2961.1999999284744,
+        "ms": 204.80000007152557,
+        "mode": "tcam-a",
+        "sample": false,
+        "main": 194.29999995231628,
+        "mirror": 0,
+        "reflection": 3.6999999284744263,
+        "warmup": 0,
+        "compile": 0,
+        "linkQuery": 3.4999998807907104,
+        "uniforms": 0,
+        "attributes": 0,
+        "shadow": 75.39999997615814,
+        "calls": 442,
+        "triangles": 1218383
+      },
+      {
+        "start": 3171.600000023842,
+        "ms": 37.799999952316284,
+        "mode": "tcam-a",
+        "sample": false,
+        "main": 25.699999928474426,
+        "mirror": 0,
+        "reflection": 0,
+        "warmup": 0,
+        "compile": 0,
+        "linkQuery": 0,
+        "uniforms": 0,
+        "attributes": 0,
+        "shadow": 8.699999928474426,
+        "calls": 436,
+        "triangles": 1218311
+      },
+      {
+        "start": 3219.399999976158,
+        "ms": 30.899999976158142,
+        "mode": "tcam-a",
+        "sample": false,
+        "main": 17.800000071525574,
+        "mirror": 0,
+        "reflection": 0,
+        "warmup": 0,
+        "compile": 0.8999999761581421,
+        "linkQuery": 0,
+        "uniforms": 0,
+        "attributes": 0,
+        "shadow": 0,
+        "calls": 304,
+        "triangles": 746480
+      },
+      {
+        "start": 3261.1999999284744,
+        "ms": 27.100000023841858,
+        "mode": "tcam-a",
+        "sample": false,
+        "main": 20.700000047683716,
+        "mirror": 0,
+        "reflection": 0,
+        "warmup": 0,
+        "compile": 2.1999999284744263,
+        "linkQuery": 0,
+        "uniforms": 0,
+        "attributes": 0,
+        "shadow": 6,
+        "calls": 436,
+        "triangles": 1218311
+      }
+    ],
+    "perSampledFrame": {
+      "Effects and other": {
+        "calls": 13.58108108108108,
+        "triangles": 743.4864864864865,
+        "ms": 0.5878378458925195
+      },
+      "Mirror": {
+        "calls": 22.635135135135137,
+        "triangles": 32706.364864864863,
+        "ms": 0.8229729710398493
+      },
+      "Circuit": {
+        "calls": 178.2027027027027,
+        "triangles": 483739.5135135135,
+        "ms": 3.9743243101480843
+      },
+      "Hero B": {
+        "calls": 78.35135135135135,
+        "triangles": 50510.90540540541,
+        "ms": 2.1054054031500944
+      },
+      "Field": {
+        "calls": 22.85135135135135,
+        "triangles": 228690.54054054053,
+        "ms": 0.6891891988548072
+      },
+      "Main": {
+        "calls": 369.0405405405405,
+        "triangles": 903106.5945945946,
+        "ms": 9.325675679219735
+      },
+      "Hero A": {
+        "calls": 110.97297297297297,
+        "triangles": 215908.7837837838,
+        "ms": 2.972972977805782
+      },
+      "Pit crew": {
+        "calls": 1,
+        "triangles": 112,
+        "ms": 0.06081080758893812
+      },
+      "Shadow": {
+        "calls": 13.283783783783784,
+        "triangles": 43892.27027027027,
+        "ms": 0.24189189318064097
+      }
+    },
+    "topDraws": [
+      [
+        "Field/Field Trim",
+        {
+          "calls": 99,
+          "triangles": 9848409,
+          "ms": 1.7999999523162842
+        }
+      ],
+      [
+        "Circuit/Circuit Steel",
+        {
+          "calls": 102,
+          "triangles": 7687948,
+          "ms": 6.299999713897705
+        }
+      ],
+      [
+        "Circuit/Circuit Armco",
+        {
+          "calls": 102,
+          "triangles": 3078120,
+          "ms": 14.699999928474426
+        }
+      ],
+      [
+        "Circuit/Distant Trunk",
+        {
+          "calls": 148,
+          "triangles": 2849888,
+          "ms": 2.3000001907348633
+        }
+      ],
+      [
+        "Field/Field Paint",
+        {
+          "calls": 99,
+          "triangles": 2755065,
+          "ms": 2.5
+        }
+      ],
+      [
+        "Hero A/Nose",
+        {
+          "calls": 74,
+          "triangles": 2514668,
+          "ms": 0.19999992847442627
+        }
+      ],
+      [
+        "Circuit/Distant Spectator0",
+        {
+          "calls": 148,
+          "triangles": 2183888,
+          "ms": 0.19999992847442627
+        }
+      ],
+      [
+        "Field/Mesh",
+        {
+          "calls": 1003,
+          "triangles": 2072084,
+          "ms": 25.90000069141388
+        }
+      ],
+      [
+        "Circuit/Distant Canopy0",
+        {
+          "calls": 74,
+          "triangles": 1681872,
+          "ms": 4.5000001192092896
+        }
+      ],
+      [
+        "Circuit/Distant Canopy3",
+        {
+          "calls": 74,
+          "triangles": 1680096,
+          "ms": 1.7999999523162842
+        }
+      ],
+      [
+        "Hero A/Rigid car shadow",
+        {
+          "calls": 14,
+          "triangles": 1563338,
+          "ms": 0
+        }
+      ],
+      [
+        "Circuit/Distant Canopy2",
+        {
+          "calls": 74,
+          "triangles": 1394160,
+          "ms": 2.100000023841858
+        }
+      ],
+      [
+        "Circuit/Distant Canopy1",
+        {
+          "calls": 74,
+          "triangles": 1321344,
+          "ms": 1.2999999523162842
+        }
+      ],
+      [
+        "Circuit/Circuit White",
+        {
+          "calls": 102,
+          "triangles": 1239376,
+          "ms": 5.000000238418579
+        }
+      ],
+      [
+        "Circuit/Circuit Asphalt",
+        {
+          "calls": 88,
+          "triangles": 1218572,
+          "ms": 4.800000190734863
+        }
+      ],
+      [
+        "Hero A/Nose_1",
+        {
+          "calls": 74,
+          "triangles": 973248,
+          "ms": 3.100000023841858
+        }
+      ],
+      [
+        "Field/Field Accent",
+        {
+          "calls": 99,
+          "triangles": 970156,
+          "ms": 5.199999809265137
+        }
+      ],
+      [
+        "Field/Field HelmetTint",
+        {
+          "calls": 99,
+          "triangles": 872770,
+          "ms": 4.299999952316284
+        }
+      ],
+      [
+        "Hero A/Floor_Carbon",
+        {
+          "calls": 74,
+          "triangles": 864024,
+          "ms": 1.1999999284744263
+        }
+      ],
+      [
+        "Hero A/Nose_2",
+        {
+          "calls": 74,
+          "triangles": 826950,
+          "ms": 0
+        }
+      ],
+      [
+        "Circuit/Circuit Dark",
+        {
+          "calls": 176,
+          "triangles": 725168,
+          "ms": 8.299999833106995
+        }
+      ],
+      [
+        "Circuit/Circuit Grass",
+        {
+          "calls": 88,
+          "triangles": 690616,
+          "ms": 4.699999928474426
+        }
+      ],
+      [
+        "Hero B/Nose",
+        {
+          "calls": 72,
+          "triangles": 688374,
+          "ms": 0.8000000715255737
+        }
+      ],
+      [
+        "Hero A/Chassis_AeroLaminate",
+        {
+          "calls": 74,
+          "triangles": 675028,
+          "ms": 3.7000001668930054
+        }
+      ],
+      [
+        "Circuit/Blender_solid_instances25_far",
+        {
+          "calls": 148,
+          "triangles": 623968,
+          "ms": 0.2999999523162842
+        }
+      ],
+      [
+        "Circuit/Blender_solid_instances27_far",
+        {
+          "calls": 148,
+          "triangles": 587264,
+          "ms": 0.8999999761581421
+        }
+      ],
+      [
+        "Circuit/Blender_solid_instances31_far",
+        {
+          "calls": 148,
+          "triangles": 578088,
+          "ms": 1.899999976158142
+        }
+      ],
+      [
+        "Circuit/Blender_solid_instances26_far",
+        {
+          "calls": 148,
+          "triangles": 550560,
+          "ms": 0.30000007152557373
+        }
+      ],
+      [
+        "Hero B/Mesh",
+        {
+          "calls": 576,
+          "triangles": 513360,
+          "ms": 22.799999952316284
+        }
+      ],
+      [
+        "Circuit/Blender_solid_instances30_far",
+        {
+          "calls": 74,
+          "triangles": 467976,
+          "ms": 0.10000002384185791
+        }
+      ]
+    ]
+  },
+  "deviceScaleFactor": 2,
+  "cpuRate": 4,
+  "circuit": "monza",
+  "width": 1100,
+  "height": 850,
+  "duration": 22000,
+  "chromium": "158.0.8127.18",
+  "hardware": [
+    {
+      "vendorId": 4203,
+      "deviceId": 0,
+      "vendorString": "Google Inc. (Apple)",
+      "deviceString": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6 (Build 25G72))",
+      "driverVendor": "Apple",
+      "driverVersion": "26.6"
+    }
+  ],
+  "samples": [
+    {
+      "gpu": {
+        "geometries": 589,
+        "textures": 181,
+        "programs": 264,
+        "calls": 407,
+        "triangles": 1161995,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 1936,
+      "JSHeapUsedSize": 86667660
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 363,
+        "triangles": 757682,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 2136,
+      "JSHeapUsedSize": 110599216
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 365,
+        "triangles": 781448,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 2498,
+      "JSHeapUsedSize": 103061240
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 456,
+        "triangles": 1154100,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 3021,
+      "JSHeapUsedSize": 94937748
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 368,
+        "triangles": 841991,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 3395,
+      "JSHeapUsedSize": 117167276
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 381,
+        "triangles": 900967,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 3604,
+      "JSHeapUsedSize": 108488148
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 458,
+        "triangles": 1217255,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 4278,
+      "JSHeapUsedSize": 99828152
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 437,
+        "triangles": 1129788,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 4639,
+      "JSHeapUsedSize": 121785620
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 432,
+        "triangles": 1119235,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 4698,
+      "JSHeapUsedSize": 113254964
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 432,
+        "triangles": 1119235,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 4753,
+      "JSHeapUsedSize": 136486472
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 432,
+        "triangles": 1119235,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 4812,
+      "JSHeapUsedSize": 128849124
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 432,
+        "triangles": 1119235,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 4867,
+      "JSHeapUsedSize": 120284060
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 264,
+        "calls": 432,
+        "triangles": 1119235,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 4926,
+      "JSHeapUsedSize": 143994880
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 373,
+        "triangles": 929096,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 5139,
+      "JSHeapUsedSize": 144920572
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 480,
+        "triangles": 1052836,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 5349,
+      "JSHeapUsedSize": 141155992
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 372,
+        "triangles": 929108,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 5562,
+      "JSHeapUsedSize": 135143612
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 480,
+        "triangles": 1049228,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 5611,
+      "JSHeapUsedSize": 131195432
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 373,
+        "triangles": 929148,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 5816,
+      "JSHeapUsedSize": 126111516
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 373,
+        "triangles": 929232,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 6019,
+      "JSHeapUsedSize": 153375856
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 480,
+        "triangles": 1053024,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 6083,
+      "JSHeapUsedSize": 148152456
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 373,
+        "triangles": 929296,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 6150,
+      "JSHeapUsedSize": 141836024
+    },
+    {
+      "gpu": {
+        "geometries": 634,
+        "textures": 183,
+        "programs": 266,
+        "calls": 480,
+        "triangles": 1052852,
+        "lost": false
+      },
+      "JSEventListeners": 194,
+      "Nodes": 6181,
+      "JSHeapUsedSize": 157318988
+    }
+  ],
+  "timeTo3DMs": 3166.7999999523163,
+  "frame2Ms": 35.799999952316284,
+  "startupMaxFrameMs": 81.69999992847443,
+  "avgFps": 39.75014196479273,
+  "minFps": 20.661157034971083,
+  "p95FrameMs": 33.5,
+  "p99FrameMs": 38.300000071525574,
+  "maxFrameMs": 48.39999997615814,
+  "JSEventListeners": 192,
+  "Nodes": 1886,
+  "JSHeapUsedSize": 69349272,
+  "gpu": {
+    "geometries": 634,
+    "textures": 183,
+    "programs": 266,
+    "calls": 434,
+    "triangles": 1119515,
+    "lost": false
+  },
+  "cycles": []
+}

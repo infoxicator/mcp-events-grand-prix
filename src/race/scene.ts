@@ -49,9 +49,10 @@ export function prepareEmbeddedRace(night:boolean){
  // Start shared downloads while the selected race session connects.
  void Promise.allSettled([prepareRaceCars(),reflectionData(night?stripReflectionURL:daylightURL,undefined,true)]);
 }
-export function createScene(container:HTMLElement,track:Track=getTrack()){
+export function createScene(container:HTMLElement,track:Track=getTrack(),quality:'auto'|'high'='auto'){
  const loadingAssets=new AbortController();
  const {pointAt,tangentAt}=track,night=track.night,embedded=import.meta.env.MCP_APP==='true';
+ const highQuality=!embedded&&quality==='high';
  const scene=new T.Scene();scene.background=new T.Color(night?'#02040d':'#c3ccd2');scene.fog=new T.FogExp2(night?'#02040d':'#c3ccd2',night?.00024:.00083);
  const renderer=new T.WebGLRenderer({antialias:!embedded,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,embedded?1:1.5));renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.92;renderer.info.autoReset=false;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
  renderer.domElement.style.visibility='hidden';container.append(renderer.domElement);renderer.domElement.setAttribute('aria-label',`Live 3D ${track.name} ${night?'night ':''}circuit`);
@@ -60,6 +61,21 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  if(embedded){camera.layers.enable(1);sun.shadow.camera.layers.enable(1);sun.shadow.camera.layers.enable(2);}
  const hemisphere=new T.HemisphereLight(night?'#8a9fd0':'#dce6f0',night?'#101323':'#504c3e',night?.5:.65);scene.add(sun,hemisphere);if(sun instanceof T.DirectionalLight)scene.add(sun.target);else{sun.position.set(-80,89,-50);sun.shadow.camera.far=200;sun.shadow.mapSize.setScalar(1024);}
  const pmrem=new T.PMREMGenerator(renderer);let environment:T.WebGLRenderTarget|undefined,disposed=false;
+ let drySky:T.Texture|null=null,stormSky:T.DataTexture|undefined,stormEnvironment:T.WebGLRenderTarget|undefined;
+ function overcast(){
+  if(stormSky)return;
+  // Overcast radiance has a broad grey zenith and a cool, darker horizon.
+  const w=64,h=32,data=new Uint8Array(w*h*4);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+   const az=x*Math.PI*2/w,alt=Math.PI*((y+.5)/h-.5);
+   const cloud=.5+.5*Math.sin(az*3+alt*7)*Math.cos(az-alt*12);
+   const level=night?19+7*cloud:92+39*Math.max(0,Math.sin(alt))+16*cloud;
+   const i=4*(y*w+x);data[i]=level*.95;data[i+1]=level;data[i+2]=level*1.05;data[i+3]=255;
+  }
+  stormSky=new T.DataTexture(data,w,h);stormSky.colorSpace=T.SRGBColorSpace;
+  stormSky.mapping=T.EquirectangularReflectionMapping;stormSky.magFilter=stormSky.minFilter=T.LinearFilter;stormSky.needsUpdate=true;
+  if(!night)stormEnvironment=pmrem.fromEquirectangular(stormSky);
+ }
  let reflectionError:string|null=null;
  const loadReflections=()=>reflectionData(night?stripReflectionURL:daylightURL,loadingAssets.signal,embedded).then(hdr=>{
   if(disposed)return;
@@ -68,7 +84,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   environment=pmrem.fromEquirectangular(map);scene.environment=environment.texture;
   scene.environmentIntensity=night?.82:.65;
   if(night)map.dispose();
-  else{scene.background=map;scene.backgroundIntensity=.8;scene.backgroundRotation.y=1.3;scene.environmentRotation.y=1.3;}
+  else{drySky=map;scene.background=map;scene.backgroundIntensity=.8;scene.backgroundRotation.y=1.3;scene.environmentRotation.y=1.3;}
  }).catch(error=>{reflectionError=String(error);});
  if(night){
   // Equirectangular city sky. Warm scattered light stays near the skyline.
@@ -78,34 +94,45 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    const elev=(.5-y/sky.height)*Math.PI,az=x/sky.width*Math.PI*2;
    const haze=Math.exp(-Math.max(0,elev)*6.8),stripGlow=.60+.40*Math.cos(az-1.4)**4;
    const index=(y*sky.width+x)*4;
-   pixels.data[index]=10+37*haze*stripGlow;pixels.data[index+1]=16+29*haze*stripGlow;
-   pixels.data[index+2]=31+21*haze;pixels.data[index+3]=255;
+   const star=elev>.22&&((Math.imul((x+1)*(y+73),2654435761)>>>0)%1601===0)?44:0;
+   pixels.data[index]=9+76*haze*stripGlow+star;pixels.data[index+1]=14+43*haze*stripGlow+star;
+   pixels.data[index+2]=27+20*haze+star;pixels.data[index+3]=255;
   }
   ctx.putImageData(pixels,0,0);const skyMap=new T.CanvasTexture(sky);
   skyMap.colorSpace=T.SRGBColorSpace;skyMap.mapping=T.EquirectangularReflectionMapping;
-  scene.background=skyMap;scene.fog=new T.FogExp2('#363741',.00034);
+  drySky=skyMap;scene.background=skyMap;scene.fog=new T.FogExp2('#363741',.00034);
  }
  const anisotropy=Math.min(embedded?4:8,renderer.capabilities.getMaxAnisotropy());
  const darkBlue=new T.Color(0x7b9bea),flagWhite=new T.Color(0xd9e1ff);
  const surfaceWater={value:0};
  const circuit=loadCircuit(scene,track,anisotropy,surfaceWater,embedded&&renderer.extensions.has('WEBGL_multi_draw')),vegas=night?circuit:null;
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
- const dryFog=scene.fog.color.clone(),rainFog=new T.Color(night?'#495365':'#a0abb3');
+ const dryFog=scene.fog.color.clone(),rainFog=new T.Color(night?'#232936':'#565d64');
  const dryDensity=scene.fog.density,drySun=sun.intensity;
  const surfaceFx=surfaceEffects(scene,track,circuit.heightAt);
  const impacts=impactEffects(scene,track,circuit.heightAt);
  const sparks=createSparks(scene,track,circuit.heightAt);
  // Warm architectural spill is fixed to the two resort facades, independent of the car.
  if(night)for(const [lon,lat] of [[-115.1757,36.1127],[-115.1693,36.1212]]){const q=track.project(lon,lat);const light=new T.PointLight('#ffc584',6500,230,2);light.position.set(q.x,24,q.z);scene.add(light);}
- const sphereSpill=vegas?new T.PointLight('#ffab5f',13500,235,2):null;
+ const sphereSpill=vegas?new T.PointLight('#ffab5f',21800,380,2):null;
  if(sphereSpill&&vegas){sphereSpill.position.copy(vegas.spherePosition);scene.add(sphereSpill);}
  const floodlightCandela=1050;
  const lights=night?Array.from({length:embedded?4:6},()=>{const l=new T.SpotLight('#f1f0e9',floodlightCandela,76,1.22,.76,2);scene.add(l,l.target);return l;}):[];
  const spot=lights[0];if(spot&&!embedded){spot.castShadow=true;spot.shadow.mapSize.set(384,384);spot.shadow.camera.near=.7;spot.shadow.camera.far=52;spot.shadow.normalBias=.021;spot.shadow.autoUpdate=false;spot.shadow.needsUpdate=true;}
  let lastSpot=-Infinity;
- const haze=night&&!embedded?new T.InstancedMesh(new T.ConeGeometry(2.65,4.8,20,1,true),new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,
-  uniforms:{fogAmount:{value:.012}},vertexShader:'varying vec2 cone;void main(){cone=uv;gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.);}',
-  fragmentShader:'uniform float fogAmount;varying vec2 cone;void main(){float a=cone.y*cone.y*(1.-smoothstep(.92,1.,cone.y));gl_FragColor=vec4(.82,.90,1.,a*fogAmount);}' }),lights.length):null;
+ // A camera-facing halo and a wide, feathered downlight occupy one fixture quad.
+ const haze=night?new T.InstancedMesh(new T.PlaneGeometry(1,1),new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,
+  uniforms:{fogAmount:{value:.13}},
+  vertexShader:`varying vec2 lampUV;void main(){
+   vec4 eye=modelViewMatrix*instanceMatrix*vec4(0.,0.,0.,1.);
+   eye.xy+=position.xy*vec2(6.,8.);gl_Position=projectionMatrix*eye;lampUV=uv-vec2(.5,.79);
+  }`,
+  fragmentShader:`uniform float fogAmount;varying vec2 lampUV;void main(){
+   float depth=-lampUV.y;float spread=.035+.34*max(0.,depth);
+   float cone=exp(-3.*lampUV.x*lampUV.x/(spread*spread))*smoothstep(0.,.12,depth)*(1.-smoothstep(.08,.79,depth));
+   float halo=exp(-24.*length(lampUV*vec2(1.,1.33)));
+   gl_FragColor=vec4(1.,.91,.77,.31*halo+fogAmount*cone);
+  }`}),lights.length):null;
  const lampPose=new T.Object3D(),fixtureStations=lights.map(()=>NaN),fixtureBoxes=lights.map(()=>NaN),fixtureGains=lights.map(()=>1);
  if(haze)scene.add(haze);
  const probe=night&&!embedded?new T.LightProbe():null;
@@ -118,7 +145,15 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  zoneProbe(hospitalityProbe,new T.Color('#f1cb93'),.68,-.73);
  const weather=createRaceWeather(scene,track,circuit.heightAt,embedded,lights);
  const beauty=new RenderPass(scene,camera);
- const composer=!embedded?new EffectComposer(renderer,new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,samples:Math.min(4,renderer.capabilities.maxSamples)})):null;let bloom:UnrealBloomPass|null=null;if(composer){composer.addPass(beauty);bloom=new UnrealBloomPass(new T.Vector2(320,180),.11,.18,1.65);composer.addPass(bloom);const output=new OutputPass();output.material.fragmentShader=output.material.fragmentShader.replace('// color space','gl_FragColor.rgb*=1.-.048*smoothstep(.10,.52,dot(vUv-.5,vUv-.5));\n// color space');composer.addPass(output);}
+ const composer=embedded?null:new EffectComposer(renderer,new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,samples:Math.min(4,renderer.capabilities.maxSamples)}));
+ const bloom=highQuality?new UnrealBloomPass(new T.Vector2(1,1),.30,.21,1.20):null;
+ if(composer){
+  composer.addPass(beauty);
+  if(bloom)composer.addPass(bloom);
+  const output=new OutputPass();
+  output.material.fragmentShader=output.material.fragmentShader.replace('// color space','gl_FragColor.rgb*=1.-.048*smoothstep(.10,.52,dot(vUv-.5,vUv-.5));\n// color space');
+  composer.addPass(output);
+ }
  const paintSheet=liveryAtlas();
  const params=new URLSearchParams(location.search);
  const reviewKey=params.get('review');
@@ -153,7 +188,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const loading=document.createElement('div');loading.className='model-loading';loading.setAttribute('elementtiming','race-loading');loading.textContent='LOADING MCP GP';if(!embedded)container.append(loading);
  let assetsLoaded=false,presentationReady=false,mirrorMs=0,mainMs=0,contextLost=false;
  let warmStep=0,warmSubmitted=false,warmFence:WebGLSync|null=null;
- let embeddedWarming=false,embeddedWarmed=false,driveAtlasUploaded=false,reflectionReady=!embedded;
+ let embeddedWarming=false,embeddedWarmed=false,atlasUploaded=false,reflectionReady=!embedded;
  const reflectionDeadline=performance.now()+600;
  // Compile the final lit materials once. Adding the environment after the first
  // visible draw used to invalidate the PBR variants on the following frames.
@@ -173,7 +208,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   });
  }
  const onContextLost=(e:Event)=>{e.preventDefault();cancelWarmFrame();contextLost=true;presentationReady=false;renderer.domElement.style.visibility='hidden';};
- const onContextRestored=()=>{mirrorQueue.length=mirrorPrograms.length=0;mirrorProgram=mirrorIndex=mirrorDraw=0;mirrorSeen.clear();mirrorReady=false;mirrorSeed=0;crewWarm=false;driveAtlasUploaded=false;contextLost=false;embeddedWarming=false;embeddedWarmed=false;};
+ const onContextRestored=()=>{mirrorQueue.length=mirrorPrograms.length=0;mirrorProgram=mirrorIndex=mirrorDraw=0;mirrorSeen.clear();mirrorReady=false;mirrorSeed=0;crewWarm=false;atlasUploaded=false;contextLost=false;embeddedWarming=false;embeddedWarmed=false;};
  renderer.domElement.addEventListener('webglcontextlost',onContextLost);
  renderer.domElement.addEventListener('webglcontextrestored',onContextRestored);
  const cameraDebug=params.has('cameraDebug');
@@ -333,18 +368,20 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
     if(o instanceof T.Mesh&&o.layers.test(camera.layers)&&(!o.frustumCulled||o.intersectsFrustum(frustum)))view.children.push(o);
    });
    renderer.compile(view,camera,scene);
-   if(selectedMode.startsWith('cockpit')||selectedMode.startsWith('tcam')){
-    // Upload the selected view's maps while its program links are in flight.
-    // Waiting for uniform reflection first serializes those two startup costs.
-    const maps=new Set<T.Texture>();
-    for(const item of view.children){
-     const material=(item as T.Mesh).material;
-     for(const m of Array.isArray(material)?material:[material])for(const value of Object.values(m)){
+   // Upload each visible material's maps while its programs link. The first
+   // broadcast frame uses the same circuit and livery textures as the cockpit.
+   const maps=new Set<T.Texture>(),materials=new Set<T.Material>();
+   for(const item of view.children){
+    const material=(item as T.Mesh).material;
+    for(const m of Array.isArray(material)?material:[material]){
+     if(materials.has(m))continue;
+     materials.add(m);
+     for(const value of Object.values(m)){
       if(value instanceof T.Texture&&!value.isRenderTargetTexture&&value.image&&value.image.complete!==false)maps.add(value);
      }
     }
-    for(const map of maps)renderer.initTexture(map);
    }
+   for(const map of maps)renderer.initTexture(map);
   }finally{renderer.setRenderTarget(previousTarget);}
   const parallel=gl.getExtension('KHR_parallel_shader_compile');
   void (async()=>{
@@ -367,7 +404,8 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  }
  // Reduce secondary-view work under sustained frame pressure. Hysteresis
  // avoids reallocating targets on camera cuts or isolated shader compiles.
- let embeddedTier=0;
+ const shadowCentre=new T.Vector3();
+ let shadowExtent=0,embeddedTier=0;
  let balanced=embedded,lastPresented=0,submitMs=0,frameMs=16.7,pressure=0,recovery=0,lastShadow=-Infinity;
  function updateQuality(now:number){
   const dt=now-lastPresented;lastPresented=now;
@@ -384,6 +422,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    }
    return;
   }
+  if(quality==='high')return;
   pressure=Math.max(0,pressure+(frameMs>17.0||submitMs>14?dt:-dt));
   recovery=frameMs<16.85&&submitMs<11?recovery+dt:0;
   if((!balanced&&pressure>450)||(balanced&&recovery>9000)){
@@ -406,9 +445,9 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    }
    if((!reflectionReady&&now<reflectionDeadline)||!hasSize||!circuit.ready||!cars.a.ready||!cars.b.ready){
     // The grid and both cars use this sheet. Transfer it while the selected
-    // Drive venue is loading, before the first cockpit frame needs the sampler.
-    if(hasSize&&!driveAtlasUploaded&&(selectedMode.startsWith('cockpit')||selectedMode.startsWith('tcam'))){
-     driveAtlasUploaded=true;renderer.initTexture(paintSheet);
+    // venue is loading, before the first race frame needs the sampler.
+    if(hasSize&&!atlasUploaded){
+     atlasUploaded=true;renderer.initTexture(paintSheet);
     }
     return;
    }
@@ -542,10 +581,10 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    });
    if(haze){
     if(moved){haze.instanceMatrix.needsUpdate=true;haze.computeBoundingSphere();}
-    haze.material.uniforms.fogAmount.value=.011+.044*surfaceWater.value;
+    haze.material.uniforms.fogAmount.value=.018+.065*surfaceWater.value;
    }
    if(spot&&spot.castShadow&&(cameraCut||now<lastSpot||now-lastSpot>(balanced?250:75))){spot.shadow.needsUpdate=true;lastSpot=now;}
-   if(probe&&vegas&&sphereSpill){const mix=1-T.MathUtils.smoothstep(vegas.spherePosition.distanceTo(p),70,330);
+   if(probe&&vegas&&sphereSpill){const mix=1-T.MathUtils.smoothstep(vegas.spherePosition.distanceTo(p),90,450);
     zoneProbe(sphereProbe,sphereSpill.color,-.61,.79);probe.sh.copy(hospitalityProbe).lerp(sphereProbe,mix);probe.intensity=.13+mix*.26;}
   }
   if(sun instanceof T.DirectionalLight){sun.position.set(p.x-80,p.y+(night?120:89),p.z-50);sun.target.position.copy(p);}
@@ -693,17 +732,26 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   sun.intensity=drySun*(1-rainfall*(night?.16:.78));
   scene.fog!.color.copy(dryFog).lerp(rainFog,rainfall);
   (scene.fog as T.FogExp2).density=dryDensity+rainfall*(night?.0032:.0046);
-  if(!night&&scene.background instanceof T.Texture){
+  if(drySky&&environment){
+   if(rainfall>=.9){overcast();scene.background=stormSky!;scene.environment=night?environment.texture:stormEnvironment!.texture;}
+   else{scene.background=drySky;scene.environment=environment!.texture;}
    scene.backgroundBlurriness=rainfall*.80;
-   scene.backgroundIntensity=.8-rainfall*.28;
+   scene.backgroundIntensity=night?1:rainfall>=.9?.94:.8-rainfall*.19;
   }
   const limitDetail=balanced&&mode!=='showroom';
-  circuit.update(race.time,p,camera.position,extent,limitDetail);
+  circuit.update(race.time,p,camera.position,extent,limitDetail,highQuality);
   renderer.shadowMap.autoUpdate=!balanced||cameraCut||mode==='showroom'||now<lastShadow||now-lastShadow>=(embedded?64+embeddedTier*12:limitDetail?(onboard?48:64):32);
-  if(renderer.shadowMap.autoUpdate)lastShadow=now;
+  // A cut from trackside to an onboard can reuse the broader shadow map
+  // for its first frame if the whole new footprint is still inside it.
+  if(embedded&&cameraCut&&sun.shadow.map&&extent<shadowExtent&&shadowCentre.distanceTo(p)+extent<shadowExtent){
+   renderer.shadowMap.autoUpdate=false;lastShadow=-Infinity;
+  }else if(renderer.shadowMap.autoUpdate){
+   lastShadow=now;
+   if(embedded){shadowCentre.copy(p);shadowExtent=extent;}
+  }
   mirrorMs=0;
   // Fill both rear views before the director cuts onboard. On the cut itself
-  // the shadow map changes projection, so refresh the next mirror one frame later.
+  // keep mirror work off the transition and the next shadow refresh.
   const seedMirror=embedded&&mirrorReady&&mirrorSeed<2&&selectedMode==='broadcast'&&!onboard&&!cameraCut&&!renderer.shadowMap.autoUpdate;
   let refreshMirror=onboard&&(!embedded||mirrorReady&&!cameraCut)&&(warmMode||mirrorFrame++%(embedded?6:balanced?3:1)===0);
   if(embedded&&onboard&&mirrorReady&&!cameraCut){
@@ -744,24 +792,25 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
    cars[id].setMirror(rearTarget!.texture);
    if(cameraDebug)mirrorMs=performance.now()-mirrorStart;
   }
-  circuit.viewDetail(limitDetail?camera:null,.54/(1+embeddedTier*.20),.8);
+  circuit.viewDetail(limitDetail?camera:null,.54/(1+embeddedTier*.20),.8,detailHeight);
   if(mode==='showroom'){cars.a.setMirror(null);cars.b.setMirror(null);}
   else field.update(race.field,camera,p,extent,false,limitDetail,!embedded||renderer.shadowMap.autoUpdate,detailHeight,race.time);
   if(prepare){lastShadow=-Infinity;return;}
   const mainStart=cameraDebug?performance.now():0;
   if(racingLine){if(racingLineMode!=='off'&&mode!=='showroom')racingLine.update(race.cars[racingLineSeat] as any,racingLineMode,race.control?.wetness??0);else racingLine.mesh.visible=false;}
   if(mode!=='showroom')for(const id of seats)if(cars[id].root.parent!==scene)scene.add(cars[id].root);
-  if(!embedded)circuit.puddles.update(renderer,scene,camera,p,now,surfaceWater.value,cameraCut);
+  if(highQuality&&mode!=='showroom')circuit.puddles.update(renderer,scene,camera,p,now,surfaceWater.value,cameraCut);
+  else circuit.puddles.visible.value=0;
   beauty.scene=mode==='showroom'?studio!.scene:scene;
-  if(bloom){bloom.strength=mode==='showroom'?.042:night?.11:.045;bloom.enabled=night||!balanced;}
+  if(bloom)bloom.strength=mode==='showroom'?.042:night?.30:.08;
   if(composer)composer.render();else renderer.render(beauty.scene,camera);
   weather.renderLens(renderer);
   if(cameraDebug)mainMs=performance.now()-mainStart;
  }
  let hasSize=false,lastWidth=0,lastHeight=0;
  function sizeBloom(width:number,height:number){
-  const scale=Math.min(renderer.getPixelRatio(),320/Math.max(1,width),180/Math.max(1,height));
-  bloom?.setSize(Math.max(1,Math.round(width*scale)),Math.max(1,Math.round(height*scale)));
+  const scale=Math.min(renderer.getPixelRatio()*.5,960/Math.max(1,width),540/Math.max(1,height));
+  bloom?.setSize(2*Math.max(1,Math.round(width*scale)),2*Math.max(1,Math.round(height*scale)));
  }
  function sizeScene(){
   const w=container.clientWidth,h=container.clientHeight;
@@ -771,7 +820,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   renderer.setSize(w,h,false);composer?.setSize(w,h);sizeBloom(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
  }
  const resize=new ResizeObserver(sizeScene);resize.observe(container);sizeScene();
- return {render,get activeCamera(){return activeMode;},get ready(){return presentationReady;},get contextLost(){return contextLost||gl.isContextLost();},get startupError(){return cars.a.error??cars.b.error??circuit.error??(contextLost||gl.isContextLost()?'WebGL context lost':null);},setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars[studioSeat].setFinish(next==='showroom'?finish:'colour');},setStudioSeat:(seat:'a'|'b')=>{if(seat!==studioSeat){scene.add(cars[studioSeat].root);cars[studioSeat].setFinish('colour');studioSeat=seat;cars[seat].setFinish(finish);}},setFinish:(next:Finish)=>{finish=next;cars[studioSeat].setFinish(next);studio?.setStageFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},setLookBack:(on:boolean)=>{lookBack=on;},setHideCar:(team:'a'|'b'|null)=>{hiddenCar=team;if(!team){cars.a.root.visible=true;cars.b.root.visible=true;}},setRacingLine:(m:RacingLineMode,seat:'a'|'b'='a')=>{racingLineMode=m;racingLineSeat=seat;if(m!=='off'&&!racingLine){racingLine=createRacingLine(track,circuit.heightAt);scene.add(racingLine.mesh);}if(racingLine&&m==='off')racingLine.mesh.visible=false;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(cameraDebug?{mirrorMs,mainMs,lensBeads:weather.beads,rainDrops:weather.drops,sprayPackets:weather.spray,cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,safetyCarReady:safetyCar?.ready??false,safetyCarOnTrack:safetyCar?.car.visible??false,circuit:track.id,modelsReady:presentationReady,modelError:reflectionError??cars.a.error??cars.b.error??circuit.error??crew?.error??safetyCar?.error??field.error,finish};},dispose:()=>{
+ return {render,get activeCamera(){return activeMode;},get ready(){return presentationReady;},get contextLost(){return contextLost||gl.isContextLost();},get startupError(){return cars.a.error??cars.b.error??circuit.error??(contextLost||gl.isContextLost()?'WebGL context lost':null);},setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars[studioSeat].setFinish(next==='showroom'?finish:'colour');},setStudioSeat:(seat:'a'|'b')=>{if(seat!==studioSeat){scene.add(cars[studioSeat].root);cars[studioSeat].setFinish('colour');studioSeat=seat;cars[seat].setFinish(finish);}},setFinish:(next:Finish)=>{finish=next;cars[studioSeat].setFinish(next);studio?.setStageFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},setLookBack:(on:boolean)=>{lookBack=on;},setHideCar:(team:'a'|'b'|null)=>{hiddenCar=team;if(!team){cars.a.root.visible=true;cars.b.root.visible=true;}},setRacingLine:(m:RacingLineMode,seat:'a'|'b'='a')=>{racingLineMode=m;racingLineSeat=seat;if(m!=='off'&&!racingLine){racingLine=createRacingLine(track,circuit.heightAt);scene.add(racingLine.mesh);}if(racingLine&&m==='off')racingLine.mesh.visible=false;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(cameraDebug?{mirrorMs,mainMs,reflectionWidth:circuit.puddles.width,bloomWidth:bloom?.enabled?bloom.renderTargetBright.width:0,stormSkyActive:!!stormSky&&scene.background===stormSky,lensBeads:weather.beads,rainDrops:weather.drops,sprayPackets:weather.spray,cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,safetyCarReady:safetyCar?.ready??false,safetyCarOnTrack:safetyCar?.car.visible??false,circuit:track.id,modelsReady:presentationReady,modelError:reflectionError??cars.a.error??cars.b.error??circuit.error??crew?.error??safetyCar?.error??field.error,finish};},dispose:()=>{
   if(disposed)return;
   disposed=true;loadingAssets.abort();cancelWarmFrame();resize.disconnect();
   element.removeEventListener('pointerdown',orbitStart);element.removeEventListener('pointermove',orbitMove);
@@ -785,7 +834,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   composer?.passes.forEach(p=>p.dispose());composer?.dispose();environment?.dispose();pmrem.dispose();
   scene.traverse(o=>{if(o instanceof SunLight||o instanceof T.DirectionalLight||o instanceof T.PointLight||o instanceof T.SpotLight)o.shadow.dispose();});
   new MeshResources().collect(scene).dispose();
-  if(scene.background instanceof T.Texture)scene.background.dispose();
+  drySky?.dispose();stormSky?.dispose();stormEnvironment?.dispose();
   scene.background=null;scene.environment=null;scene.clear();
   renderer.renderLists.dispose();renderer.dispose();
   if(embedded&&!gl.isContextLost())renderer.forceContextLoss();

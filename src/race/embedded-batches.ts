@@ -15,7 +15,7 @@ export function batchCircuit(root:T.Group){
   if(!(o instanceof T.Mesh)||o instanceof T.SkinnedMesh||Array.isArray(o.material)||o.material.transparent||!o.visible||o.children.length)return;
   for(let p=o.parent;p&&p!==root;p=p.parent)if(p instanceof T.LOD)return;
   const m=o.material;
-  if(!/^(Armco|Asphalt|RepairCourse|Concrete|Steel|White|Red|Green|Dark|Glass|Windows|WarmWindows|RoofSheet|DistantRidge|Grass|Gravel|Sign|Gold|Ice|Barrier|Stage|Roof|ParkHorizon|CityGround|Kerb|RunoffPaint|LeafLitter)$/.test(m.name))return;
+  if(!/^(Armco|Asphalt|RepairCourse|Concrete|Steel|White|Red|Green|Dark|Glass|Windows|WarmWindows|RoofSheet|DistantRidge|Grass|Gravel|Sign|Gold|Ice|Barrier|Stage|Roof|ParkHorizon|CityGround|Kerb|RunoffPaint|LeafLitter|RoughMeadow|BarrierPrint|Astroturf|UpperCurtain|UpperStone|UpperRibbon|TarSeam|Fence|CopperRoof|Travertine|RecessGlass|StoreGlass|ImpactIvory|ImpactRed)$/.test(m.name))return;
   if(o instanceof T.InstancedMesh&&(o.instanceColor||o.morphTexture))return;
   const layout=attributeLayout(o.geometry);
   const key=m.uuid+layout+Boolean(o.geometry.index)+o.renderOrder;
@@ -23,6 +23,17 @@ export function batchCircuit(root:T.Group){
  });
  const batchMaterials=new Set<T.Material>(),matrix=new T.Matrix4(),inverse=root.matrixWorld.clone().invert();
  const batches:T.BatchedMesh[]=[];
+ const frustum=new T.Frustum(),projection=new T.Matrix4(),lastView=new T.Matrix4(),lastProjection=new T.Matrix4();
+ const positiveX=new Uint8Array(6),positiveY=new Uint8Array(6),positiveZ=new Uint8Array(6);
+ let lastCamera:T.Camera|null=null;
+ function updateFrustum(camera:T.Camera){
+  if(camera===lastCamera&&lastView.equals(camera.matrixWorldInverse)&&lastProjection.equals(camera.projectionMatrix))return;
+  lastCamera=camera;lastView.copy(camera.matrixWorldInverse);lastProjection.copy(camera.projectionMatrix);
+  frustum.setFromProjectionMatrix(projection.multiplyMatrices(lastProjection,lastView),camera.coordinateSystem,camera.reversedDepth);
+  for(let j=0;j<6;j++){
+   const n=frustum.planes[j].normal;positiveX[j]=Number(n.x>=0);positiveY[j]=Number(n.y>=0);positiveZ[j]=Number(n.z>=0);
+  }
+ }
  for(const sources of buckets.values()){
   if(sources.length<3)continue;
   const shapes=new Set(sources.map(o=>o.geometry));
@@ -41,9 +52,9 @@ export function batchCircuit(root:T.Group){
   }
   const batch=new T.BatchedMesh(instances,vertices,indices,m),shapeIDs=new Map<T.BufferGeometry,number>();
   batch.name='Circuit '+m.name;batch.sortObjects=false;batch.renderOrder=sources[0].renderOrder;
-  const ranges:{mesh:T.Mesh;first:number;end:number;bounds:T.Box3|null}[]=[];
-  const clusters:{bounds:T.Box3[];blocks:T.Box3[];step:number}[]=[],boxes:T.Box3[]=[],frustum=new T.Frustum(),projection=new T.Matrix4();
-  const masks=new Int8Array(instances),positiveX=new Uint8Array(6),positiveY=new Uint8Array(6),positiveZ=new Uint8Array(6);
+  const ranges:{mesh:T.Mesh;first:number;end:number;bounds:T.Box3|null;mask:number}[]=[];
+  const clusters:{bounds:Float32Array;blocks:Float32Array;step:number}[]=[],boxes:T.Box3[]=[];
+  const masks=new Int8Array(instances);
   // A child box only needs the planes that actually intersect its parent.
   function planeMask(box:T.Box3,mask:number){
    const lo=box.min,hi=box.max;
@@ -52,6 +63,19 @@ export function batchCircuit(root:T.Group){
     const {normal:n,constant:d}=frustum.planes[j];
     if(n.x*(positiveX[j]?hi.x:lo.x)+n.y*(positiveY[j]?hi.y:lo.y)+n.z*(positiveZ[j]?hi.z:lo.z)+d<0)return -1;
     if(n.x*(positiveX[j]?lo.x:hi.x)+n.y*(positiveY[j]?lo.y:hi.y)+n.z*(positiveZ[j]?lo.z:hi.z)+d>=0)mask^=bit;
+   }
+   return mask;
+  }
+  // Keep cluster bounds contiguous. A venue has thousands of small ranges,
+  // and the main, mirror and shadow frusta read them several times per frame.
+  const scratch=new T.Box3(),blockBox=new T.Box3(),emptyBounds=new Float32Array(0);
+  function packedMask(bounds:Float32Array,offset:number,mask:number){
+   for(let j=0;j<6;j++){
+    const bit=1<<j;if(!(mask&bit))continue;
+    const {normal:n,constant:d}=frustum.planes[j];
+    const x=positiveX[j]*3,y=positiveY[j]*3,z=positiveZ[j]*3;
+    if(n.x*bounds[offset+x]+n.y*bounds[offset+1+y]+n.z*bounds[offset+2+z]+d<0)return -1;
+    if(n.x*bounds[offset+3-x]+n.y*bounds[offset+4-y]+n.z*bounds[offset+5-z]+d>=0)mask^=bit;
    }
    return mask;
   }
@@ -65,36 +89,38 @@ export function batchCircuit(root:T.Group){
     if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();
     boxes.push(o.geometry.boundingBox!.clone().applyMatrix4(matrix));
     const coords=o.geometry.userData.clusterBounds as number[]|undefined;
-    const bounds:T.Box3[]=[];
+    const bounds=coords?new Float32Array(coords.length):emptyBounds;
+    const blocks=coords?new Float32Array(Math.ceil(bounds.length/96)*6):emptyBounds;
     if(coords)for(let j=0;j<coords.length;j+=6){
-     const box=new T.Box3(new T.Vector3().fromArray(coords,j).multiplyScalar(1/32767),new T.Vector3().fromArray(coords,j+3).multiplyScalar(1/32767));
-     bounds.push(box.applyMatrix4(matrix).expandByScalar(.025));
-    }
-    const blocks:T.Box3[]=[];
-    for(let j=0;j<bounds.length;j+=16){
-     const box=bounds[j].clone();
-     for(let k=j+1;k<Math.min(j+16,bounds.length);k++)box.union(bounds[k]);
-     blocks.push(box);
+     scratch.min.fromArray(coords,j).multiplyScalar(1/32767);
+     scratch.max.fromArray(coords,j+3).multiplyScalar(1/32767);
+     scratch.applyMatrix4(matrix).expandByScalar(.025);
+     scratch.min.toArray(bounds,j);scratch.max.toArray(bounds,j+3);
+     if(j%96===0)blockBox.makeEmpty();
+     blockBox.union(scratch);
+     if(j%96===90||j+6===coords.length){
+      const offset=Math.floor(j/96)*6;blockBox.min.toArray(blocks,offset);blockBox.max.toArray(blocks,offset+3);
+     }
     }
     clusters.push({bounds,blocks,step:o.geometry.userData.clusterStep??0});
     batch.setMatrixAt(batch.addInstance(id),matrix.premultiply(inverse));slot++;
    }
    const bounds=count>1?boxes[first].clone():null;
    if(bounds)for(let i=first+1;i<slot;i++)bounds.union(boxes[i]);
-   ranges.push({mesh:o,first,end:slot,bounds});o.removeFromParent();
+   ranges.push({mesh:o,first,end:slot,bounds,mask:63});o.removeFromParent();
   }
   // Source nodes still carry the venue's distance/receiver decisions. Set the
   // batch's instance visibility independently for the shadow and beauty passes.
   batch.perObjectFrustumCulled=false;batch.castShadow=/^(Armco|Concrete|White|Steel)$/.test(m.name);batch.receiveShadow=sources.some(o=>o.receiveShadow);
   const main=batch.onBeforeRender,shadow=batch.onBeforeShadow;
   function visibility(camera:T.Camera,depth:boolean){
-   frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse),camera.coordinateSystem,camera.reversedDepth);
-   for(let j=0;j<6;j++){
-    const n=frustum.planes[j].normal;positiveX[j]=Number(n.x>=0);positiveY[j]=Number(n.y>=0);positiveZ[j]=Number(n.z>=0);
-   }
-   for(const {mesh,first,end,bounds} of ranges){
+   updateFrustum(camera);
+   for(const range of ranges){
+    const {mesh,first,end,bounds}=range;
     const visible=mesh.visible&&(!depth||mesh.castShadow);
     const parentMask=visible?(bounds?planeMask(bounds,63):63):-1;
+    if(parentMask<=0&&range.mask===parentMask)continue;
+    range.mask=parentMask;
     for(let i=first;i<end;i++){
      const mask=parentMask>0?planeMask(boxes[i],parentMask):parentMask;
      if((masks[i]>=0)!==(mask>=0))batch.setVisibleAt(i,mask>=0);
@@ -117,11 +143,11 @@ export function batchCircuit(root:T.Group){
      if(!bounds.length||mask===0){visible.push(item);continue;}
      let run:Draw|undefined;
      let blockMask=mask;
-     for(let i=0;i<bounds.length;i++){
-      if(i%16===0)blockMask=planeMask(blocks[i/16],mask);
+     for(let i=0,countClusters=bounds.length/6;i<countClusters;i++){
+      if(i%16===0)blockMask=packedMask(blocks,i/16*6,mask);
       if(blockMask<0){run=undefined;i+=15;continue;}
-      const length=blockMask===0?Math.min(16,bounds.length-i):1;
-      if(blockMask&&planeMask(bounds[i],blockMask)<0){run=undefined;continue;}
+      const length=blockMask===0?Math.min(16,countClusters-i):1;
+      if(blockMask&&packedMask(bounds,i*6,blockMask)<0){run=undefined;continue;}
       const count=Math.min(step*length,item.count-i*step);
       if(run)run.count+=count;
       else{

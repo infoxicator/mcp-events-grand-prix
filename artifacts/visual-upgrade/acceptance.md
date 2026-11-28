@@ -194,3 +194,88 @@ During tuning, the first full run measured 41.90, 37.13 and 32.24 FPS in the thr
 A separate repeat of the same production build measured 60.00 FPS inline and 60.00 FPS expanded. Their worst cuts were 0.3 ms and 1.7 ms faster than the archived before run. Expanded stress reached 54.46 FPS, 2.54 FPS above before, and used 0.32 MiB less post-GC heap. The small higher cut times and heap reading in the complete nine-case run reversed in this repeat. [Inline profile](../perf-check/phase3-vegas-validation/vegas-inline.json), [expanded profile](../perf-check/phase3-vegas-validation/vegas-expanded.json), [stress profile](../perf-check/phase3-vegas-validation/vegas-expanded-stress.json).
 
 All 19 requested matched stills were inspected after the final build. Both seven-shot pit reviews show the release equipment and driver display on the boom, the distinct constructor trim and the two teams servicing cars simultaneously. The five trackside and steering views show the grandstands, blue flag, Las Vegas live timing screen and raised Mercedes wordmark. The seven iframe benchmark captures also show the hero cars, circuit, cockpit and pit crew after camera changes. [Trackside capture state](phase3/visual/trackside-shots.json).
+
+## Phase 4 circuit surfaces, lighting and rain
+
+Both venues were rebuilt from the surveyed paths on the Phase 3 base at `91d9efa` with Blender 5.2.2 LTS and Node 24.14.0. The 13 desktop captures use the 1920 × 1080 review fixture with high quality selected. In the race view, `?quality=high` selects the half-resolution bloom pass, 512 × 288 wet reflection and expanded shadow casters. Automatic desktop quality and the MCP iframe use environment reflections. The front, Rettifilo, Strip, Sphere, television and wet Strip views reuse earlier review cameras. The remaining views frame the new work. [Capture settings and frame state](phase4/visual/shots.json)
+
+| Gap | Change | Visual proof |
+| --- | --- | --- |
+| Uniform asphalt and a sparse grid | Angular aggregate shares its relief with the albedo tile. A second rotated sample breaks up repetition. Rubber collects away from the racing line. All 22 grid boxes follow the same road crown and share their paint, number sheet and yellow stop marks. | [Aggregate and rubber](phase4/visual/monza-aggregate.jpg), [grid and finish band](phase4/visual/monza-gridline.jpg) |
+| Hard kerb shoulders and straight gravel furrows | Kerbs have rolling shoulders and rounded raised sections. Behind them sit turf, drainage and a scalloped gravel margin. A curved rake pattern crosses the gravel. | [Kerb and trap](phase4/visual/monza-kerb-edge.jpg), [Rettifilo onboard](phase4/visual/monza-rettifilo.jpg) |
+| Uniform woodland and sparse trackside landmarks | Oak, hornbeam, poplar and pine use four cutout maps on the existing canopy LODs. The woodland floor extends around the lap. The banked oval crosses the Serraglio, and recovery vehicles and camera towers sit beside the gravel and spectator stands. | [Foliage](phase4/visual/monza-front.jpg), [Sopraelevata](phase4/visual/monza-banking.jpg), [recovery stand](phase4/visual/monza-recovery-stand.jpg) |
+| Repeating Strip panels, window blocks and intersecting lettering | A shared sponsor sheet changes the barrier advertising. Storefront marquees project beyond the piers. Three architectural elevations carry lit windows across the district, with animated LED signs and multi-head lamps along the boulevard. | [Strip at night](phase4/visual/las-vegas-strip.jpg) |
+| Flat Plaza roof and unframed television site | Continuous illuminated roof bands identify the pit building. A paved terrace grounds the live television. The Sphere wordmark reaches HDR bloom while its mascot keeps its programmed colours. | [Grand Prix Plaza](phase4/visual/las-vegas-plaza.jpg), [television](phase4/visual/las-vegas-giant-tv.jpg), [Sphere](phase4/visual/las-vegas-finish-sphere.jpg), [colour and tracking test](phase4/sphere-test.log) |
+| Blue storm sky, dry paint and coarse wet reflections | Heavy rain uses a storm sky, wet paint and barriers, a central diffuser plume, and instanced red lamp footprints. Desktop high quality renders a 512 × 288 planar reflection and a bloom bright target capped at 960 × 540. The iframe shades the water film with the venue environment. | [Monza storm](phase4/visual/monza-wet-reflections.jpg), [wet Strip](phase4/visual/las-vegas-wet-reflections.jpg) |
+
+Both wet captures recorded a 512-pixel reflection width, a 960-pixel bloom width and an active storm sky. The spray batch submitted 4,263 packets at Monza and 4,449 at Las Vegas. The review checked all 13 exported frames. [Frame measurements](phase4/visual/shots.json)
+
+The circuit authoring run exported 358 Monza chunks and 703 Las Vegas chunks. [Blender build summary](phase4/circuit-build-summary.log)
+
+The Monza sweep checked 34,059 woodland instances. The Las Vegas racing surface and pit route passed at 3,115 survey stations. [Monza clearance](phase4/clearance-monza.log), [Las Vegas clearance](phase4/clearance-vegas.log)
+
+| Asset and GPU gate | Measured result |
+| --- | --- |
+| MCP HTML | 9,649 bytes of 65,536 |
+| Largest shipped asset | Monza MCP circuit, 6,792,908 bytes of 26,214,400 |
+| Las Vegas MCP circuit | 5,829,003 bytes |
+| High-detail hero | 228,714 triangles of 245,000 |
+| Monza desktop | 98.0 / 96.5 / 113.6 mean FPS for driver A, driver B and broadcast. Minimum sampled FPS was 67.9. |
+| Las Vegas desktop | 97.0 / 97.9 / 107.9 mean FPS for driver A, driver B and broadcast. Minimum sampled FPS was 73.5. |
+
+The desktop tests used three independent Chromium processes, uncapped presentation and 50 samples per view. Both venues cleared the 60 FPS mean and sampled minimum gates. [Asset budgets](phase4/build.log), [Monza capacity](phase4/capacity-monza.log), [Las Vegas capacity](phase4/capacity-las-vegas.log)
+
+All 296 unit tests, 44 desktop browser tests and 13 MCP tests passed with `JEV_MOCK=1`. The rain scenarios exercised the automatic and high desktop tiers. The MCP suite exercised five full offscreen cycles each for human and autopilot. [Unit suite](phase4/unit.log), [desktop suite](phase4/e2e.log), [MCP suite](phase4/mcp.log)
+
+### Phase 4 iframe performance
+
+On the final production build, 56 of 72 metric comparisons met the frozen `before` measurements. 3 of the nine cases met all eight metrics. The strict zero-regression gate failed. Bold cells identify slower frame rates, longer times or higher resource use. Each row links to its full profile. [Benchmark log](phase4/benchmark.log)
+
+#### Compared with the frozen before run
+
+| Case | FPS | Δ FPS | Δ p95 ms | Δ p99 ms | Δ worst cut ms | Δ first 3D ms | Δ calls/frame | Δ triangles/frame | Δ heap MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| [monza-inline](../perf-check/phase4/monza-inline.json) | 59.9985 | +0.0496 | -0.30 | -1.10 | -19.10 | -281.5 | -10.7 | -17716 | -1.029 |
+| [monza-expanded](../perf-check/phase4/monza-expanded.json) | 59.9598 | +0.0030 | +0.00 | -0.10 | -12.10 | -98.3 | -11.2 | -25654 | -1.203 |
+| [vegas-inline](../perf-check/phase4/vegas-inline.json) | 59.9986 | **-0.0080** | +0.00 | -0.10 | -12.90 | -120.6 | -32.0 | -30985 | -0.788 |
+| [vegas-expanded](../perf-check/phase4/vegas-expanded.json) | 60.0047 | +0.0076 | -0.10 | -0.30 | -14.30 | **+7.4** | -43.0 | -52505 | -1.216 |
+| [drive](../perf-check/phase4/drive.json) | 59.9968 | **-0.0041** | **+0.10** | **+0.50** | +0.00 | **+2.7** | -10.2 | -136209 | -0.987 |
+| [lifecycle](../perf-check/phase4/lifecycle.json) | 60.0069 | +0.0556 | -0.90 | -1.30 | -16.80 | -36.4 | -10.7 | -17492 | -1.292 |
+| [monza-inline-stress](../perf-check/phase4/monza-inline-stress.json) | 52.9303 | **-4.1409** | **+2.30** | **+5.00** | -54.60 | -365.2 | -22.8 | -63448 | -1.574 |
+| [vegas-expanded-stress](../perf-check/phase4/vegas-expanded-stress.json) | 49.0535 | **-2.8643** | **+2.30** | **+2.60** | -24.10 | -113.9 | -49.0 | -113040 | -1.342 |
+| [drive-stress](../perf-check/phase4/drive-stress.json) | 39.7501 | **-3.8593** | **+4.80** | **+6.30** | +0.00 | **+345.3** | -22.7 | -140569 | -0.619 |
+
+#### Compared with Phase 3
+
+| Case | FPS | Δ FPS | Δ p95 ms | Δ p99 ms | Δ worst cut ms | Δ first 3D ms | Δ calls/frame | Δ triangles/frame | Δ heap MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| [monza-inline](../perf-check/phase4/monza-inline.json) | 59.9985 | +0.0393 | **+0.40** | **+0.30** | -15.00 | -43.8 | **+2.9** | -4364 | -0.420 |
+| [monza-expanded](../perf-check/phase4/monza-expanded.json) | 59.9598 | +0.0055 | **+0.40** | **+0.50** | -9.50 | -38.3 | **+2.7** | -8958 | -0.644 |
+| [vegas-inline](../perf-check/phase4/vegas-inline.json) | 59.9986 | **-0.0075** | **+0.30** | **+0.30** | -14.70 | -30.7 | -17.8 | -27656 | -0.379 |
+| [vegas-expanded](../perf-check/phase4/vegas-expanded.json) | 60.0047 | +0.0447 | **+0.20** | **+0.10** | -15.10 | **+63.9** | -32.1 | -51710 | -0.918 |
+| [drive](../perf-check/phase4/drive.json) | 59.9968 | **-0.0030** | **+0.90** | **+1.40** | +0.00 | **+30.9** | **+5.5** | -21851 | -0.063 |
+| [lifecycle](../perf-check/phase4/lifecycle.json) | 60.0069 | +0.0082 | **+0.10** | **+0.10** | -14.50 | **+8.2** | **+2.9** | -3367 | -0.703 |
+| [monza-inline-stress](../perf-check/phase4/monza-inline-stress.json) | 52.9303 | **-5.7758** | **+3.50** | **+5.90** | -27.60 | -105.9 | -0.4 | -21279 | -0.801 |
+| [vegas-expanded-stress](../perf-check/phase4/vegas-expanded-stress.json) | 49.0535 | **-7.8633** | **+4.80** | **+5.00** | -1.00 | **+283.5** | -25.0 | -61930 | -1.648 |
+| [drive-stress](../perf-check/phase4/drive-stress.json) | 39.7501 | **-7.0788** | **+6.90** | **+8.60** | +0.00 | **+506.4** | **+8.1** | -12209 | **+0.017** |
+
+All five lifecycle cycles released every tracked geometry and texture, removed the canvas, lost the suspended WebGL context and recorded zero pending or executed animation frames while hidden. Each resumed context rendered again. [Lifecycle measurements](../perf-check/phase4/lifecycle.json)
+
+#### Same-build repeat
+
+The six cases that missed at least one metric were run again from fresh browser contexts. Monza inline stress recovered to 59.25 FPS. Las Vegas expanded stress and Drive stress remained below the archived before run at 50.57 and 38.15 FPS. The primary table retains all nine measurements from the uninterrupted production run. [Repeat log](phase4/benchmark-repeat.log)
+
+| Case | FPS | Δ FPS | Δ p95 ms | Δ p99 ms | Δ worst cut ms | Δ first 3D ms | Δ calls/frame | Δ triangles/frame | Δ heap MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| [vegas-inline](../perf-check/phase4-repeat/vegas-inline.json) | 60.0006 | **-0.0060** | **+0.20** | **+0.50** | -3.30 | -29.4 | -32.3 | -31602 | -1.232 |
+| [vegas-expanded](../perf-check/phase4-repeat/vegas-expanded.json) | 60.0069 | +0.0098 | -0.10 | -0.20 | -14.90 | -55.2 | -43.1 | -52546 | -0.546 |
+| [drive](../perf-check/phase4-repeat/drive.json) | 60.0135 | +0.0126 | **+0.40** | **+0.90** | +0.00 | -77.7 | -10.1 | -136098 | -1.231 |
+| [monza-inline-stress](../perf-check/phase4-repeat/monza-inline-stress.json) | 59.2488 | +2.1776 | -1.10 | -1.00 | -54.60 | -381.3 | -23.9 | -58763 | -1.536 |
+| [vegas-expanded-stress](../perf-check/phase4-repeat/vegas-expanded-stress.json) | 50.5716 | **-1.3462** | **+1.20** | **+1.10** | -28.70 | -470.0 | -51.2 | -110637 | -1.424 |
+| [drive-stress](../perf-check/phase4-repeat/drive-stress.json) | 38.1477 | **-5.4618** | **+5.80** | **+6.40** | +0.00 | **+105.8** | -23.3 | -141710 | -0.444 |
+
+The desktop visuals and seven embedded captures were inspected after the final build. The wet images show the red lamp footprint and diffuser plume. The kerb camera shows the bevel, turf and raked gravel. Gravel spill is represented by a textured, irregular margin. [Desktop captures](phase4/visual), [iframe captures](../perf-check/phase4)
+
+#### Archived-build stress control
+
+The archived production build from `a93a39c` was sampled immediately after the Phase 4 repeat. Its Monza, Vegas and Drive stress results were 44.95, 52.28 and 43.28 FPS. This shows substantial variation at Monza. Vegas and Drive still ran slower on both final-build measurements than on this control. Calls, triangles and post-GC heap fell in every case in the complete Phase 4 run, and its worst camera-cut time was equal or lower in all nine. The remaining acceptance failures are frame pacing and first-3D latency. [Control log](phase4/benchmark-control.log), [control profiles](../perf-check/phase4-control)

@@ -1,0 +1,159 @@
+
+> jev-grand-prix@1.0.0 test:e2e
+> playwright test e2e/strategy.spec.ts e2e/replay.spec.ts e2e/radio.spec.ts e2e/event-log.spec.ts e2e/race.spec.ts e2e/provider-ui.spec.ts e2e/realism.spec.ts e2e/vegas.spec.ts e2e/realism-v2.spec.ts e2e/circuit-review.spec.ts e2e/aerial-camera.spec.ts e2e/side-camera.spec.ts e2e/broadcast-camera.spec.ts e2e/watch.spec.ts e2e/crashes.spec.ts e2e/matchup-reconnect.spec.ts e2e/rain.spec.ts
+
+[WebServer] (node:67677) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:67707) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:67716) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:67744) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 44 tests using 1 worker
+
+(node:67751) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 e2e/aerial-camera.spec.ts:5:53 › aerial follows the monza straight without bouncing during lead swaps (11.1s)
+  ✓   2 e2e/aerial-camera.spec.ts:5:53 › aerial follows the las-vegas straight without bouncing during lead swaps (11.0s)
+  ✓   3 e2e/broadcast-camera.spec.ts:7:53 › broadcast rotates through both onboards and external shots, with manual hold (monza) (1.2m)
+  ✓   4 e2e/broadcast-camera.spec.ts:7:53 › broadcast rotates through both onboards and external shots, with manual hold (las-vegas) (1.2m)
+  ✓   5 e2e/broadcast-camera.spec.ts:49:1 › broadcast holds the active pit crew through overlapping Ferrari and Mercedes stops (1.8s)
+  ✓   6 e2e/broadcast-camera.spec.ts:83:53 › two neighbouring field constructors service cars together at monza (2.1s)
+  ✓   7 e2e/broadcast-camera.spec.ts:83:53 › two neighbouring field constructors service cars together at las-vegas (2.4s)
+  ✓   8 e2e/broadcast-camera.spec.ts:117:1 › T-cam halo shows the selected driver’s live telemetry and running lap (3.3s)
+  ✓   9 e2e/circuit-review.spec.ts:4:1 › circuit review: fixed straight, signature corner, aerial and pit views (27.8s)
+  ✓  10 e2e/crashes.spec.ts:8:1 › a front wing carries impact damage through snapshots and returns after service (2.7s)
+  ✓  11 e2e/event-log.spec.ts:5:1 › event log opens by default, hides driver events, filters cleanly, and preserves scroll position (1.0s)
+  ✓  12 e2e/matchup-reconnect.spec.ts:4:36 › matchup survives owner transport loss before server acceptance (3.0s)
+  ✓  13 e2e/matchup-reconnect.spec.ts:4:36 › matchup survives owner transport loss after server acceptance (3.8s)
+  ✓  14 e2e/provider-ui.spec.ts:3:1 › provider UI distinguishes credentials, confirmed Jev/Luna replies and authentication fallback (1.3s)
+{
+  "race": "dbb1814e-ab07-475b-9c45-69a17f9a0ced",
+  "circuit": "monza",
+  "matchup": "jev-vs-jev",
+  "winner": "ANT",
+  "lapTimes": {
+    "a": [
+      117.45833333337288,
+      99.64999999992733,
+      90.5999999999176
+    ],
+    "b": [
+      118.05833333337335,
+      99.44999999992649,
+      117.49999999989313
+    ]
+  },
+  "stops": {
+    "a": 1,
+    "b": 1
+  },
+  "intents": {
+    "a": 45,
+    "b": 45
+  },
+  "engineerCalls": {
+    "a": 13,
+    "b": 11
+  },
+  "paidCalls": 0,
+  "errors": []
+}
+  ✓  15 e2e/race.spec.ts:10:118 › three independent WebSocket contexts race from lights out to results with radio and a pit stop (monza, jev-vs-jev) (22.0s)
+{
+  "race": "dbb1814e-ab07-475b-9c45-69a17f9a0ced",
+  "circuit": "monza",
+  "matchup": "jev-vs-luna",
+  "winner": "ANT",
+  "lapTimes": {
+    "a": [
+      118.76666666670725,
+      100.39166666659109,
+      93.3499999999151
+    ],
+    "b": [
+      93.9000000000208,
+      125.73333333327712,
+      98.30833333324392
+    ]
+  },
+  "stops": {
+    "a": 1,
+    "b": 1
+  },
+  "intents": {
+    "a": 43,
+    "b": 43
+  },
+  "engineerCalls": {
+    "a": 11,
+    "b": 16
+  },
+  "paidCalls": 0,
+  "errors": []
+}
+  ✓  16 e2e/race.spec.ts:10:118 › three independent WebSocket contexts race from lights out to results with radio and a pit stop (monza, jev-vs-luna) (20.9s)
+{
+  "race": "dbb1814e-ab07-475b-9c45-69a17f9a0ced",
+  "circuit": "las-vegas",
+  "matchup": "jev-vs-luna",
+  "winner": "ANT",
+  "lapTimes": {
+    "a": [
+      121.83333333337636,
+      111.75833333324219,
+      110.83333333323253
+    ],
+    "b": [
+      102.9916666666947,
+      135.61666666658596,
+      112.86666666656402
+    ]
+  },
+  "stops": {
+    "a": 1,
+    "b": 1
+  },
+  "intents": {
+    "a": 48,
+    "b": 48
+  },
+  "engineerCalls": {
+    "a": 12,
+    "b": 15
+  },
+  "paidCalls": 0,
+  "errors": []
+}
+  ✓  17 e2e/race.spec.ts:10:118 › three independent WebSocket contexts race from lights out to results with radio and a pit stop (las-vegas, jev-vs-luna) (22.9s)
+  ✓  18 e2e/radio.spec.ts:39:1 › live driver can send a question and read a fast reply in team radio (1.5s)
+  ✓  19 e2e/radio.spec.ts:103:1 › the broadcast delivers a driver question before a reply received in the same snapshot (341ms)
+  ✓  20 e2e/radio.spec.ts:136:1 › radio appears above the minimap, reveals words and clears without replaying the same message (423ms)
+  ✓  21 e2e/radio.spec.ts:184:1 › long radio calls reveal an unbroken prefix and scroll the latest caption into view (532ms)
+  ✓  22 e2e/radio.spec.ts:230:1 › the wide-feed nameplate holds its measured position through the wipe and fade (347ms)
+  ✓  23 e2e/radio.spec.ts:262:1 › the spectator feed reserves room for the caption above the minimap (314ms)
+  ✓  24 e2e/radio.spec.ts:277:1 › the caption keeps its broadcast wrapping and ignores a later driver reply (356ms)
+  ✓  25 e2e/radio.spec.ts:319:1 › painted Shanghai waveform heights match at 720p within one raster row (893ms)
+  ✓  26 e2e/radio.spec.ts:353:1 › voice events preserve the same waveform phase and caption clock as muted playback (519ms)
+  ✓  27 e2e/rain.spec.ts:7:2 › onboard rain, tyre spray and drying in monza (9.8s)
+  ✓  28 e2e/rain.spec.ts:7:2 › onboard rain, tyre spray and drying in las-vegas (10.0s)
+  ✓  29 e2e/realism-v2.spec.ts:4:1 › Blender cars, onboard, studio finishes and live camera transitions (45.7s)
+  ✓  30 e2e/realism.spec.ts:4:1 › detailed cars render from front and rear, with textured aerial and cockpit views (7.7s)
+  ✓  31 e2e/replay.spec.ts:3:1 › historical race picker plays recorded telemetry and switches 2D and 3D views (708ms)
+  ✓  32 e2e/side-camera.spec.ts:5:53 › manual side camera holds a steady shot at monza through anchors, gaps, timers and overtakes (19.8s)
+  ✓  33 e2e/side-camera.spec.ts:5:53 › manual side camera holds a steady shot at las-vegas through anchors, gaps, timers and overtakes (20.1s)
+  ✓  34 e2e/strategy.spec.ts:3:1 › strategy screen displays each call and its consequence (324ms)
+  ✓  35 e2e/strategy.spec.ts:29:1 › live strategy presents provider results, escapes radio text and cancels when switching scenarios (478ms)
+  ✓  36 e2e/strategy.spec.ts:65:1 › live endpoint refuses provider calls in mock mode (7ms)
+  ✓  37 e2e/vegas.spec.ts:5:1 › Las Vegas night scene renders Sphere, Strip, cockpit and skid sparks without missing assets or shader errors (9.0s)
+  ✓  38 e2e/vegas.spec.ts:18:1 › owner switches day and night scenes without losing the shared room or retaining extra canvases (9.1s)
+  ✓  39 e2e/vegas.spec.ts:33:1 › Sphere runs its wordmark, turns toward passing field cars and waves the finish flag (19.9s)
+  ✓  40 e2e/watch.spec.ts:4:1 › default private watch runs 100% locally at 1x with zero server rooms or WebSockets (1.6s)
+  ✓  41 e2e/watch.spec.ts:25:1 › online watch uses a single WebSocket, preserves the watch circuit and room on reload, and shares broadcast audio (3.9s)
+  ✓  42 e2e/watch.spec.ts:59:1 › provisional classification, replay completion and onboard cuts keep the world feed coherent (5.8s)
+  ✓  43 e2e/watch.spec.ts:88:49 › private watch boot stays on localhost (1.3s)
+  ✓  44 e2e/watch.spec.ts:88:49 › private watch boot stays on 127.0.0.1 (1.2s)
+
+  44 passed (7.7m)
