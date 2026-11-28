@@ -141,11 +141,11 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  function mirrorTarget(){
   if(!rearTarget){
    rearTarget=new T.WebGLRenderTarget(512,128);
-   rearTarget.texture.wrapS=T.RepeatWrapping;rearTarget.texture.repeat.x=-1;
+
   }
   return rearTarget;
  }
- const rearCamera=new T.PerspectiveCamera(55,256/128,.1,500);let mirrorFrame=0,mirrorSide=0,mirrorSeed=0;
+ const rearCamera=new T.PerspectiveCamera(55,256/128,.1,500);let mirrorFrame=0,mirrorSide=0,mirrorSeed=0,mirrorSeat:'a'|'b'|undefined;
  let studio:ReturnType<typeof createShowroom>|undefined;let finish:Finish='colour',turntable=true;
  const field=createField(track,circuit.heightAt,paintSheet,surfaceWater);scene.add(field.root,field.signage);
  const loading=document.createElement('div');loading.className='model-loading';loading.setAttribute('elementtiming','race-loading');loading.textContent='LOADING MCP GP';if(!embedded)container.append(loading);
@@ -696,28 +696,33 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   if(seedMirror||(onboard&&(!embedded||mirrorReady&&!cameraCut)&&(warmMode||mirrorFrame++%(embedded?6:balanced?3:1)===0))){
    const mirrorStart=cameraDebug?performance.now():0;
    const id=seedMirror?focus:mode.endsWith('-a')?'a':'b',chassis=cars[id].chassis;
-   const side=mirrorSide===0?-1:1;
-   chassis.localToWorld(rearCamera.position.set(-side*.78,.73,0));
-   chassis.getWorldQuaternion(rearCamera.quaternion);rearCamera.up.copy(upAxis).applyQuaternion(rearCamera.quaternion);
-   rearCamera.lookAt(chassis.localToWorld(rearPos.set(-side*4,.65,-25)));
-   const rearTarget=mirrorTarget();
-   rearTarget.viewport.set(mirrorSide*256,0,256,128);rearTarget.scissor.copy(rearTarget.viewport);rearTarget.scissorTest=true;
-   if(seedMirror)mirrorSeed++;
-   mirrorSide=1-mirrorSide;cars[id].root.visible=false;
-   // Both cockpits can retain the shared rear texture after a broadcast cut.
-   // Exclude both sets of reflecting faces while writing into that texture.
-   cars.a.setMirrorVisible(false);cars.b.setMirrorVisible(false);
-   rearCamera.updateMatrixWorld();
-   field.update(race.field,rearCamera,p,0,true);circuit.viewDetail(rearCamera,.18);
-   const oldTarget=renderer.getRenderTarget(),oldShadow=renderer.shadowMap.autoUpdate;
-   renderer.shadowMap.autoUpdate=false;renderer.setRenderTarget(rearTarget);
-   if(embedded)crew?.setMirrorHidden(true);
-   try{renderer.render(scene,rearCamera);}finally{
-    if(embedded)crew?.setMirrorHidden(false);
-    renderer.setRenderTarget(oldTarget);renderer.shadowMap.autoUpdate=oldShadow;
-    cars[id].root.visible=id!==hiddenCar;cars.a.setMirrorVisible(true);cars.b.setMirrorVisible(true);
+   chassis.updateWorldMatrix(true,false);
+   const passes=onboard&&mirrorSeat!==id?2:1;
+   for(let pass=0;pass<passes;pass++){
+    const sign=mirrorSide===0?1:-1;
+    rearCamera.position.set(sign*.70,.72,.29).applyMatrix4(chassis.matrixWorld);
+    rearCamera.up.set(0,1,0).transformDirection(chassis.matrixWorld);
+    rearCamera.lookAt(rearPos.set(sign*2.8,-1.1,-22).applyMatrix4(chassis.matrixWorld));
+    const rearTarget=mirrorTarget();
+    rearTarget.viewport.set(mirrorSide*256,0,256,128);rearTarget.scissor.copy(rearTarget.viewport);rearTarget.scissorTest=true;
+    if(seedMirror)mirrorSeed++;
+    mirrorSide=1-mirrorSide;cars[id].root.visible=false;
+    // Both cockpits can retain the shared rear texture after a broadcast cut.
+    // Exclude both sets of reflecting faces while writing into that texture.
+    cars.a.setMirrorVisible(false);cars.b.setMirrorVisible(false);
+    rearCamera.updateMatrixWorld();
+    field.update(race.field,rearCamera,p,0,true);circuit.viewDetail(rearCamera,.18);
+    const oldTarget=renderer.getRenderTarget(),oldShadow=renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate=false;renderer.setRenderTarget(rearTarget);
+    if(embedded)crew?.setMirrorHidden(true);
+    try{renderer.render(scene,rearCamera);}finally{
+     if(embedded)crew?.setMirrorHidden(false);
+     renderer.setRenderTarget(oldTarget);renderer.shadowMap.autoUpdate=oldShadow;
+     cars[id].root.visible=id!==hiddenCar;cars.a.setMirrorVisible(true);cars.b.setMirrorVisible(true);
+    }
    }
-   cars[id].setMirror(rearTarget.texture);
+   if(onboard||mirrorSeed===2)mirrorSeat=id;
+   cars[id].setMirror(rearTarget!.texture);
    if(cameraDebug)mirrorMs=performance.now()-mirrorStart;
   }
   circuit.viewDetail(limitDetail?camera:null,.54,.8);

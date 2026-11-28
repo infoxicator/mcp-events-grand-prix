@@ -35,7 +35,7 @@ def staff_mesh(role, material, kit, alternate=False):
     def loft(rows,colour,group=0):
         rings=[]
         for x,y,z,rx,rz in rows:
-            rings.append([vertex((x+rx*math.cos(k*math.tau/8),y,z+rz*math.sin(k*math.tau/8)),colour,group) for k in range(8)])
+            rings.append([vertex((x+rx*math.cos(k*math.tau/8),y,z+rz*math.sin(k*math.tau/8)),colour,group,art=(.63+.30*k/8,.12+y*.13) if colour==suit else (.96,.327)) for k in range(8)])
         for a,b in zip(rings,rings[1:]):
             for k in range(8):faces.append((a[k],b[k],b[(k+1)%8],a[(k+1)%8]))
         faces.extend([tuple(rings[0]),tuple(reversed(rings[-1]))])
@@ -43,11 +43,12 @@ def staff_mesh(role, material, kit, alternate=False):
     def limb(a,b,r1,r2,colour,group=0):
         a,b=Vector(a),Vector(b);axis=(b-a).normalized()
         u=axis.cross(Vector((0,0,1))).normalized();v=axis.cross(u)
+        segments=4 if max(r1,r2)<.018 else 6
         rings=[]
         for t,r in ([(0,r1),(.55,(r1+r2)*.52),(1,r2)] if colour==suit else [(0,r1),(1,r2)]):
-            rings.append([vertex(a+(b-a)*t+r*(u*math.cos(k*math.tau/6)+v*math.sin(k*math.tau/6)),colour,group,art=(.613+.352*k/6,1-(533+209*t)/768) if colour==suit else (.96,.327)) for k in range(6)])
+            rings.append([vertex(a+(b-a)*t+r*(u*math.cos(k*math.tau/segments)+v*math.sin(k*math.tau/segments)),colour,group,art=(.613+.352*k/segments,1-(533+209*t)/768) if colour==suit else (.96,.327)) for k in range(segments)])
         for a,b in zip(rings,rings[1:]):
-            for k in range(6):faces.append((a[k],a[(k+1)%6],b[(k+1)%6],b[k]))
+            for k in range(segments):faces.append((a[k],a[(k+1)%segments],b[(k+1)%segments],b[k]))
         faces.extend([tuple(reversed(rings[0])),tuple(rings[-1])])
 
     def panel(cx,y,width,height,row):
@@ -84,13 +85,13 @@ def staff_mesh(role, material, kit, alternate=False):
         # Jaw, zygomatic arches, brow ridge, eye sockets, nasal bridge, lips and chin.
         profile=[(1.501,.044,.057),(1.518,.064,.079),(1.547,.081,.090),(1.586,.091,.098),(1.624,.099,.103),(1.672,.097,.105),(1.721,.088,.101),(1.754,.072,.084)]
         prev=None
-        for j in range(10):
-            y=1.501+.253*j/9
+        for j in range(12):
+            y=1.501+.253*j/11
             k=next((k for k in range(len(profile)-1) if y<=profile[k+1][0]),len(profile)-2)
             ay,ax,az=profile[k];by,bx,bz=profile[k+1];f=(y-ay)/(by-ay)
             rx=ax+(bx-ax)*f;rz=az+(bz-az)*f;ring=[]
-            for n in range(14):
-                a=math.tau*n/14;c=math.cos(a);x=rx*math.sin(a)
+            for n in range(20):
+                a=math.tau*n/20;c=math.cos(a);x=rx*math.sin(a)
                 def bump(cx,cy,w,h):return math.exp(-((abs(x)-cx)/w)**2-((y-cy)/h)**2)
                 shape=.032*bump(0,1.597,.017,.031)+.016*bump(0,1.632,.011,.042)+.009*bump(.021,1.594,.010,.009)-.009*bump(.042,1.649,.022,.012)+.008*bump(.050,1.671,.033,.010)+.01*bump(.057,1.612,.032,.015)+.007*bump(0,1.557,.040,.013)+.008*bump(0,1.522,.026,.014)
                 z=.014+rz*c+max(c,0)**1.3*shape
@@ -99,13 +100,16 @@ def staff_mesh(role, material, kit, alternate=False):
                 if c<0:u=.78 if x>0 else .22;v=.14
                 ring.append(vertex((x,y,z),(.97,.94,.94),1/3,art=(u,1-v*512/768)))
             if prev:
-                for n in range(14):faces.append((prev[n],prev[(n+1)%14],ring[(n+1)%14],ring[n]))
+                for n in range(20):faces.append((prev[n],prev[(n+1)%20],ring[(n+1)%20],ring[n]))
             prev=ring
     for side in [-1,1]:
         x=side*.133;z=.072 if side<0 else -.07
         loft([(x,.012,z+.05,.09,.162),(x,.05,z+.06,.102,.169),(x,.12,z+.03,.088,.135),(x,.17,z,.073,.079)],boot)
-        limb((x,.14,z),(x,.53,z+.024),.074,.088,suit)
-        limb((x,.51,z+.024),(side*.092,.91,0),.099,.091,suit)
+        # A continuous trouser shell shares its knee ring and overlaps the boot.
+        loft([(x,.135,z,.077,.081),(x,.21,z+.005,.076,.082),
+              (x,.37,z+.014,.083,.088),(x,.515,z+.024,.092,.096),
+              (x,.565,z+.022,.095,.103),(side*.112,.73,.5*z,.105,.112),
+              (side*.092,.91,0,.098,.102)],suit)
         limb((x,.30,z+.01),(x,.35,z+.012),.079,.081,silver if signaller else navy)
     coverall()
     loft([(0,1.10,-.006,.18,.117),(0,1.149,-.006,.187,.123)],silver if signaller else navy)

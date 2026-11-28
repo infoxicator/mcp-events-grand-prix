@@ -1,5 +1,6 @@
 // Compare two Vite checkouts with identical state, camera, exposure and frame times.
 // Run with node scripts/visual-acceptance.mjs <origin> <output-directory>.
+import sharp from 'sharp';
 import {captureOptics} from './capture-optics.mjs';
 import {installStripMeter} from './strip-photometry.mjs';
 import {chromium} from '@playwright/test';
@@ -401,6 +402,31 @@ try{
     await clip('steer-'+seat,181,f=>capture(f,.42*Math.sin(f*Math.PI/90)));
     await start('steer-flag',seat);await still('steer-'+seat+'-yellow',0);
    }
+  }
+  if(process.env.REVIEW_CAR_STILLS){
+   if(circuit==='monza'){
+    for(const seat of ['a','b']){
+     await start('steer',seat);await still('steer-'+seat+'-centre');
+     // At this fixed lens the lower third of each glass sees asphalt.
+     const sample=sharp(out+'/steer-'+seat+'-centre.jpg');
+     for(const x of [46,1824]){
+      const sky=await sample.clone().extract({left:x,top:409,width:35,height:5}).raw().toBuffer();
+      const road=await sample.clone().extract({left:x,top:438,width:35,height:7}).raw().toBuffer();
+      const mean=data=>data.reduce((sum,value)=>sum+value,0)/data.length;
+      if(mean(sky)-mean(road)<15)throw Error('Missing road/horizon in mirror at '+x+' for '+seat);
+     }
+     await still('steer-'+seat+'-left',0,-.42);
+    }
+    for(const side of ['left','right']){await start('flank-'+side);await still('field-'+side);}
+    for(const name of ['front','rettifilo']){await start(name);await still('monza-'+name,110);}
+    await start('wing-print');await still('field-wing-print');
+   }else{
+    await start('strip');await still('las-vegas-strip',110);
+    await start('wet-reflections');await page.evaluate(()=>{for(let f=0;f<60;f+=2)window.drawShot(f);});
+    await still('las-vegas-wet-reflections',60);
+   }
+   await writeFile(out+'/shots.json',JSON.stringify(manifest,null,2));
+   await page.close();if(errors.length)throw Error(errors.join('\n'));continue;
   }
   if(process.env.REVIEW_TRACK_POLISH){
    await start('pack');await still(circuit+'-pack');

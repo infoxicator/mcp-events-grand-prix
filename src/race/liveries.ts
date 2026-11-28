@@ -193,7 +193,12 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
     #endif
     wrapPoint=${instanced?'position':'liveryPoint'};wrapRow=${instanced?'liveryRow':shaderRow.toFixed(1)};`);
   if(fieldFlap){
-   shader.vertexShader='varying vec2 flapUV;\n'+shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nflapUV=uv;');
+   shader.vertexShader='varying vec2 flapUV;\n'+shader.vertexShader.replace('#include <uv_vertex>',`#include <uv_vertex>
+    flapUV=uv;
+    // The rear-facing print uses -X as screen right. Reverse the span on the
+    // forward-facing presentation of the flap, keeping the flap UV sentinel.
+    mat4 flapFrame=modelViewMatrix*instanceMatrix;
+    if(uv.x>=0. && dot(flapFrame[2].xyz,-flapFrame[3].xyz)>0.)flapUV.x=1.-uv.x;`);
    shader.fragmentShader='varying vec2 flapUV;\n'+shader.fragmentShader;
   }
   shader.fragmentShader='uniform sampler2D liverySheet; varying float wrapRow; varying vec3 wrapPoint; varying vec3 wrapTint;\n'+shader.fragmentShader;

@@ -616,8 +616,8 @@ def build(cid):
    for k in [-4.2,4.2]:atbox(d+j+k,-24.9,2.2,(.25,4.4,.22),'White')
   heading=sample(d);yaw=math.atan2(heading['tx'],heading['tz'])-math.pi/2
   kit,uniform=((1,1,1),'GarageUniform') if i in uniforms else ((.031,.09,.14),'PitCrewUniform')
-  staff('crew',pt(d,-28.4,.104),yaw+.24,kit,uniform)
-  staff('crew',pt(d+1.25,-28.9,.104),yaw-.59,kit,uniform,alternate=True)
+  staff('crew',pt(d,-31.4,.104),yaw+.24,kit,uniform)
+  staff('crew',pt(d+1.25,-31.9,.104),yaw-.59,kit,uniform,alternate=True)
   lounge(d,-24.9,4.72)
   atbox(d,-24.9,5.8,(.1,2.1,27),'Hospitality')
   for j in range(-13,14,3):atbox(d+j,-24.75,5.8,(.17,2.2,.1),'Steel')

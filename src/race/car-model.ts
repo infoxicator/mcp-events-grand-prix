@@ -300,6 +300,9 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
  const bodyGroups=new Set(['Chassis','Floor','ConformalDecals','NumberA','NumberB','DRS']);
  const loaded=Promise.all([assets(!!reviewPose),constructorKit(),team==='a'&&reviewPose?loadWireShell():undefined,reviewPose?gzipBytes(posesURL).then(b=>JSON.parse(new TextDecoder().decode(b)) as InspectionPoses):undefined]).then(([models,kit,inspection,poseData])=>{if(dead)return;shell=inspection;poses=poseData;tyreContacts=trimMesh(kit,'Contact','#ffffff');root.add(tyreContacts);models.forEach((template,index)=>{
   const model=cloneSkeleton(template) as T.Group;const materials=new Map<T.Material,T.Material>();
+  const hand=model.getObjectByName('HandR');
+  hand?.updateWorldMatrix(true,false);
+  const garmentRest=hand?.matrixWorld.clone().invert();
   model.traverse(o=>{if(o instanceof T.Mesh){const parent=(o.parent?.name??'').split('_')[0];
    if(/^(Steering_(Brushed button bezel|Button|MarkWhite|VisorInk|Screen|Titanium)|Chassis_(Seat pan laminate|Knee bolster)|SuitBody_(Button|Titanium))/.test(o.name))cockpitFittings.push(o);
    let ancestor:T.Object3D|null=o.parent,inBody=bodyGroups.has(parent);
@@ -365,7 +368,12 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
    if(p.name==='Mirror'){
     if(mirrorFallback)p.map=p.emissiveMap=mirrorFallback;
     mirrors.push(p);o.geometry.computeBoundingBox();const bounds=o.geometry.boundingBox!,pos=o.geometry.getAttribute('position'),uv=new Float32Array(pos.count*2),mid=(bounds.min.x+bounds.max.x)/2;
-    for(let i=0;i<pos.count;i++){const cx=pos.getX(i)<mid?bounds.min.x+.0875:bounds.max.x-.0875;uv[i*2]=(pos.getX(i)<mid?.5:0)+.5*(.5+(pos.getX(i)-cx)/.175);uv[i*2+1]=(pos.getY(i)-bounds.min.y)/.038;}o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
+    for(let i=0;i<pos.count;i++){
+     const left=pos.getX(i)>mid,cx=left?bounds.max.x-.0875:bounds.min.x+.0875;
+     const u=T.MathUtils.clamp(.5+(pos.getX(i)-cx)/.175,.002,.998);
+     uv[i*2]=(left?0:.5)+u*.5;
+     uv[i*2+1]=T.MathUtils.clamp((pos.getY(i)-bounds.min.y)/.038,.004,.996);
+    }o.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
    }
    if(p.name==='GloveSuede'){p.roughness=.64;p.sheen=.20;p.sheenColor.set('#858a90');p.sheenRoughness=.95;p.bumpMap=grainMap;p.bumpScale=.00012;}
    if(p.name==='GlovePanel'){p.color.set(team==='a'?'#4c2028':'#17383f');p.roughness=.73;p.bumpMap=fabricMap;p.bumpScale=.00028;p.sheen=.15;}
@@ -388,11 +396,19 @@ export function createCar(team:'a'|'b',track:Track,paintSheet:T.Texture,sceneMor
       `);
     };
     const textile=p.onBeforeCompile;
-    if(p.name==='GloveFabric'&&team==='b')p.onBeforeCompile=(shader,renderer)=>{
+    if(p.name==='GloveFabric')p.onBeforeCompile=(shader,renderer)=>{
      textile.call(p,shader,renderer);
+     shader.uniforms.garmentRest={value:garmentRest};
+     shader.vertexShader='uniform mat4 garmentRest;\n'+shader.vertexShader.replace('clothPoint=position;',
+      'clothPoint=(garmentRest*vec4(abs(position.x),position.yz,1.)).xyz;');
      shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
       float teamInk=smoothstep(.018,.12,diffuseColor.r-max(diffuseColor.g,diffuseColor.b));
-      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.018,.155,.175)*(diffuseColor.r/.44),teamInk);`);
+      ${team==='b'?'diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.018,.155,.175)*(diffuseColor.r/.44),teamInk);':''}
+      float wristY=-.062+.057*smoothstep(-.105,-.022,clothPoint.z);
+      vec2 radial=vec2((abs(clothPoint.x)-.209)/.033,(clothPoint.y-wristY)/.044);
+      float hem=clothPoint.z+.094+.006*radial.y/max(length(radial),.001);
+      float aa=max(.00018,fwidth(hem)*.65);
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.69,.67,.58),.84*(1.-smoothstep(.001-aa,.001+aa,abs(hem))));`);
     };
     p.customProgramCacheKey=()=>p.name==='GloveFabric'?'driver-shell-'+team:'woven-racewear';
    }
