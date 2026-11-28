@@ -135,6 +135,7 @@ export function advanceField(race:Race,track:Track,dt:number,queue?:ReturnType<t
    }
    if(pitting||Math.abs(car.impactSideSpeed)<.03)delete car.impactSideSpeed;
   }
+  car.harvesting=!pitting&&car.speed>40&&target<car.speed-.3;
   const acceleration=Math.min(11,530000/(830*Math.max(car.speed,20))-.00075*car.speed**2);
   car.speed=Math.max(0,car.speed+Math.max(-29*dt,Math.min(acceleration*dt,target-car.speed)));
   const before=car.distance;

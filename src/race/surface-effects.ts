@@ -25,20 +25,32 @@ export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>nu
   float billow=.68*noise(q)+.32*noise(q*2.28);
   float density=1.-smoothstep(.16,.98,length(p)+(.51-billow)*.70);
   if(density<.008)discard;
-  vec3 tint=mix(vec3(.59,.61,.63),vec3(.37,.285,.19),vPuff.y)*(.72+.44*billow);
+  vec3 tint=mix(mix(vec3(.59,.61,.63),vec3(.37,.285,.19),clamp(vPuff.y,0.,1.)),vec3(.115,.112,.106),step(1.5,vPuff.y))*(.72+.44*billow);
   gl_FragColor=vec4(tint,density*(.30+.70*billow)*vPuff.x);
  #include <tonemapping_fragment>
  #include <colorspace_fragment>
  }`});
  const mesh=new T.Points(geo,material);mesh.frustumCulled=false;scene.add(mesh);
  const marks=new T.InstancedMesh(new T.PlaneGeometry(.27,1),new T.MeshBasicMaterial({color:'#111212',transparent:true,opacity:.31,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}),384);
+ marks.material.onBeforeCompile=shader=>{
+  shader.vertexShader='varying vec2 markUV;\n'+shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nmarkUV=uv;');
+  shader.fragmentShader='varying vec2 markUV;\n'+shader.fragmentShader.replace('#include <alphamap_fragment>','#include <alphamap_fragment>\ndiffuseColor.a*=smoothstep(0.,.19,min(markUV.x,1.-markUV.x))*smoothstep(0.,.055,min(markUV.y,1.-markUV.y));');
+ };
  marks.count=0;marks.frustumCulled=false;marks.instanceMatrix.setUsage(T.DynamicDrawUsage);scene.add(marks);
  const pose=new T.Object3D(),trail=new Float64Array(22).fill(NaN);let markIndex=0;
+ const impactTime=new Float64Array(22).fill(-1);
+ const ribbons=new T.InstancedMesh(new T.PlaneGeometry(1,1,1,6),new T.MeshBasicMaterial({color:'#dce7ef',transparent:true,opacity:.15,depthWrite:false,side:T.DoubleSide}),44);
+ ribbons.count=0;ribbons.frustumCulled=false;scene.add(ribbons);
+ ribbons.material.onBeforeCompile=shader=>{
+  shader.vertexShader='varying vec2 st;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nst=uv;transformed.x+=.32*sin(uv.y*5.);transformed.z=.15*uv.y*uv.y;');
+  shader.fragmentShader='varying vec2 st;\n'+shader.fragmentShader.replace('#include <alphamap_fragment>','#include <alphamap_fragment>\ndiffuseColor.a*=sin(st.y*3.14159)*smoothstep(0.,.5,min(st.x,1.-st.x));');
+ };
  const previous:string[]=[],last=new Float64Array(22).fill(-100);let before=-1,index=0;
  function emit(d:number,x:number,time:number,vx:number,vz:number,size:number,dust:number){
   puffs[index]={d,x,time,vx,vz,size,dust,seed:(index*17.73)%91};index=(index+1)%capacity;
  }
- return {update(r:RenderRace,height:number){
+ return {update(r:RenderRace,height:number,highQuality=true){
+  ribbons.count=0;
   if(before>r.time||r.time-before>2){puffs.length=0;index=0;last.fill(-100);previous.length=0;trail.fill(NaN);marks.count=0;markIndex=0;}
   before=r.time;material.uniforms.pixelHeight.value=height;
   for(let i=0;i<2+(r.field?.length??0);i++){
@@ -47,6 +59,21 @@ export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>nu
    const velocity=car.speed,lateral='lateralVelocity' in car?car.lateralVelocity??0:0;
    const slip=pit==='none'&&(('lockup' in car&&(car.lockup??0)>.12)||Math.abs(lateral)>3.3||('throttle' in car&&(car.throttle??0)>.85&&velocity>3&&velocity<14));
    const dirt=pit==='none'&&Math.abs(car.offset)>track.trackHalfWidth(car.distance)+.6;
+   if(highQuality&&car.lastImpact?.source==='BARRIER'&&r.time-car.lastImpact.time<.32&&impactTime[i]!==car.lastImpact.time){
+    impactTime[i]=car.lastImpact.time;
+    for(let j=0;j<10;j++)emit(car.distance-j*.13,car.offset,r.time,Math.sin(j)*.7,velocity*.15,.31+j*.036,.27);
+   }
+   if(highQuality&&'acceleration' in car&&(car.acceleration??0)<-18&&!slip&&r.time-last[i]>.12){
+    for(const side of [-1,1])emit(car.distance+1.55,car.offset+side*.81,r.time,side*.4,velocity*.46,.14,2);
+    last[i]=r.time;
+   }
+   if(highQuality&&velocity>48&&(r.control?.wetness??0)>.32){
+    for(const side of [-1,1]){
+     const d=car.distance-3.8,p=track.pointAt(d,car.offset+side*.77),t=track.tangentAt(d);
+     pose.position.set(p.x,heightAt(d)+.89,p.z);pose.rotation.set(-Math.PI/2,Math.atan2(t.x,t.z),0,'YXZ');
+     pose.scale.set(.065,2.6,1);pose.updateMatrix();ribbons.setMatrixAt(ribbons.count++,pose.matrix);
+    }
+   }
    if((slip||dirt)&&velocity>2){
     const axle='lockup' in car&&(car.lockup??0)>.12?1.55:-2.05;
     if(r.time-last[i]>.068){
@@ -84,6 +111,7 @@ export function surfaceEffects(scene:T.Scene,track:Track,heightAt:(d:number)=>nu
    pos.setXYZ(n,p.x,heightAt(d)+.16+age*(.58+.004*puff.seed),p.z);
    attrib.setXYZW(n++,puff.size+age*.98,.46*(.25+.75*Math.min(1,age/.044))*(1-age/1.25)**1.4,puff.dust,puff.seed+age*.29);
   }
+  ribbons.visible=ribbons.count>0;if(ribbons.count)ribbons.instanceMatrix.needsUpdate=true;
   geo.setDrawRange(0,n);mesh.visible=n>0;if(n){pos.needsUpdate=true;attrib.needsUpdate=true;}
- },dispose(){marks.removeFromParent();marks.material.dispose();marks.geometry.dispose();marks.dispose();mesh.removeFromParent();geo.dispose();material.dispose();}};
+ },dispose(){ribbons.removeFromParent();ribbons.geometry.dispose();ribbons.material.dispose();ribbons.dispose();marks.removeFromParent();marks.material.dispose();marks.geometry.dispose();marks.dispose();mesh.removeFromParent();geo.dispose();material.dispose();}};
 }

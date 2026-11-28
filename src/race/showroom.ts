@@ -21,12 +21,28 @@ export function createShowroom(renderer:T.WebGLRenderer,stageOffset=0,view:strin
  for(let i=0;i<=14;i++){const a=i*Math.PI/28;sweep.push(new T.Vector2(19+6*Math.sin(a),stageOffset-.014+6*(1-Math.cos(a))));}
  sweep.push(new T.Vector2(25,22));
  const cyclorama=new T.Mesh(new T.LatheGeometry(sweep,64),new T.MeshStandardMaterial({color:'#131a24',roughness:.92,side:T.BackSide,envMapIntensity:.08}));scene.add(cyclorama);
+ floor.material.onBeforeCompile=shader=>{
+  shader.vertexShader='varying vec2 epoxyUV;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nepoxyUV=position.xy;');
+  shader.fragmentShader='varying vec2 epoxyUV;\n'+shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+   float grain=sin(epoxyUV.x*69.)*sin(epoxyUV.y*77.);
+   roughnessFactor+=.025*grain*(1.-smoothstep(.004,.04,length(fwidth(epoxyUV))));`);
+ };
  const mirror=new Reflector(new T.PlaneGeometry(150,150),{textureWidth:768,textureHeight:768,color:0x151b23,clipBias:.001});mirror.rotation.x=-Math.PI/2;mirror.position.y=-.01;
  const mirrorMaterial=mirror.material as T.ShaderMaterial;
  // A subdued, slightly blurred studio reflection; no extra pass during racing.
- mirrorMaterial.fragmentShader=mirrorMaterial.fragmentShader.replace('vec4 base = texture2DProj( tDiffuse, vUv );',`vec4 base = vec4(0.0); for(int x=-1;x<=1;x++){for(int y=-1;y<=1;y++){vec4 uv=vUv;uv.xy+=vec2(float(x),float(y))*.004*uv.w;base+=texture2DProj(tDiffuse,uv)/9.0;}}`);
- mirrorMaterial.uniforms.reflectionOpacity={value:.14};
- mirrorMaterial.transparent=true;mirrorMaterial.fragmentShader='uniform float reflectionOpacity;\n'+mirrorMaterial.fragmentShader.replace('gl_FragColor = vec4( blendOverlay( base.rgb, color ), 1.0 );','gl_FragColor = vec4( base.rgb * vec3(.80,.84,.89), reflectionOpacity );');scene.add(mirror);
+ mirrorMaterial.vertexShader='varying vec2 floorPoint;\n'+mirrorMaterial.vertexShader.replace('void main() {','void main() {\n floorPoint=position.xy;');
+ mirrorMaterial.fragmentShader='varying vec2 floorPoint;uniform float reflectionOpacity;\n'+mirrorMaterial.fragmentShader
+  .replace('vec4 base = texture2DProj( tDiffuse, vUv );',`vec2 centre=vUv.xy/vUv.w;
+   float grain=fract(sin(dot(floor(floorPoint*180.),vec2(17.13,43.29)))*7531.2);
+   vec4 base=vec4(0.);
+   for(int i=0;i<7;i++){
+    float k=float(i)+.5,a=k*2.399963+grain*.65;
+    base+=texture2D(tDiffuse,centre+vec2(cos(a),sin(a))*sqrt(k/7.)*.0021)/7.;
+   }`)
+  .replace('gl_FragColor = vec4( blendOverlay( base.rgb, color ), 1.0 );','gl_FragColor=vec4(base.rgb*vec3(.80,.84,.89),reflectionOpacity*(1.-smoothstep(2.,9.,length(floorPoint))));');
+ mirrorMaterial.uniforms.reflectionOpacity={value:.14};mirrorMaterial.transparent=true;scene.add(mirror);
+ const ring=new T.Mesh(new T.RingGeometry(3.42,3.433,160),new T.MeshStandardMaterial({color:'#38404a',metalness:.32,roughness:.62}));
+ ring.rotation.x=-Math.PI/2;ring.position.y=stageOffset-.006;scene.add(ring);
  // Soft contact occlusion strengthens contact without a full-resolution SSAO pass.
  const contact={value:null as T.Texture|null};let disposed=false;
  const shadow=new T.Mesh(new T.PlaneGeometry(4,7),new T.ShaderMaterial({uniforms:{ao:contact},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'uniform sampler2D ao;varying vec2 vUv;void main(){float a=1.-texture2D(ao,vUv).r;gl_FragColor=vec4(0.,0.,0.,a*.92);}',transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=.001;shadow.visible=false;scene.add(shadow);
@@ -107,5 +123,5 @@ export function createShowroom(renderer:T.WebGLRenderer,stageOffset=0,view:strin
   floor.material.roughness=assembled?.90:.79;
   floor.material.metalness=assembled?.12:.03;
  }
- return {scene,contactReady,setStageFinish,dispose(){disposed=true;cyclorama.geometry.dispose();cyclorama.material.dispose();env.dispose();key.shadow.dispose();mirror.dispose();floor.geometry.dispose();(floor.material as T.Material).dispose();shadow.geometry.dispose();shadow.material.dispose();contact.value?.dispose();}};
+ return {scene,contactReady,setStageFinish,dispose(){disposed=true;ring.geometry.dispose();ring.material.dispose();cyclorama.geometry.dispose();cyclorama.material.dispose();env.dispose();key.shadow.dispose();mirror.dispose();floor.geometry.dispose();(floor.material as T.Material).dispose();shadow.geometry.dispose();shadow.material.dispose();contact.value?.dispose();}};
 }

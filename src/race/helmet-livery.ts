@@ -17,6 +17,13 @@ export function helmetLivery(team:Team){
  ribbon(.10,.105,'#344051');ribbon(.105,.059,accent);ribbon(.15,.011,'#ebe7d7');
  ribbon(.30,.145,'#222a39');ribbon(.30,.095,accent);ribbon(.24,.012,'#f2eee3');
  ribbon(.72,.078,'#273041');ribbon(.69,.018,'#efebe0');ribbon(.75,.025,accent);
+ for(const side of [-1,1]){
+  ctx.save();ctx.translate(w*(side>0?.24:.76),h*.46);ctx.scale(side,1);
+  for(let i=0;i<3;i++){
+   ctx.beginPath();ctx.moveTo(-215,30+i*17);ctx.bezierCurveTo(-85,41,32,-87-i*12,196,-64-i*18);
+   ctx.quadraticCurveTo(45,-11,-215,37+i*17);ctx.fillStyle=i===1?'#e9e4d4':accent;ctx.fill();
+  }ctx.restore();
+ }
  ctx.fillStyle='#f9f3e6';ctx.textAlign='center';ctx.font='italic 800 86px Arial';
  for(const x of [.22,.78])ctx.fillText(team==='a'?'44':'63',w*x,h*.57);
  // A separate planar island keeps the number legible over the compound curve.

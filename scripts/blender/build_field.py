@@ -18,7 +18,7 @@ if near:
         layers[layer]=([],[],[])
 normals={key:[] for key in layers}
 omit = {
-    'MarkWhite', 'BrandBlue', 'BrandGold', 'CompoundInk', 'GloveStitch',
+    'MarkWhite', 'BrandBlue', 'BrandGold', 'CompoundInk', 'GloveStitch', 'HaloInk',
     # Sealed under-cowling engine, transmission, and removable-fairing internals
     'Ground steel', 'Transmission alloy', 'Machined gear web',
     'Machined intake bell', 'Power unit casting', 'Formed heat shield',
@@ -27,6 +27,10 @@ omit = {
     # Deep cockpit interior occluded at AI field distances
     'SeatFoam', 'Seat pan laminate', 'Seat edge satin', 'Knee bolster', 'Cockpit liner',
 }
+if not near:
+    # At the distant LOD the closed wheel faces cover the rotor and caliper
+    # hardware. Keep the tyre, dish and suspension silhouettes.
+    omit.update({'BrakeDisc', 'Centrelock gunmetal'})
 groups.update(corner+'Knuckle' for corner in ('FrontL','FrontR','RearL','RearR'))
 for obj in list(bpy.context.scene.objects):
     if obj.type != 'MESH' or not obj.parent or obj.parent.name not in groups:

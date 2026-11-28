@@ -23,26 +23,33 @@ const profiles:Record<GridEntry['team'],Profile>={
 let gridArt:HTMLCanvasElement|undefined,mercedesArt:HTMLCanvasElement|undefined;
 export function liveryAtlas(entries:readonly GridEntry[]=grid,resolution=1){
  const cacheable=entries===grid&&resolution===1;
- const hero=resolution===1.5&&entries.length===1&&entries[0]===grid.find(e=>e.seat==='b');
+ const hero=resolution===3&&entries.length===1&&entries[0]===grid.find(e=>e.seat==='b');
  const canvas=(cacheable?gridArt:hero?mercedesArt:undefined)??drawAtlas(entries,resolution);
  if(cacheable)gridArt=canvas;
  if(hero)mercedesArt=canvas;
  const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=import.meta.env.MCP_APP==='true'?4:8;map.userData.rows=entries.length;return map;
 }
 function drawAtlas(entries:readonly GridEntry[],resolution:number){
- const canvas=document.createElement('canvas');canvas.width=tileW*4*resolution;canvas.height=tileH*entries.length*resolution;
+ const columns=entries.length>1?2:1,rows=Math.ceil(entries.length/columns);
+ // Keep the two sharp, printed views. Colour-block masks only need a short strip.
+ const w=columns===2?1024:tileW*resolution,h=columns===2?160:tileH*resolution;
+ const maskHeight=Math.ceil(h/5),bandHeight=h+maskHeight;
+ const scale=import.meta.env.MCP_APP==='true'?.5:1;
+ const canvas=document.createElement('canvas');canvas.width=2*w*columns*scale;canvas.height=bandHeight*rows*scale;
  const c=canvas.getContext('2d')!;
- c.scale(resolution,resolution);
+ c.scale(scale,scale);
+
  entries.forEach((entry,row)=>{
   for(let tile=0;tile<4;tile++){
    const reverse=tile%2===1,printed=tile>=2,p=profiles[entry.team];
-   c.save();c.beginPath();c.rect(tile*tileW,row*tileH,tileW,tileH);c.clip();
-   c.translate(tile*tileW+2.85*tileW/length,(row+1)*tileH);
+   const x=(2*(row%columns)+tile%2)*w,y=Math.floor(row/columns)*bandHeight+(printed?maskHeight:0);
+   c.save();c.translate(x,y);c.scale(w/tileW,(printed?h:maskHeight)/tileH);c.beginPath();c.rect(0,0,tileW,tileH);c.clip();
+   c.translate(2.85*tileW/length,tileH);
    c.scale(tileW/length,-tileH/height);
    function patch(fill:string,...coords:number[]){
     c.fillStyle=fill;c.beginPath();c.moveTo(coords[0],coords[1]);
     for(let i=2;i<coords.length;i+=2)c.lineTo(coords[i],coords[i+1]);c.closePath();c.fill();
-    if(fill===dark){c.save();c.globalCompositeOperation='destination-out';c.globalAlpha=.64;c.fill();c.restore();}
+    if(fill===dark){c.save();c.globalCompositeOperation='destination-out';c.globalAlpha=1;c.fill();c.restore();}
    }
    function disc(x:number,y:number,r:number,fill:string){c.fillStyle=fill;c.beginPath();c.arc(x,y,r,0,2*Math.PI);c.fill();}
    function word(s:string,x:number,y:number,w:number,h:number,fill:string,italic=false){
@@ -171,6 +178,8 @@ function drawAtlas(entries:readonly GridEntry[],resolution:number){
     }
     c.restore();
    }
+   const finish=['Red Bull Racing','Ferrari'].includes(entry.team)?.35:['Mercedes','Aston Martin','Audi'].includes(entry.team)?1:.7;
+   if(finish<1){c.globalCompositeOperation='destination-out';c.globalAlpha=1-finish;c.fillRect(-3,-.1,6.1,1.5);}
    c.restore();
   }
  });
@@ -185,9 +194,9 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
  material.onBeforeCompile=(shader,renderer)=>{
   existing.call(material,shader,renderer);
   shader.uniforms.liverySheet={value:atlas};
-  shader.vertexShader=(instanced?'attribute float liveryRow;':'attribute vec3 liveryPoint;')+'\nvarying float wrapRow; varying vec3 wrapPoint; varying vec3 wrapTint;\n'+shader.vertexShader;
+  shader.vertexShader=(instanced?'attribute float liveryRow;' :'attribute vec3 liveryPoint; attribute vec3 liveryNormal;')+'\nvarying float wrapRow; varying vec3 wrapPoint; varying vec3 wrapTint; varying vec3 wrapNormal;\n'+shader.vertexShader;
   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
-    wrapTint=vec3(1.);
+    wrapNormal=${instanced?'normal':'liveryNormal'};wrapTint=vec3(1.);
     #if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
      wrapTint=color.rgb;
     #endif
@@ -201,21 +210,30 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
     if(uv.x>=0. && dot(flapFrame[2].xyz,-flapFrame[3].xyz)>0.)flapUV.x=1.-uv.x;`);
    shader.fragmentShader='varying vec2 flapUV;\n'+shader.fragmentShader;
   }
-  shader.fragmentShader='uniform sampler2D liverySheet; varying float wrapRow; varying vec3 wrapPoint; varying vec3 wrapTint;\n'+shader.fragmentShader;
+  shader.fragmentShader='uniform sampler2D liverySheet; varying float wrapRow; varying vec3 wrapPoint; varying vec3 wrapTint; varying vec3 wrapNormal;\n'+shader.fragmentShader;
+  const columns=rows>1?2:1,bands=Math.ceil(rows/columns);
+  shader.fragmentShader=shader.fragmentShader.replace('void main()',`vec2 paintUV(float tile,vec2 point){
+   float band=${(bands-1).toFixed(1)}-floor(wrapRow/${columns.toFixed(1)});
+   float printedHeight=${(rows>1?160/192:456/548).toFixed(8)};
+   float y=tile<2.?printedHeight+(1.-printedHeight)*point.y:printedHeight*point.y;
+   return vec2((2.*mod(wrapRow,${columns.toFixed(1)})+mod(tile,2.)+point.x)/${(2*columns).toFixed(1)},(band+y)/${bands.toFixed(1)});
+  }
+  vec3 pigment(vec4 texel){return mix(vec3(.008,.010,.016),texel.rgb,smoothstep(0.,.12,texel.a));}
+  void main()`);
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
    ${endplate?`if((wrapPoint.z < -2.16 && wrapPoint.y > .68 && abs(wrapPoint.x) > .62) ||
                    (wrapPoint.z > 2.025 && wrapPoint.z < 2.82 && wrapPoint.y < .39 && abs(wrapPoint.x) > .90)){`:''}
    vec2 uvPaint=clamp(vec2((wrapPoint.z+2.85)/5.82,wrapPoint.y/1.16),vec2(.002),vec2(.998));
    float column=step(0.,wrapPoint.x);
-   vec2 tc=vec2((column+uvPaint.x)*.25,(${(rows-1).toFixed(1)}-wrapRow+uvPaint.y)/${rows.toFixed(1)});
+   vec2 tc=paintUV(column,uvPaint);
    vec4 bodyPrint=texture2D(liverySheet,tc);
    float lacquer=bodyPrint.a;
-   vec3 baseInk=bodyPrint.rgb;
-   vec3 face=normalize(cross(dFdx(wrapPoint),dFdy(wrapPoint)));
+   vec3 baseInk=pigment(bodyPrint);
+   vec3 face=normalize(wrapNormal)*(gl_FrontFacing?1.:-1.);
    // The outward panel sets the reading direction on curved shoulders and thin fins.
    float printSide=step(0.,face.x);
-   vec2 printedUV=vec2((2.+printSide+uvPaint.x)*.25,tc.y);
-   vec3 printInk=texture2D(liverySheet,printedUV).rgb;
+   vec2 printedUV=paintUV(2.+printSide,uvPaint);
+   vec3 printInk=pigment(texture2D(liverySheet,printedUV));
    vec3 finishInk=mix(baseInk,printInk,smoothstep(.33,.70,abs(face.x)));
    if(abs(wrapPoint.x)>.90 && wrapPoint.z>2.025 && wrapPoint.z<2.82 && wrapPoint.y<.39){
     float frontZ=wrapPoint.x<0.?wrapPoint.z:4.86-wrapPoint.z;
@@ -224,14 +242,14 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
     float centre=.235-.075*smoothstep(2.22,2.66,wrapPoint.z);
     frontZ=clamp(${ferrariPlate?'2.43+(frontZ-2.43)*1.42':'frontZ'},1.92,2.88);
     float printHeight=clamp(${ferrariPlate?'.945+(wrapPoint.y-centre)*2.55':'.736+(wrapPoint.y-.105)*1.64'},.75,1.12);
-    vec2 frontUV=vec2((3.+(frontZ+2.85)/5.82)*.25,(${(rows-1).toFixed(1)}-wrapRow+printHeight/1.16)/${rows.toFixed(1)});
+    vec2 frontUV=paintUV(3.,vec2((frontZ+2.85)/5.82,printHeight/1.16));
     finishInk=texture2D(liverySheet,frontUV).rgb;
    }
    ${endplate?`float blade=step(.62,abs(wrapPoint.x))*step(wrapPoint.z,-2.16)*step(.68,wrapPoint.y)*smoothstep(.72,.94,abs(face.x));
    blade=max(blade,${ferrariPlate?'smoothstep(.956,.965,abs(wrapPoint.x))':'step(.90,abs(wrapPoint.x))'}*step(2.025,wrapPoint.z)*step(wrapPoint.z,2.82)
      *step(wrapPoint.y,.39)*${ferrariPlate?'smoothstep(.79,.95,abs(face.x))':'smoothstep(.55,.85,abs(face.x))'});
    diffuseColor.rgb=mix(diffuseColor.rgb,finishInk,blade);}`:`{
-    vec2 topUV=vec2((2.+uvPaint.x)*.25,(${(rows-1).toFixed(1)}-wrapRow+(.953+wrapPoint.x*.54)/1.16)/${rows.toFixed(1)});
+    vec2 topUV=paintUV(2.,vec2(uvPaint.x,(.953+wrapPoint.x*.54)/1.16));
     // Keep implicit mip derivatives defined across the entire nose.
     // Sampling inside a varying branch gave a one-pixel broken line at z=.73.
     float noseMask=smoothstep(.73,.83,wrapPoint.z)*(1.-smoothstep(2.81,2.86,wrapPoint.z))
@@ -241,14 +259,14 @@ export function applyLivery(material:T.MeshStandardMaterial,atlas:T.Texture,inst
    ${fieldFlap?`if(flapUV.x>=0.){
     // Exported flap UVs follow the aft observer on both skins.
     vec2 ink=vec2(.60+1.20*flapUV.x,.825+.30*flapUV.y);
-    finishInk=texture2D(liverySheet,vec2((3.+(ink.x+2.85)/5.82)*.25,(${(rows-1).toFixed(1)}-wrapRow+ink.y/1.16)/${rows.toFixed(1)})).rgb;
+    finishInk=texture2D(liverySheet,paintUV(3.,vec2((ink.x+2.85)/5.82,ink.y/1.16))).rgb;
    }`:''}
    diffuseColor.rgb=finishInk;
    #if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
     diffuseColor.rgb*=wrapTint;
    #endif`}
   `);
-  if(!endplate)shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(.57,roughnessFactor,lacquer);');
+  if(!endplate)shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(.62,.25,lacquer);').replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=mix(.08,.62,smoothstep(.70,1.,lacquer));');
  };
  material.customProgramCacheKey=()=>oldKey+'-side-paint-'+rows+'-'+(instanced?'grid':row)+(endplate?'wing':fieldFlap?'flap':'body');
 }

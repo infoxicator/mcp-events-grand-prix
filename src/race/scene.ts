@@ -146,6 +146,8 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   return rearTarget;
  }
  const rearCamera=new T.PerspectiveCamera(55,256/128,.1,500);let mirrorFrame=0,mirrorSide=0,mirrorSeed=0,mirrorSeat:'a'|'b'|undefined;
+ let mirrorDeferred=false;
+ let studioSeat:'a'|'b'=params.get('subject')==='b'?'b':'a';
  let studio:ReturnType<typeof createShowroom>|undefined;let finish:Finish='colour',turntable=true;
  const field=createField(track,circuit.heightAt,paintSheet,surfaceWater);scene.add(field.root,field.signage);
  const loading=document.createElement('div');loading.className='model-loading';loading.setAttribute('elementtiming','race-loading');loading.textContent='LOADING MCP GP';if(!embedded)container.append(loading);
@@ -218,7 +220,8 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  const aerial=new TrackingCameraRig(AERIAL_CAMERA),side=new TrackingCameraRig(SIDE_CAMERA),chase=new TrackingCameraRig(CHASE_CAMERA),target=new T.Vector3(),desired=new T.Vector3();
  const carPosA=new T.Vector3(),carPosB=new T.Vector3(),focusPos=new T.Vector3(),rearPos=new T.Vector3(),upAxis=new T.Vector3(0,1,0),detailPos=new T.Vector3(),detailOffset=new T.Vector3(0,.45,0);
  const visitMap=new Map<Constructor,GarageVisit>();
- const carPosition=(c:Pick<RenderCar,'distance'|'offset'>,out=new T.Vector3())=>{const q=pointAt(c.distance,c.offset);return out.set(q.x,circuit.heightAt(c.distance),q.z);};
+ const locationOnTrack={x:0,z:0};
+ const carPosition=(c:Pick<RenderCar,'distance'|'offset'>,out=new T.Vector3())=>{const q=pointAt(c.distance,c.offset,locationOnTrack);return out.set(q.x,circuit.heightAt(c.distance),q.z);};
  let covering:Constructor|undefined;
  const garages=Object.keys(garageBay) as Constructor[];
  const crewFrustum=new T.Frustum(),crewProjection=new T.Matrix4();
@@ -457,13 +460,13 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
  function drawFrame(race:RenderRace,now:number,warmMode?:CameraMode,prepare=false){
   const safety=race.phase==='racing'&&selectedMode!=='showroom'?race.control?.safetyCar:undefined;
   if(safety){
-   if(!safetyCar){safetyCar=createSafetyCar();scene.add(safetyCar.car);}
+   if(!safetyCar){safetyCar=createSafetyCar(!embedded&&night);scene.add(safetyCar.car);}
    const point=pointAt(safety.distance,safety.offset),tangent=tangentAt(safety.distance);
-   safetyCar.car.visible=true;
+   safetyCar.car.visible=safetyCar.ready;
    safetyCar.car.position.set(point.x,circuit.heightAt(safety.distance),point.z);
    safetyCar.car.rotation.y=Math.atan2(tangent.x,tangent.z);
    safetyCar.car.rotation.x=Math.atan2(circuit.heightAt(safety.distance-2)-circuit.heightAt(safety.distance+2),4);
-   safetyCar.flash(race.time,safety.distance);
+   safetyCar.flash(race.time,safety.distance,safety.releaseDistance-safety.distance<150,!balanced);
   }else if(safetyCar)safetyCar.car.visible=false;
   const visits=garageVisits(track,race.cars,race.field,visitMap);
   let featured=covering?visits.get(covering):undefined;
@@ -482,7 +485,11 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   if(cameraCut){aerial.reset();side.reset();chase.reset();driverHead.reset();activeMode=mode;}
   renderer.info.reset();container.classList.toggle('visor-edge',params.has('visor')&&mode.startsWith('cockpit'));
   for(const id of seats){const c=race.cars[id],p=carPosition(c,id==='a'?carPosA:carPosB),t=tangentAt(c.distance);cars[id].root.position.copy(p);cars[id].root.position.y=p.y+.026;cars[id].root.rotation.set(Math.atan2(circuit.heightAt(c.distance-3)-circuit.heightAt(c.distance+3),6),Math.atan2(t.x,t.z)+(c.heading??0),0,'YXZ');const flag=race.control?.safetyCar||(race.control?.yellowUntil??0)>race.time?'yellow':(race.cars[id==='a'?'b':'a'].distance-c.distance>track.LENGTH?'blue':'green');
-   cars[id].update(c,mode===`cockpit-${id}`,mode==='showroom',now,mode===`cockpit-${id}`||mode===`tcam-${id}`||mode==='detail'||mode==='showroom',flag);}
+   const cockpit=mode===`cockpit-${id}`;
+   // The elevated T-cam has a separate telemetry overlay. Under iframe
+   // pressure, skip the small dashboard and fittings behind the helmet.
+   const dash=cockpit||(mode===`tcam-${id}`&&(!embedded||embeddedTier===0))||mode==='detail'||mode==='showroom';
+   cars[id].update(c,cockpit,mode==='showroom',now,dash,flag,!embedded&&!balanced);}
   const onboard=mode.startsWith('cockpit')||mode.startsWith('tcam');
   const playerCam=onboard||mode.startsWith('chase-')||mode.startsWith('nose-');
   const leader=race.cars.a.distance>=race.cars.b.distance?'a':'b';
@@ -504,7 +511,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   circuit.people.update(elapsed,cars.a.root.position,cars.b.root.position,race.phase==='racing'&&race.cars.a.distance<track.LENGTH,race.phase==='racing'&&race.cars.b.distance<track.LENGTH,chequered,(race.control?.yellowUntil??0)>race.time||!!race.control?.safetyCar);
   circuit.sphereShow?.update(race,track,elapsed,chequered);
   if(sphereSpill&&circuit.sphereShow){const u=circuit.sphereShow.material.uniforms;sphereSpill.color.set('#ffbd62').lerp(darkBlue,u.helmetMix.value).lerp(flagWhite,u.flagMix.value);}
-  sparks.update(race,p);impacts.update(race,camera);surfaceFx.update(race,renderer.domElement.height);
+  sparks.update(race,p);impacts.update(race,camera);surfaceFx.update(race,renderer.domElement.height,!embedded&&!balanced);
   if(night){
    // The exported fixtures are 45 m apart with a shorter span at the timing line.
    const station=track.wrap(c.distance),row=Math.floor(station/45)*45,next=Math.min(row+45,track.LENGTH);
@@ -549,7 +556,8 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
     studio=createShowroom(renderer,reviewPose?-.34*stageProgress:0,reviewView);
     studio.setStageFinish(finish);
    }
-   studio.scene.add(cars.a.root);cars.a.root.position.set(0,0,0);cars.a.root.rotation.set(0,0,0);cars.a.update({...race.cars.a,steering:0,drs:false},true,true,now);
+   const featuredCar=cars[studioSeat];studio.scene.add(featuredCar.root);featuredCar.root.visible=true;
+   featuredCar.root.position.set(0,0,0);featuredCar.root.rotation.set(0,0,0);featuredCar.update({...race.cars[studioSeat],steering:0,drs:false},true,true,now);
    const angle=params.get('angle')??'front';
    const key=reviewView?(reviewView==='hero'?finish:reviewView):angle==='front'?finish:angle==='wheel'?'front-corner':angle==='diffuser'?'diffuser-wire':angle==='steering'?'steering':null;
    if(key){
@@ -692,8 +700,15 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   mirrorMs=0;
   // Fill both rear views before the director cuts onboard. On the cut itself
   // the shadow map changes projection, so refresh the next mirror one frame later.
-  const seedMirror=embedded&&mirrorReady&&mirrorSeed<2&&selectedMode==='broadcast'&&!onboard&&!cameraCut;
-  if(seedMirror||(onboard&&(!embedded||mirrorReady&&!cameraCut)&&(warmMode||mirrorFrame++%(embedded?6:balanced?3:1)===0))){
+  const seedMirror=embedded&&mirrorReady&&mirrorSeed<2&&selectedMode==='broadcast'&&!onboard&&!cameraCut&&!renderer.shadowMap.autoUpdate;
+  let refreshMirror=onboard&&(!embedded||mirrorReady&&!cameraCut)&&(warmMode||mirrorFrame++%(embedded?6:balanced?3:1)===0);
+  if(embedded&&onboard&&mirrorReady&&!cameraCut){
+   // Keep the expensive shadow and rear-view passes off the same frame.
+   // Refresh on the following frame even when pressure persists.
+   if(mirrorDeferred){refreshMirror=true;mirrorDeferred=false;}
+   else if(refreshMirror&&renderer.shadowMap.autoUpdate){refreshMirror=false;mirrorDeferred=true;}
+  }else mirrorDeferred=false;
+  if(seedMirror||refreshMirror){
    const mirrorStart=cameraDebug?performance.now():0;
    const id=seedMirror?focus:mode.endsWith('-a')?'a':'b',chassis=cars[id].chassis;
    chassis.updateWorldMatrix(true,false);
@@ -711,7 +726,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
     // Exclude both sets of reflecting faces while writing into that texture.
     cars.a.setMirrorVisible(false);cars.b.setMirrorVisible(false);
     rearCamera.updateMatrixWorld();
-    field.update(race.field,rearCamera,p,0,true);circuit.viewDetail(rearCamera,.18);
+    field.update(race.field,rearCamera,p,0,true,balanced,false,0,race.time);circuit.viewDetail(rearCamera,.18);
     const oldTarget=renderer.getRenderTarget(),oldShadow=renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate=false;renderer.setRenderTarget(rearTarget);
     if(embedded)crew?.setMirrorHidden(true);
@@ -727,11 +742,11 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   }
   circuit.viewDetail(limitDetail?camera:null,.54,.8);
   if(mode==='showroom'){cars.a.setMirror(null);cars.b.setMirror(null);}
-  else field.update(race.field,camera,p,extent,false,limitDetail,!embedded||renderer.shadowMap.autoUpdate,embedded?lastHeight:0);
+  else field.update(race.field,camera,p,extent,false,limitDetail,!embedded||renderer.shadowMap.autoUpdate,embedded?lastHeight:0,race.time);
   if(prepare){lastShadow=-Infinity;return;}
   const mainStart=cameraDebug?performance.now():0;
   if(racingLine){if(racingLineMode!=='off'&&mode!=='showroom')racingLine.update(race.cars[racingLineSeat] as any,racingLineMode,race.control?.wetness??0);else racingLine.mesh.visible=false;}
-  if(mode!=='showroom'&&cars.a.root.parent!==scene)scene.add(cars.a.root);
+  if(mode!=='showroom')for(const id of seats)if(cars[id].root.parent!==scene)scene.add(cars[id].root);
   if(!embedded)circuit.puddles.update(renderer,scene,camera,p,now,surfaceWater.value,cameraCut);
   beauty.scene=mode==='showroom'?studio!.scene:scene;
   if(bloom){bloom.strength=mode==='showroom'?.042:night?.11:.045;bloom.enabled=night||!balanced;}
@@ -752,7 +767,7 @@ export function createScene(container:HTMLElement,track:Track=getTrack()){
   renderer.setSize(w,h,false);composer?.setSize(w,h);sizeBloom(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
  }
  const resize=new ResizeObserver(sizeScene);resize.observe(container);sizeScene();
- return {render,get activeCamera(){return activeMode;},get ready(){return presentationReady;},get contextLost(){return contextLost||gl.isContextLost();},get startupError(){return cars.a.error??cars.b.error??circuit.error??(contextLost||gl.isContextLost()?'WebGL context lost':null);},setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars.a.setFinish(next==='showroom'?finish:'colour');},setFinish:(next:Finish)=>{finish=next;cars.a.setFinish(next);studio?.setStageFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},setLookBack:(on:boolean)=>{lookBack=on;},setHideCar:(team:'a'|'b'|null)=>{hiddenCar=team;if(!team){cars.a.root.visible=true;cars.b.root.visible=true;}},setRacingLine:(m:RacingLineMode,seat:'a'|'b'='a')=>{racingLineMode=m;racingLineSeat=seat;if(m!=='off'&&!racingLine){racingLine=createRacingLine(track,circuit.heightAt);scene.add(racingLine.mesh);}if(racingLine&&m==='off')racingLine.mesh.visible=false;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(cameraDebug?{mirrorMs,mainMs,lensBeads:weather.beads,rainDrops:weather.drops,sprayPackets:weather.spray,cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,safetyCarOnTrack:safetyCar?.car.visible??false,circuit:track.id,modelsReady:presentationReady,modelError:reflectionError??cars.a.error??cars.b.error??circuit.error??crew?.error??field.error,finish};},dispose:()=>{
+ return {render,get activeCamera(){return activeMode;},get ready(){return presentationReady;},get contextLost(){return contextLost||gl.isContextLost();},get startupError(){return cars.a.error??cars.b.error??circuit.error??(contextLost||gl.isContextLost()?'WebGL context lost':null);},setMode:(next:CameraMode)=>{selectedMode=next;director.reset();aerial.reset();side.reset();chase.reset();cars[studioSeat].setFinish(next==='showroom'?finish:'colour');},setStudioSeat:(seat:'a'|'b')=>{if(seat!==studioSeat){scene.add(cars[studioSeat].root);cars[studioSeat].setFinish('colour');studioSeat=seat;cars[seat].setFinish(finish);}},setFinish:(next:Finish)=>{finish=next;cars[studioSeat].setFinish(next);studio?.setStageFinish(next);},setTurntable:(on:boolean)=>{turntable=on;},setLookBack:(on:boolean)=>{lookBack=on;},setHideCar:(team:'a'|'b'|null)=>{hiddenCar=team;if(!team){cars.a.root.visible=true;cars.b.root.visible=true;}},setRacingLine:(m:RacingLineMode,seat:'a'|'b'='a')=>{racingLineMode=m;racingLineSeat=seat;if(m!=='off'&&!racingLine){racingLine=createRacingLine(track,circuit.heightAt);scene.add(racingLine.mesh);}if(racingLine&&m==='off')racingLine.mesh.visible=false;},get label(){return cameraLabel;},get info(){return {...renderer.info.render,...(cameraDebug?{mirrorMs,mainMs,lensBeads:weather.beads,rainDrops:weather.drops,sprayPackets:weather.spray,cameraMode:activeMode,selectedCamera:selectedMode,cameraLabel,cameraFov:camera.fov,cameraPosition:camera.position.toArray(),cameraQuaternion:camera.quaternion.toArray(),cameraTarget:target.toArray()}:{}),sparks:sparks?.active??0,safetyCarReady:safetyCar?.ready??false,safetyCarOnTrack:safetyCar?.car.visible??false,circuit:track.id,modelsReady:presentationReady,modelError:reflectionError??cars.a.error??cars.b.error??circuit.error??crew?.error??safetyCar?.error??field.error,finish};},dispose:()=>{
   if(disposed)return;
   disposed=true;loadingAssets.abort();cancelWarmFrame();resize.disconnect();
   element.removeEventListener('pointerdown',orbitStart);element.removeEventListener('pointermove',orbitMove);

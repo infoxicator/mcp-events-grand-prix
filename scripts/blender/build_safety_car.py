@@ -1,6 +1,6 @@
 """A section-lofted GT safety car. Y up, longitudinal axis +Z as in build_car."""
 import bpy,gzip,tempfile,math
-from mathutils import Vector
+from mathutils import Vector, Matrix
 from pathlib import Path
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
@@ -8,6 +8,8 @@ def material(name,col,metal,rough):
  m=bpy.data.materials.new(name);m.use_nodes=True
  p=m.node_tree.nodes.get('Principled BSDF');p.inputs['Base Color'].default_value=(*col,1)
  p.inputs['Metallic'].default_value=metal;p.inputs['Roughness'].default_value=rough
+ if name in ("GT lacquer","Solar glazing"):
+  p.inputs["Coat Weight"].default_value=.85;p.inputs["Coat Roughness"].default_value=.12
  return m
 lacquer=material('GT lacquer',(.52,.026,.018),.54,.25)
 glass=material('Solar glazing',(.023,.058,.085),.45,.12)
@@ -63,6 +65,14 @@ for side in [-1,1]:
  for j in range(3):block('Bonnet vent',(side*.52,.856-j*.009,1.32+j*.069),(.23,.023,.033),trim)
  block('Rear spoiler mount',(side*.55,.87,-2.02),(.07,.13,.17),trim)
 block('Rear spoiler',(0,.951,-2.14),(1.63,.044,.205),trim,.013)
+ink=material('Fleet lettering',(.94,.94,.89),.04,.42)
+for location,normal,size in [((.945,.66,-.12),(1,0,0),.196),((-.945,.66,-.12),(-1,0,0),.196),((0,.61,-2.345),(0,0,-1),.122)]:
+ n=Vector(normal);up=Vector((0,1,0));right=up.cross(n)
+ bpy.ops.object.text_add(location=location)
+ mark=bpy.context.object;mark.name='Safety car identification'
+ mark.data.body='SAFETY CAR';mark.data.align_x='CENTER';mark.data.align_y='CENTER'
+ mark.data.size=size;mark.data.resolution_u=4;mark.rotation_euler=Matrix((right,up,n)).transposed().to_euler()
+ mark.data.materials.append(ink);bpy.ops.object.convert(target='MESH')
 # Static components share batches, including the grille slats and door hardware.
 for mat in bpy.data.materials:
  objects=[o for o in bpy.context.scene.objects if o.type=='MESH' and o.active_material==mat]

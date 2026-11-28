@@ -313,6 +313,7 @@ export function stepRace(s:Race, controls?: Partial<Record<Team, DriverControls>
   // Late braking on worn or wet tyres risks a real wheel lockup (reduced decel + flat-spot wear).
   const brakeAgg=pedal==='overdrive'||pedal==='brake-hard'?1:pedal==='push'?.9:clamp(c.intent.brakeAggression,0,1);
   const driverAttack=clamp(c.intent.speedBias,-2,2)/2;
+  c.brakeBias=inputs?.brakeBias??56;
   const biasThreshold=clamp(.88-Math.max(0,((inputs?.brakeBias??56)-56)*.015),.72,.92);
   const humanLockup=Boolean((inputs?.abs===false||pedal==='brake-hard'||pedal==='overdrive')&&!pit&&c.brake>biasThreshold&&c.speed>30&&(c.wear>.35||sectorWet>.2||c.brake>.95));
   const lockedUp=humanLockup||(!inputs&&c.pit==='none'&&c.brake>.68&&brakeAgg>=.85&&(c.wear>.58||sectorWet>.25)&&c.speed>32);

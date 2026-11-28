@@ -118,6 +118,7 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
  let replayActive = false;
  let replayStartAt = 0;
  let lastStandingsHtml = '';
+ let standingGaps: Element[] = [];
  let lastResultsHtml = '';
 
  let conn = connect(seat, room, {
@@ -1206,18 +1207,23 @@ export function mountDrive(room: HostedRoom, options: DriveMountOptions = {}): {
   const visible = order.slice(0, 7);
   if (place > 7 && order[place - 1]) visible.push(order[place - 1]);
   const leaderDist = order[0]?.car.distance ?? 0;
+  const gapText: string[] = [];
   const stHtml = visible.map((row) => {
    const idx = order.indexOf(row);
    const isPlayer = row.entry.seat === seat;
    const gapSec = idx === 0 ? 'LEAD' : `+${(Math.max(0, leaderDist - row.car.distance) / Math.max(30, row.car.speed)).toFixed(1)}s`;
+   gapText.push(row.car.finishTime !== null ? 'FIN' : gapSec);
    const col = constructors[row.entry.team]?.[0] ?? '#ed3446';
    const comp = (row.car.compound ?? 'medium') as Compound;
-   return `<div class="drive-st-row${isPlayer ? ' is-player' : ''}"><span class="drive-st-pos">${idx + 1}</span><i class="drive-st-bar" style="background:${col}"></i><span class="drive-st-code">${row.entry.code}${isPlayer ? ` <small>${DRIVER_LABELS[dMode]}</small>` : ''}</span><span class="drive-st-gap">${row.car.finishTime !== null ? 'FIN' : gapSec}</span><span class="drive-st-tyre" data-c="${comp}">${COMPOUND_SHORT[comp]}</span></div>`;
+   return `<div class="drive-st-row${isPlayer ? ' is-player' : ''}"><span class="drive-st-pos">${idx + 1}</span><i class="drive-st-bar" style="background:${col}"></i><span class="drive-st-code">${row.entry.code}${isPlayer ? ` <small>${DRIVER_LABELS[dMode]}</small>` : ''}</span><span class="drive-st-gap"></span><span class="drive-st-tyre" data-c="${comp}">${COMPOUND_SHORT[comp]}</span></div>`;
   }).join('');
   if (stHtml !== lastStandingsHtml) {
    lastStandingsHtml = stHtml;
-   el('drive-standings').innerHTML = stHtml;
+   const tower = el('drive-standings');
+   tower.innerHTML = stHtml;
+   standingGaps = Array.from(tower.querySelectorAll('.drive-st-gap'));
   }
+  standingGaps.forEach((node, i) => setTextIfChanged(node, gapText[i]));
 
   // Strategy strip + Radio banner timeout
   setTextIfChanged(el('dst-pace'),`PACE: ${car.instruction.pace.toUpperCase()}`);
